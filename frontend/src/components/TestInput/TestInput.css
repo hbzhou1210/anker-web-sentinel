@@ -1,0 +1,366 @@
+.test-input {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.test-input-form {
+  background: white;
+  border-radius: 12px;
+  padding: 32px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.form-header {
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.form-header h2 {
+  margin: 0 0 8px 0;
+  font-size: 28px;
+  color: #1a1a1a;
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: #666;
+}
+
+.url-input-group {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.url-input {
+  flex: 1;
+  padding: 12px 16px;
+  font-size: 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  transition: border-color 0.2s;
+}
+
+.url-input:focus {
+  outline: none;
+  border-color: #2563eb;
+}
+
+.url-input:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.submit-button {
+  padding: 12px 32px;
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+  background-color: #2563eb;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  white-space: nowrap;
+}
+
+.submit-button:hover:not(:disabled) {
+  background-color: #1d4ed8;
+}
+
+.submit-button:disabled {
+  background-color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.error-message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #991b1b;
+  margin-bottom: 16px;
+}
+
+.error-icon {
+  font-size: 20px;
+}
+
+/* Email Input Section */
+.email-input-group {
+  margin-bottom: 16px;
+}
+
+.email-input-group label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.email-hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: #6b7280;
+}
+
+.email-input {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 15px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  transition: border-color 0.2s;
+}
+
+.email-input:focus {
+  outline: none;
+  border-color: #2563eb;
+}
+
+.email-input:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.email-input::placeholder {
+  color: #9ca3af;
+}
+
+.advanced-section {
+  margin: 24px 0;
+  padding-top: 24px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.advanced-toggle {
+  background: none;
+  border: none;
+  padding: 8px 0;
+  font-size: 14px;
+  color: #2563eb;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: color 0.2s;
+}
+
+.advanced-toggle:hover {
+  color: #1d4ed8;
+}
+
+.advanced-options {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Test Options Section */
+.test-options-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.test-options-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.test-options-section .section-header label {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.select-all-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.select-all-btn:hover:not(:disabled) {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.select-all-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.checkbox-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background: #f9fafb;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.checkbox-item:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.checkbox-item input[type='checkbox'] {
+  display: none;
+}
+
+.checkbox-item input[type='checkbox']:checked + .checkbox-label {
+  color: #2563eb;
+}
+
+.checkbox-item input[type='checkbox']:checked ~ .checkbox-hint {
+  color: #1e40af;
+}
+
+.checkbox-item:has(input[type='checkbox']:checked) {
+  background: #eff6ff;
+  border-color: #2563eb;
+}
+
+.checkbox-item:has(input[type='checkbox']:disabled) {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.checkbox-icon {
+  font-size: 18px;
+}
+
+.checkbox-hint {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+/* Configuration Section */
+.config-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.config-section .section-header {
+  margin-bottom: 8px;
+}
+
+.config-section .section-header label {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.option-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.option-group label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.option-hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: #6b7280;
+}
+
+.option-group input[type='number'] {
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  transition: border-color 0.2s;
+}
+
+.option-group input[type='number']:focus {
+  outline: none;
+  border-color: #2563eb;
+}
+
+.option-group input[type='number']:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.info-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 16px;
+  background-color: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  color: #1e40af;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-top: 16px;
+}
+
+.info-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .test-input-form {
+    padding: 24px 16px;
+  }
+
+  .url-input-group {
+    flex-direction: column;
+  }
+
+  .submit-button {
+    width: 100%;
+  }
+
+  .checkbox-grid {
+    grid-template-columns: 1fr;
+  }
+}

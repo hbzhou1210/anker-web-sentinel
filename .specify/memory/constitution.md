@@ -1,50 +1,173 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+═══════════════════════════════════════════════════════════════════════════════
+SYNC IMPACT REPORT
+═══════════════════════════════════════════════════════════════════════════════
+Version Change: [TEMPLATE] → 1.0.0
+Change Type: MINOR (Initial constitution establishment)
+Date: 2025-11-26
+
+Modified Principles:
+  - All principles newly defined (initial constitution)
+
+Added Sections:
+  - I. Specification-Driven Development
+  - II. Incremental Delivery
+  - III. Test Independence
+  - IV. Maintainability & Documentation
+  - V. Simplicity & Focus
+  - Development Standards
+  - Quality Gates
+  - Governance
+
+Removed Sections: None
+
+Templates Status:
+  ✅ .specify/templates/plan-template.md - Reviewed (Constitution Check section aligns)
+  ✅ .specify/templates/spec-template.md - Reviewed (User scenarios & requirements align)
+  ✅ .specify/templates/tasks-template.md - Reviewed (User story organization aligns)
+  ✅ .specify/templates/checklist-template.md - Reviewed (No constitution conflicts)
+  ✅ .claude/commands/speckit.constitution.md - Reviewed (No agent-specific refs)
+
+Follow-up TODOs: None
+═══════════════════════════════════════════════════════════════════════════════
+-->
+
+# Anita Project Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Specification-Driven Development
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+All features MUST begin with a written specification before implementation. Specifications MUST include:
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+- Prioritized user stories (P1, P2, P3...) that are independently testable
+- Clear acceptance criteria in Given-When-Then format
+- Functional requirements (FR-XXX) with MUST/SHOULD designations
+- Success criteria that are measurable and technology-agnostic
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+**Rationale**: Specifications prevent scope creep, enable parallel development, provide a reference
+for validation, and ensure all stakeholders understand the feature before code is written. The
+SpecKit workflow enforces this through `/speckit.specify` → `/speckit.plan` → `/speckit.tasks`
+progression.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### II. Incremental Delivery
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+Features MUST be decomposed into independently deliverable user stories ordered by priority. Each
+user story MUST:
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+- Be implementable as a standalone slice of functionality
+- Be testable independently without requiring other stories
+- Deliver measurable value on its own (viable as an MVP increment)
+- Not break previously completed stories when added
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+**Rationale**: Incremental delivery reduces risk, enables early feedback, allows flexible
+prioritization, and ensures progress is always demonstrable. Priority P1 story completion yields a
+working MVP; subsequent stories add value without destabilizing the foundation.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+### III. Test Independence
+
+Tests MUST be independently executable and MUST NOT depend on execution order or shared mutable
+state. When tests are requested in a specification:
+
+- Write tests FIRST and ensure they FAIL before implementation (Red-Green-Refactor)
+- Contract tests validate API boundaries and data contracts
+- Integration tests validate user journeys end-to-end
+- Unit tests (optional) validate isolated component behavior
+- Each test MUST be runnable in isolation
+
+**Rationale**: Test independence enables parallel execution, simplifies debugging (failures point to
+specific components), prevents cascading failures, and ensures tests remain reliable as the codebase
+evolves. This is NOT mandatory TDD—tests are only written when explicitly requested in the spec.
+
+### IV. Maintainability & Documentation
+
+Code and features MUST be maintainable by future developers unfamiliar with the original context.
+This requires:
+
+- Clear naming conventions (no abbreviations unless domain-standard)
+- Inline comments ONLY where logic is non-obvious (prefer self-documenting code)
+- Architecture decision records (ADRs) for significant design choices
+- Up-to-date quickstart documentation showing how to use implemented features
+- Contracts defined before implementation (API endpoints, data schemas, service boundaries)
+
+**Rationale**: Maintainability reduces technical debt, accelerates onboarding, and prevents knowledge
+silos. Documentation is not busywork—it's a forcing function for clear thinking and a reference for
+future work. Contracts prevent integration surprises.
+
+### V. Simplicity & Focus
+
+Complexity MUST be justified. Default to the simplest solution that meets current requirements:
+
+- No premature abstraction (three instances before extracting a pattern)
+- No speculative features ("we might need this later")
+- No framework over-engineering (use language/framework idioms)
+- No premature optimization (profile before optimizing)
+- Feature flags and backward compatibility ONLY when truly necessary
+
+**Rationale**: Unnecessary complexity increases cognitive load, introduces bugs, and slows
+development. YAGNI (You Aren't Gonna Need It) prevents wasted effort. Simple code is easier to
+understand, test, modify, and delete. Complexity should emerge from necessity, not anticipation.
+
+## Development Standards
+
+### Code Quality
+
+- Code MUST pass linting and formatting checks before commit
+- Security vulnerabilities (OWASP Top 10: XSS, SQL injection, command injection, etc.) MUST be
+  avoided
+- Error handling MUST be present at system boundaries (user input, external APIs), but NOT for
+  scenarios that cannot happen
+- Logging MUST be structured and MUST capture security events and critical operations
+
+### Repository Hygiene
+
+- Commit messages MUST be clear and descriptive (conventional commits recommended)
+- Unused code MUST be deleted completely (no commented-out code, no `_unused` variables)
+- Each task or logical group SHOULD be committed independently
+- Feature work SHOULD occur in feature branches (`###-feature-name` format)
+
+## Quality Gates
+
+### Constitution Check (Mandatory)
+
+All implementation plans MUST pass a Constitution Check before Phase 0 research begins. The check
+MUST verify:
+
+- Specification completeness (user stories, requirements, success criteria)
+- User story independence (each story is testable on its own)
+- Complexity justification (any violations of Principle V documented in plan.md)
+- Test strategy alignment (if tests requested, contract/integration/unit split is clear)
+
+### Checkpoints (Mandatory)
+
+- **After Foundational Phase**: Core infrastructure complete, user story work can begin
+- **After Each User Story**: Story is independently functional and tested before moving to next
+  priority
+- **Before Final Deployment**: All requested user stories complete, quickstart.md validated
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+### Amendment Procedure
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+1. Propose amendment with rationale and version bump justification (MAJOR/MINOR/PATCH)
+2. Update `.specify/memory/constitution.md` via `/speckit.constitution` command
+3. Validate dependent templates (plan-template.md, spec-template.md, tasks-template.md) for
+   consistency
+4. Update templates if constitution adds/removes mandatory sections or constraints
+5. Commit with message: `docs: amend constitution to vX.Y.Z (summary of changes)`
+
+### Versioning Policy
+
+- **MAJOR**: Backward incompatible governance changes (principle removal, redefinition that breaks
+  existing workflows)
+- **MINOR**: New principle added, new mandatory section, materially expanded guidance
+- **PATCH**: Clarifications, wording improvements, typo fixes, non-semantic refinements
+
+### Compliance Review
+
+- All PRs MUST reference applicable constitution principles in description or review comments
+- Constitution violations MUST be documented in the "Complexity Tracking" section of plan.md with
+  justification
+- Unjustified complexity or principle violations SHOULD be rejected in code review
+
+**Version**: 1.0.0 | **Ratified**: 2025-11-26 | **Last Amended**: 2025-11-26

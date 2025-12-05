@@ -1,0 +1,36 @@
+{
+  "name": "web-automation-checker",
+  "version": "1.0.0",
+  "description": "Visual web automation checker with UI testing and performance analysis",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev": "npm run dev:backend & npm run dev:frontend",
+    "dev:backend": "npm run dev --workspace=backend",
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:backend": "npm run build --workspace=backend",
+    "build:frontend": "npm run build --workspace=frontend",
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:backend": "npm run test --workspace=backend",
+    "test:frontend": "npm run test --workspace=frontend",
+    "migrate": "npm run migrate --workspace=backend",
+    "clean": "rm -rf backend/dist frontend/dist node_modules backend/node_modules frontend/node_modules"
+  },
+  "keywords": [
+    "web-automation",
+    "testing",
+    "performance",
+    "playwright",
+    "lighthouse"
+  ],
+  "author": "Anita Project Team",
+  "license": "MIT"
+}

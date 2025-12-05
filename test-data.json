@@ -1,0 +1,3 @@
+{
+  "content": "澳洲信息安全测试要点\n\n一、前端页面测试\n1.1 入口触点测试\n- 触点位置: 在X1产品页显示按钮\n- 点击交互: 点击按钮能正常弹出表单弹窗\n\n1.2 表单弹窗测试\n- Activity Period下拉选项正确显示\n- Customer Name字段必填\n- Email Address必填且格式校验\n- Invoice Date日历控件正常\n- Product SN文本输入框正常"
+}

@@ -1,0 +1,196 @@
+.report-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 24px;
+}
+
+.report-page-header {
+  max-width: 1200px;
+  margin: 0 auto 24px auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.back-button {
+  padding: 10px 20px;
+  font-size: 15px;
+  font-weight: 500;
+  color: white;
+  background-color: rgba(255, 255, 255, 0.2);
+  border: 2px solid white;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  backdrop-filter: blur(10px);
+}
+
+.back-button:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+  transform: translateX(-4px);
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.action-button {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: white;
+  background-color: rgba(255, 255, 255, 0.2);
+  border: 2px solid white;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  backdrop-filter: blur(10px);
+  white-space: nowrap;
+}
+
+.action-button:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+.report-page-main {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.report-loading,
+.report-error {
+  background: white;
+  border-radius: 12px;
+  padding: 64px 32px;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.loading-spinner {
+  font-size: 64px;
+  display: inline-block;
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.report-loading p {
+  margin: 24px 0 0 0;
+  font-size: 18px;
+  color: #6b7280;
+}
+
+.error-icon {
+  font-size: 64px;
+  margin-bottom: 24px;
+}
+
+.report-error h2 {
+  margin: 0 0 12px 0;
+  font-size: 28px;
+  color: #1a1a1a;
+}
+
+.error-message {
+  margin: 0 0 32px 0;
+  font-size: 16px;
+  color: #6b7280;
+}
+
+.report-error .back-button {
+  color: #2563eb;
+  background-color: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.report-error .back-button:hover {
+  background-color: #dbeafe;
+  border-color: #93c5fd;
+  transform: none;
+}
+
+.report-page-footer {
+  max-width: 1200px;
+  margin: 32px auto 0 auto;
+  text-align: center;
+}
+
+.back-button-bottom {
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 500;
+  color: white;
+  background-color: rgba(255, 255, 255, 0.2);
+  border: 2px solid white;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  backdrop-filter: blur(10px);
+}
+
+.back-button-bottom:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+  transform: translateX(-4px);
+}
+
+/* Print styles */
+@media print {
+  .report-page {
+    background: white;
+    padding: 0;
+  }
+
+  .report-page-header,
+  .report-page-footer {
+    display: none;
+  }
+
+  .report-page-main {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .report-page {
+    padding: 16px;
+  }
+
+  .report-page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-actions {
+    width: 100%;
+  }
+
+  .action-button {
+    flex: 1;
+  }
+
+  .report-loading,
+  .report-error {
+    padding: 48px 24px;
+  }
+
+  .error-icon {
+    font-size: 48px;
+  }
+
+  .report-error h2 {
+    font-size: 24px;
+  }
+}

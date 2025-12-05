@@ -1,0 +1,52 @@
+.coming-soon-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  padding: 40px;
+}
+
+.coming-soon-content {
+  text-align: center;
+  max-width: 500px;
+}
+
+.coming-soon-content .icon {
+  font-size: 80px;
+  margin-bottom: 24px;
+  animation: bounce 2s infinite;
+}
+
+.coming-soon-content h1 {
+  font-size: 32px;
+  color: #1a202c;
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+
+.coming-soon-content p {
+  font-size: 16px;
+  color: #718096;
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 8px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+@keyframes bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-20px);
+  }
+}
