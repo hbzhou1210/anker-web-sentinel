@@ -21,24 +21,19 @@ interface TestResult {
   errorMessage?: string;
   checkDetails?: string; // 检查详情
   screenshotUrl?: string; // 截图URL
-
-  // Core Web Vitals 性能数据
-  coreWebVitals?: {
-    lcp?: { value: number; rating: 'good' | 'needs-improvement' | 'poor' };
-    fid?: { value: number; rating: 'good' | 'needs-improvement' | 'poor' };
-    cls?: { value: number; rating: 'good' | 'needs-improvement' | 'poor' };
-    fcp?: { value: number; rating: 'good' | 'needs-improvement' | 'poor' };
-    tti?: number;
-    tbt?: number;
-    ttfb?: number;
-    domLoad?: number;
-    onLoad?: number;
+  // 视觉对比结果
+  visualDiff?: {
+    hasDifference: boolean;
+    diffPercentage: number;
+    diffImageUrl?: string;
+    baselineImageUrl?: string;
   };
-  performanceLevel?: 'excellent' | 'good' | 'needs_improvement';
-  performanceScenario?: {
-    deviceType: string;
-    networkType: string;
-    businessType: string;
+  // 设备信息
+  deviceType?: 'desktop' | 'mobile' | 'tablet';
+  deviceName?: string;
+  viewport?: {
+    width: number;
+    height: number;
   };
 }
 
@@ -49,6 +44,27 @@ interface PatrolTask {
   urls: PatrolUrl[];
   notificationEmails: string[];
   enabled: boolean;
+  config?: {
+    visualComparison?: {
+      enabled: boolean;
+      diffThreshold?: number;
+      saveBaseline?: boolean;
+    };
+    devices?: Array<{
+      type: 'desktop' | 'mobile' | 'tablet';
+      name: string;
+      viewport: { width: number; height: number };
+      userAgent?: string;
+    }>;
+    retry?: {
+      enabled: boolean;
+      maxAttempts?: number;
+      retryDelay?: number;
+      retryOnInfraError?: boolean;
+    };
+    timeout?: number;
+    waitAfterLoad?: number;
+  };
   createdAt: string;
   updatedAt: string;
 }
@@ -72,6 +88,34 @@ const DEFAULT_PATROL_URLS = [
   { url: 'https://www.anker.com', name: '首页' },
   { url: 'https://www.anker.com/products', name: '产品页' },
   { url: 'https://www.anker.com/about', name: '关于我们' },
+];
+
+// 预设设备配置
+const DEVICE_PRESETS = [
+  {
+    type: 'desktop' as const,
+    name: 'Desktop 1920x1080',
+    viewport: { width: 1920, height: 1080 },
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  },
+  {
+    type: 'tablet' as const,
+    name: 'iPad Pro 11"',
+    viewport: { width: 834, height: 1194 },
+    userAgent: 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+  },
+  {
+    type: 'mobile' as const,
+    name: 'iPhone 14',
+    viewport: { width: 390, height: 844 },
+    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+  },
+  {
+    type: 'mobile' as const,
+    name: 'iPhone 14 Pro Max',
+    viewport: { width: 430, height: 932 },
+    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+  },
 ];
 
 const PatrolManagement: React.FC = () => {
@@ -100,6 +144,28 @@ const PatrolManagement: React.FC = () => {
     enabled: true,
     scheduleType: 'daily_morning' as 'daily_morning' | 'daily_afternoon' | 'daily_twice' | 'custom',
     customCron: '',
+    // 高级配置
+    config: {
+      visualComparison: {
+        enabled: false,
+        diffThreshold: 5,
+        saveBaseline: false,
+      },
+      devices: [] as Array<{
+        type: 'desktop' | 'mobile' | 'tablet';
+        name: string;
+        viewport: { width: number; height: number };
+        userAgent?: string;
+      }>,
+      retry: {
+        enabled: false,
+        maxAttempts: 3,
+        retryDelay: 2000,
+        retryOnInfraError: true,
+      },
+      timeout: 30,
+      waitAfterLoad: 2,
+    },
   });
 
   // 加载巡检任务列表
@@ -291,6 +357,22 @@ const PatrolManagement: React.FC = () => {
       enabled: task.enabled,
       scheduleType: 'daily_morning',
       customCron: '',
+      config: {
+        visualComparison: task.config?.visualComparison || {
+          enabled: false,
+          diffThreshold: 5,
+          saveBaseline: false,
+        },
+        devices: task.config?.devices || [],
+        retry: task.config?.retry || {
+          enabled: false,
+          maxAttempts: 3,
+          retryDelay: 2000,
+          retryOnInfraError: true,
+        },
+        timeout: task.config?.timeout || 30,
+        waitAfterLoad: task.config?.waitAfterLoad || 2,
+      },
     });
     setShowEditModal(true);
   };
@@ -337,6 +419,7 @@ const PatrolManagement: React.FC = () => {
           urls: validUrls,
           notificationEmails: validEmails,
           enabled: formData.enabled,
+          config: formData.config,
         }),
       });
 
@@ -394,6 +477,22 @@ const PatrolManagement: React.FC = () => {
         enabled: true,
         scheduleType: 'daily_morning',
         customCron: '',
+        config: {
+          visualComparison: {
+            enabled: false,
+            diffThreshold: 5,
+            saveBaseline: false,
+          },
+          devices: [],
+          retry: {
+            enabled: false,
+            maxAttempts: 3,
+            retryDelay: 2000,
+            retryOnInfraError: true,
+          },
+          timeout: 30,
+          waitAfterLoad: 2,
+        },
       });
       loadTasks();
     } catch (error) {
@@ -439,6 +538,7 @@ const PatrolManagement: React.FC = () => {
           urls: validUrls,
           notificationEmails: validEmails,
           enabled: formData.enabled,
+          config: formData.config,
         }),
       });
 
@@ -454,6 +554,22 @@ const PatrolManagement: React.FC = () => {
           enabled: true,
           scheduleType: 'daily_morning',
           customCron: '',
+          config: {
+            visualComparison: {
+              enabled: false,
+              diffThreshold: 5,
+              saveBaseline: false,
+            },
+            devices: [],
+            retry: {
+              enabled: false,
+              maxAttempts: 3,
+              retryDelay: 2000,
+              retryOnInfraError: true,
+            },
+            timeout: 30,
+            waitAfterLoad: 2,
+          },
         });
         loadTasks();
       } else {
@@ -941,104 +1057,6 @@ const PatrolManagement: React.FC = () => {
                                 )}
                               </div>
 
-                              {/* Core Web Vitals 性能指标 */}
-                              {result.coreWebVitals && (
-                                <div className="mt-4 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
-                                  <div className="flex items-center gap-2 mb-3">
-                                    <Activity className="w-4 h-4 text-blue-600" />
-                                    <div className="text-sm font-bold text-blue-900">
-                                      Core Web Vitals 性能指标
-                                      {result.performanceLevel && (
-                                        <span className={`ml-2 px-2 py-0.5 rounded text-xs font-semibold ${
-                                          result.performanceLevel === 'excellent' ? 'bg-green-500 text-white' :
-                                          result.performanceLevel === 'good' ? 'bg-yellow-500 text-white' :
-                                          'bg-orange-500 text-white'
-                                        }`}>
-                                          {result.performanceLevel === 'excellent' ? '优秀' :
-                                           result.performanceLevel === 'good' ? '良好' : '需优化'}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  {/* Core Metrics (LCP, FID, CLS) */}
-                                  <div className="grid grid-cols-3 gap-2 mb-2">
-                                    {result.coreWebVitals.lcp && (
-                                      <div className={`bg-white rounded p-2 border-2 ${
-                                        result.coreWebVitals.lcp.rating === 'good' ? 'border-green-300' :
-                                        result.coreWebVitals.lcp.rating === 'needs-improvement' ? 'border-yellow-300' :
-                                        'border-red-300'
-                                      }`}>
-                                        <div className="text-xs text-gray-600 mb-0.5">LCP (最大内容绘制)</div>
-                                        <div className="text-sm font-bold text-gray-900">
-                                          {result.coreWebVitals.lcp.value.toFixed(0)}ms
-                                        </div>
-                                      </div>
-                                    )}
-                                    {result.coreWebVitals.fid && (
-                                      <div className={`bg-white rounded p-2 border-2 ${
-                                        result.coreWebVitals.fid.rating === 'good' ? 'border-green-300' :
-                                        result.coreWebVitals.fid.rating === 'needs-improvement' ? 'border-yellow-300' :
-                                        'border-red-300'
-                                      }`}>
-                                        <div className="text-xs text-gray-600 mb-0.5">FID (首次输入延迟)</div>
-                                        <div className="text-sm font-bold text-gray-900">
-                                          {result.coreWebVitals.fid.value.toFixed(0)}ms
-                                        </div>
-                                      </div>
-                                    )}
-                                    {result.coreWebVitals.cls && (
-                                      <div className={`bg-white rounded p-2 border-2 ${
-                                        result.coreWebVitals.cls.rating === 'good' ? 'border-green-300' :
-                                        result.coreWebVitals.cls.rating === 'needs-improvement' ? 'border-yellow-300' :
-                                        'border-red-300'
-                                      }`}>
-                                        <div className="text-xs text-gray-600 mb-0.5">CLS (累积布局偏移)</div>
-                                        <div className="text-sm font-bold text-gray-900">
-                                          {result.coreWebVitals.cls.value.toFixed(3)}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {/* Auxiliary Metrics (FCP, TTI, TBT) */}
-                                  <div className="grid grid-cols-3 gap-2">
-                                    {result.coreWebVitals.fcp && (
-                                      <div className="bg-white rounded p-2">
-                                        <div className="text-xs text-gray-500 mb-0.5">FCP</div>
-                                        <div className="text-xs font-semibold text-gray-700">
-                                          {result.coreWebVitals.fcp.value.toFixed(0)}ms
-                                        </div>
-                                      </div>
-                                    )}
-                                    {result.coreWebVitals.tti && (
-                                      <div className="bg-white rounded p-2">
-                                        <div className="text-xs text-gray-500 mb-0.5">TTI</div>
-                                        <div className="text-xs font-semibold text-gray-700">
-                                          {result.coreWebVitals.tti.toFixed(0)}ms
-                                        </div>
-                                      </div>
-                                    )}
-                                    {result.coreWebVitals.tbt !== undefined && (
-                                      <div className="bg-white rounded p-2">
-                                        <div className="text-xs text-gray-500 mb-0.5">TBT</div>
-                                        <div className="text-xs font-semibold text-gray-700">
-                                          {result.coreWebVitals.tbt.toFixed(0)}ms
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {/* Scenario info */}
-                                  {result.performanceScenario && (
-                                    <div className="mt-2 text-xs text-gray-600 flex items-center gap-1">
-                                      <Globe className="w-3 h-3" />
-                                      评估场景: {result.performanceScenario.deviceType} / {result.performanceScenario.networkType} / {result.performanceScenario.businessType}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-
                               {/* 检查详情 - 始终显示 */}
                               {result.checkDetails && (
                                 <div className={`mt-3 p-3 bg-white rounded-lg border ${
@@ -1348,6 +1366,265 @@ const PatrolManagement: React.FC = () => {
                     <Calendar className="w-3 h-3" />
                     选择任务的定时执行时间,启用后将自动按时执行
                   </p>
+                </div>
+
+                {/* 高级配置 */}
+                <div className="border-2 border-gray-200 rounded-xl p-6 space-y-6">
+                  <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-purple-600" />
+                    高级配置
+                  </h3>
+
+                  {/* 视觉对比 */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                        <Eye className="w-4 h-4 text-purple-600" />
+                        页面快照对比
+                      </label>
+                      <input
+                        type="checkbox"
+                        checked={formData.config.visualComparison.enabled}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            config: {
+                              ...formData.config,
+                              visualComparison: {
+                                ...formData.config.visualComparison,
+                                enabled: e.target.checked,
+                              },
+                            },
+                          })
+                        }
+                        className="w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                    {formData.config.visualComparison.enabled && (
+                      <div className="pl-6 space-y-3 border-l-2 border-purple-200">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            差异阈值 ({formData.config.visualComparison.diffThreshold}%)
+                          </label>
+                          <input
+                            type="range"
+                            min="1"
+                            max="20"
+                            step="1"
+                            value={formData.config.visualComparison.diffThreshold}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                config: {
+                                  ...formData.config,
+                                  visualComparison: {
+                                    ...formData.config.visualComparison,
+                                    diffThreshold: parseInt(e.target.value),
+                                  },
+                                },
+                              })
+                            }
+                            className="w-full"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">像素差异超过此百分比将触发告警</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="saveBaseline"
+                            checked={formData.config.visualComparison.saveBaseline}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                config: {
+                                  ...formData.config,
+                                  visualComparison: {
+                                    ...formData.config.visualComparison,
+                                    saveBaseline: e.target.checked,
+                                  },
+                                },
+                              })
+                            }
+                            className="w-4 h-4 text-purple-600 border-gray-300 rounded"
+                          />
+                          <label htmlFor="saveBaseline" className="text-xs text-gray-600">
+                            自动更新基线图片(无差异时)
+                          </label>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 设备测试 */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-semibold text-gray-700">
+                        多设备测试
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const device = DEVICE_PRESETS[0];
+                          setFormData({
+                            ...formData,
+                            config: {
+                              ...formData.config,
+                              devices: [...formData.config.devices, { ...device }],
+                            },
+                          });
+                        }}
+                        className="text-xs text-purple-600 hover:text-purple-700 font-medium flex items-center gap-1"
+                      >
+                        <Plus className="w-3 h-3" />
+                        添加设备
+                      </button>
+                    </div>
+                    {formData.config.devices.length > 0 ? (
+                      <div className="space-y-2">
+                        {formData.config.devices.map((device, index) => (
+                          <div key={index} className="flex items-center gap-2 p-3 bg-purple-50 rounded-lg group">
+                            <select
+                              value={device.name}
+                              onChange={(e) => {
+                                const selectedDevice = DEVICE_PRESETS.find((d) => d.name === e.target.value);
+                                if (selectedDevice) {
+                                  const newDevices = [...formData.config.devices];
+                                  newDevices[index] = { ...selectedDevice };
+                                  setFormData({
+                                    ...formData,
+                                    config: { ...formData.config, devices: newDevices },
+                                  });
+                                }
+                              }}
+                              className="flex-1 px-3 py-2 text-sm border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500"
+                            >
+                              {DEVICE_PRESETS.map((preset) => (
+                                <option key={preset.name} value={preset.name}>
+                                  {preset.name} ({preset.viewport.width}x{preset.viewport.height})
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newDevices = formData.config.devices.filter((_, i) => i !== index);
+                                setFormData({
+                                  ...formData,
+                                  config: { ...formData.config, devices: newDevices },
+                                });
+                              }}
+                              className="p-2 text-red-600 hover:bg-red-100 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-500">未配置设备,将使用默认桌面端测试</p>
+                    )}
+                  </div>
+
+                  {/* 重试机制 */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                        <Zap className="w-4 h-4 text-purple-600" />
+                        自动重试
+                      </label>
+                      <input
+                        type="checkbox"
+                        checked={formData.config.retry.enabled}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            config: {
+                              ...formData.config,
+                              retry: {
+                                ...formData.config.retry,
+                                enabled: e.target.checked,
+                              },
+                            },
+                          })
+                        }
+                        className="w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                    {formData.config.retry.enabled && (
+                      <div className="pl-6 space-y-3 border-l-2 border-purple-200">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">最大重试次数</label>
+                            <input
+                              type="number"
+                              min="1"
+                              max="5"
+                              value={formData.config.retry.maxAttempts}
+                              onChange={(e) =>
+                                setFormData({
+                                  ...formData,
+                                  config: {
+                                    ...formData.config,
+                                    retry: {
+                                      ...formData.config.retry,
+                                      maxAttempts: parseInt(e.target.value),
+                                    },
+                                  },
+                                })
+                              }
+                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">重试间隔(毫秒)</label>
+                            <input
+                              type="number"
+                              min="1000"
+                              max="10000"
+                              step="500"
+                              value={formData.config.retry.retryDelay}
+                              onChange={(e) =>
+                                setFormData({
+                                  ...formData,
+                                  config: {
+                                    ...formData.config,
+                                    retry: {
+                                      ...formData.config.retry,
+                                      retryDelay: parseInt(e.target.value),
+                                    },
+                                  },
+                                })
+                              }
+                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="retryInfraError"
+                            checked={formData.config.retry.retryOnInfraError}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                config: {
+                                  ...formData.config,
+                                  retry: {
+                                    ...formData.config.retry,
+                                    retryOnInfraError: e.target.checked,
+                                  },
+                                },
+                              })
+                            }
+                            className="w-4 h-4 text-purple-600 border-gray-300 rounded"
+                          />
+                          <label htmlFor="retryInfraError" className="text-xs text-gray-600">
+                            仅对基础设施错误重试(网络超时、连接失败等)
+                          </label>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* 启用状态 */}

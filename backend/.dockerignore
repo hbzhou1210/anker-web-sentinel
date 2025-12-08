@@ -1,0 +1,42 @@
+# Node modules
+node_modules/
+npm-debug.log
+
+# Development files
+.env
+.env.local
+.env.development
+
+# Build outputs
+dist/
+*.tsbuildinfo
+
+# Tests
+coverage/
+test-results/
+*.test.ts
+*.spec.ts
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+docs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Logs
+logs/
+*.log
+
+# Screenshots (will be mounted as volume)
+screenshots/
+
+# Temporary files
+*.tmp
+.cache/

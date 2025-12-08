@@ -5,6 +5,7 @@ import path from 'path';
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  base: './', // 使用相对路径，适配子路径部署
   server: {
     port: 5173,
     proxy: {

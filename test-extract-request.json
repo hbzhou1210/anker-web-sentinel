@@ -1,5 +1,0 @@
-{
-  "documentUrl": "https://anker-in.feishu.cn/docx/A0HVd6B7CoJIuXx1Cjxcjm32nKg",
-  "documentContent": "阳台SKU后缀去除需求\n\n背景：目前阳台产品通过后缀区分同一产品的不同定价类型（如德国免税、奥地利含税），以及不同 listing 下的产品用途（用于促销的赠品、主产品配件区、或配件独立销售的 listing）。由于每次新品上线前都需手动提报后缀移除需求，流程较为繁琐，希望能明确后缀规则并实现自动应用，以在新 SKU 上线时自动匹配，减少运营与开发的维护成本。\n\n欧洲站点DE、FR、EU、NL、IT、UK后缀清单\n以-分割，当SKU第二部分全为数字时，取前面两个。举例:A17C13Z1-85-DE-HES取A17C13Z1-85，将-DE后面的字符截掉。整个欧洲所有店铺用同一套逻辑。\n\n需求生效店铺：\nankersolix-fra.myshopify.com\nankersolix-de.myshopify.com\nankersolix-eu.myshopify.com\nankersolix-nl.myshopify.com\nankersolix-it.myshopify.com\nankersolix-uk.myshopify.com\n\n美区US、CA、AU这三个店铺不适用，没有清除后缀的需求。",
-  "documentTitle": "阳台SKU后缀去除需求"
-}

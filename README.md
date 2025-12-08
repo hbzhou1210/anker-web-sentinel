@@ -1,186 +1,154 @@
-# Web Automation Checker
+# Anita - Web Automation Checker
 
-可视化网页自动化检查工具 - 检测UI功能和性能指标
+可视化网页自动化巡检工具 - UI测试 + 性能分析 + 自动化巡检
 
-## 项目概述
+## 功能特性
 
-用户可以在界面上输入URL，系统会自动进行:
-1. **UI功能检测** - 检查链接、表单、按钮、图片是否正常工作
-2. **性能检测** - 评估页面加载速度、资源大小、响应时间等指标
-3. **测试点提取** - 从飞书需求文档中自动提取测试点并生成测试用例表格
-
-检测完成后展示详细的可视化报告，包括通过/失败状态、性能评分和优化建议。
+- ✅ **UI 自动化测试** - 链接、表单、按钮、图片检测，自动截图
+- ✅ **性能分析** - Core Web Vitals、资源大小、加载时间
+- ✅ **响应式测试** - 多设备尺寸适配检测
+- ✅ **自动化巡检** - 定时巡检任务、邮件通知、历史记录
+- ✅ **测试点提取** - AI 从飞书文档提取测试用例
 
 ## 技术栈
 
-### 后端
-- **Node.js 20 LTS** + **TypeScript 5.3**
-- **Express 4** - REST API
-- **Playwright** - 浏览器自动化
-- **Lighthouse** - 性能分析
-- **PostgreSQL 16** - 数据存储
-- **Claude AI (Bedrock)** - 测试点提取
-
-### 前端
-- **React 18** + **TypeScript 5.3**
-- **Vite 5** - 构建工具
-- **TanStack Query** - 数据获取
-- **Recharts** - 数据可视化
-- **Tailwind CSS** - 样式
+**后端**: Node.js 20 + TypeScript + Express + Playwright + PostgreSQL
+**前端**: React 18 + TypeScript + Vite + TailwindCSS
 
 ## 快速开始
 
 ### 前置要求
 
 - Node.js >= 20.0.0
-- PostgreSQL >= 16
+- PostgreSQL >= 14
 - npm >= 10.0.0
 
 ### 安装
 
 ```bash
-# 1. 克隆仓库
-git clone <repository-url>
-cd anita-project
-
-# 2. 安装依赖
+# 1. 安装依赖
 npm install
 
-# 3. 配置数据库
+# 2. 配置数据库
 createdb web_automation_checker
 
-# 4. 配置环境变量
+# 3. 配置环境变量
 cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
 # 编辑 backend/.env 设置 DATABASE_URL
 
-# 5. 运行数据库迁移
+# 4. 运行数据库迁移
 npm run migrate
 
-# 6. 安装 Playwright 浏览器
-cd backend
-npx playwright install chromium
-cd ..
+# 5. 安装浏览器
+cd backend && npx playwright install chromium
 ```
 
 ### 开发
 
 ```bash
-# 启动开发服务器 (前端 + 后端)
+# 启动开发服务器
 npm run dev
 
 # 前端: http://localhost:5173
 # 后端: http://localhost:3000
-# API: http://localhost:3000/api/v1
 ```
 
-### 构建
+### 生产构建
 
 ```bash
 npm run build
 ```
 
-### 测试
+## Docker 部署
+
+### 使用 Docker Compose（推荐）
 
 ```bash
-npm test
+# 1. 配置环境变量
+cp .env.production .env
+nano .env  # 编辑数据库密码等配置
+
+# 2. 启动所有服务
+docker-compose up -d
+
+# 3. 访问应用
+# 前端: http://localhost
+# 后端: http://localhost:3000
+```
+
+### Launch 平台部署
+
+```bash
+# 1. 准备数据库（推荐 Neon: https://neon.tech）
+# 获取 PostgreSQL 连接字符串
+
+# 2. 打包项目
+zip -r anita-launch.zip . \
+    -x "node_modules/*" -x ".git/*" -x "dist/*"
+
+# 3. 上传到 Launch 平台
+# 选择 "其他类型，自带 Dockerfile"
+
+# 4. 配置环境变量
+DATABASE_URL=postgresql://user:pass@host:5432/dbname
+FRONTEND_URL=https://web.anker-launch.com
 ```
 
 ## 项目结构
 
 ```
 anita-project/
-├── backend/                 # 后端服务
+├── backend/               # 后端 Node.js 服务
 │   ├── src/
-│   │   ├── database/       # 数据库连接和迁移
-│   │   ├── models/         # 实体和仓库
-│   │   ├── automation/     # Playwright浏览器池
-│   │   ├── api/            # Express API
-│   │   └── index.ts        # 入口文件
+│   │   ├── api/          # Express API 路由
+│   │   ├── automation/   # Playwright 浏览器池
+│   │   ├── database/     # 数据库连接和迁移
+│   │   ├── models/       # 实体和仓库
+│   │   ├── services/     # 业务逻辑
+│   │   └── index.ts
 │   └── package.json
-├── frontend/                # 前端应用
+├── frontend/              # 前端 React 应用
 │   ├── src/
-│   │   ├── components/     # React组件
-│   │   ├── pages/          # 页面
-│   │   ├── services/       # API客户端
-│   │   └── main.tsx        # 入口文件
+│   │   ├── components/   # React 组件
+│   │   ├── pages/        # 页面路由
+│   │   ├── services/     # API 客户端
+│   │   └── main.tsx
 │   └── package.json
-├── specs/                   # 功能规范文档
-│   └── 001-web-automation-checker/
-│       ├── spec.md         # 功能规范
-│       ├── plan.md         # 实现计划
-│       ├── tasks.md        # 任务清单
-│       ├── data-model.md   # 数据模型
-│       ├── quickstart.md   # 快速入门
-│       └── contracts/      # API契约
-└── package.json            # Monorepo配置
+├── Dockerfile             # Docker 镜像配置
+├── docker-compose.yml     # Docker Compose 配置
+└── package.json           # Monorepo 配置
 ```
 
-## 核心功能
+## API 端点
 
-### ✅ UI自动化测试
-- 链接检测 (404错误、重定向、响应时间)
-- 表单检测 (必填字段、提交功能)
-- 按钮检测 (可点击性、禁用状态)
-- 图片检测 (加载状态、尺寸、alt属性)
-- 自动截图失败元素
-- 智能失败分析和修复建议
+```
+GET  /api/v1/tests/:id              - 获取测试结果
+POST /api/v1/tests/run              - 执行 UI 测试
+POST /api/v1/tests/performance      - 执行性能测试
+POST /api/v1/responsive/test        - 响应式测试
+GET  /api/v1/patrol/tasks           - 巡检任务列表
+POST /api/v1/patrol/tasks           - 创建巡检任务
+POST /api/v1/patrol/tasks/:id/run   - 执行巡检
+POST /api/v1/testPoints/extract     - 提取测试点
+GET  /health                        - 健康检查
+```
 
-### ✅ 性能测试
-- 使用 WebPageTest API 进行专业性能测试
-- 评估指标:
-  - 加载时间 (Load Time)
-  - 首次渲染时间 (First Paint)
-  - 服务器响应时间 (TTFB)
-  - 总资源大小 (Total Size)
-- 超标原因分析和优化建议
-- 最大资源列表展示
+## 环境变量
 
-### ✅ 测试点提取
-- AI驱动的测试点提取 (基于 Claude Sonnet 4.5)
-- 从飞书需求文档自动生成测试用例
-- 支持以下测试类型:
-  - 功能测试 (Functional)
-  - 界面测试 (UI)
-  - 兼容性测试 (Compatibility)
-  - 性能测试 (Performance)
-  - 安全测试 (Security)
-  - 集成测试 (Integration)
-- 生成8列测试用例表格 (Markdown格式):
-  - 用例ID、模块、优先级、测试类型
-  - 用例标题、操作步骤、预期结果、实际执行结果
-- 卡片视图和表格预览双视图展示
-- 一键复制Markdown表格内容
-- 自动保存到数据库
+**后端** (`backend/.env`):
+```bash
+DATABASE_URL=postgresql://user:pass@localhost:5432/web_automation_checker
+FRONTEND_URL=http://localhost:5173
+ANTHROPIC_API_KEY=sk-xxx           # Claude AI (可选)
+SMTP_HOST=smtp.gmail.com           # 邮件通知 (可选)
+SMTP_USER=your@email.com
+SMTP_PASSWORD=your_password
+```
 
-## 实现进度
-
-### ✅ Phase 1-4: 核心功能 (已完成 - 2025-12-03)
-- ✅ Monorepo项目设置
-- ✅ PostgreSQL数据库 (6张表: test_results, test_checks, performance_metrics, feishu_documents, test_points, migrations)
-- ✅ Playwright浏览器自动化
-- ✅ UI测试服务 (链接、表单、按钮、图片)
-- ✅ 性能测试服务 (WebPageTest集成)
-- ✅ 截图服务 (失败元素高亮)
-- ✅ 智能失败分析 (AI驱动)
-- ✅ 测试点提取服务 (Claude AI)
-- ✅ REST API完整实现
-- ✅ React前端界面
-- ✅ 测试历史记录
-
-### 📋 待实现功能
-- 测试结果对比分析
-- 定时任务和自动化测试
-- 测试报告导出 (PDF/HTML)
-
-## 文档
-
-详细文档请参考:
-- [功能规范](./specs/001-web-automation-checker/spec.md)
-- [实现计划](./specs/001-web-automation-checker/plan.md)
-- [快速入门指南](./specs/001-web-automation-checker/quickstart.md)
-- [数据模型](./specs/001-web-automation-checker/data-model.md)
-- [API契约](./specs/001-web-automation-checker/contracts/api.yaml)
+**前端** (`frontend/.env.production`):
+```bash
+VITE_API_BASE_URL=http://localhost:3000/api/v1
+```
 
 ## 许可证
 

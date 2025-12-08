@@ -72,10 +72,23 @@ test-results/
 playwright-report/
 playwright/.cache/
 
-# Docker
-.dockerignore
-
 # Backups
 *.sql
 *.tar.gz
+*.zip
 *_backup/
+
+# Documentation and specs (keep only README.md)
+docs/
+specs/
+.specify/
+DEPLOYMENT*.md
+DEPENDENCIES.md
+REQUIREMENTS.txt
+STARTUP_GUIDE.md
+PATROL_*.md
+LAUNCH_*.md
+test-*.sh
+test-*.json
+test-*.js
+*.bak

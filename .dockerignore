@@ -1,0 +1,52 @@
+# Node modules
+node_modules
+*/node_modules
+
+# Build outputs
+backend/dist
+frontend/dist
+frontend/build
+
+# Development files
+.git
+.gitignore
+.env
+.env.*
+*.log
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Test files
+__tests__
+*.test.js
+*.test.ts
+*.spec.js
+*.spec.ts
+coverage
+
+# Documentation
+README.md
+docs
+*.md
+!package.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp
+temp
+*.tmp
+/tmp/screenshots
+
+# Backup files
+*.bak
+*_backup/
+*.sql
+*.tar.gz
+*.zip

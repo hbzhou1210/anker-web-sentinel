@@ -11,6 +11,7 @@ import feishuRouter from './api/routes/feishu.js';
 import responsiveRouter from './api/routes/responsive.js';
 import patrolRouter from './api/routes/patrol.js';
 import { patrolSchedulerService } from './services/PatrolSchedulerService.js';
+import { imageCompareService } from './automation/ImageCompareService.js';
 
 // Load environment variables
 dotenv.config();
@@ -44,6 +45,11 @@ async function startServer() {
     console.log('Initializing browser pool...');
     await browserPool.initialize();
     console.log('✓ Browser pool ready');
+
+    // Initialize image compare service
+    console.log('Initializing image compare service...');
+    await imageCompareService.initialize();
+    console.log('✓ Image compare service ready');
 
     // Initialize patrol scheduler
     console.log('Initializing patrol scheduler...');

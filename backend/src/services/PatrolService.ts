@@ -1,20 +1,11 @@
-import { Browser, Page } from 'playwright';
+import { Browser, Page, BrowserContext } from 'playwright';
 import browserPool from '../automation/BrowserPool.js';
 import { PatrolTaskRepository } from '../database/repositories/PatrolTaskRepository.js';
 import { PatrolExecutionRepository } from '../database/repositories/PatrolExecutionRepository.js';
-import { PatrolExecutionStatus, PatrolTestResult, PatrolTask } from '../models/entities.js';
+import { PatrolExecutionStatus, PatrolTestResult, PatrolTask, PatrolConfig } from '../models/entities.js';
 import screenshotService from '../automation/ScreenshotService.js';
 import { patrolEmailService } from './PatrolEmailService.js';
-import coreWebVitalsCollector from '../performance/CoreWebVitalsCollector.js';
-import {
-  getThresholdsForScenario,
-  evaluateMetric,
-  DeviceType,
-  NetworkType,
-  BusinessType,
-  WebVitalMetric,
-  PerformanceLevel,
-} from '../performance/coreWebVitalsThresholds.js';
+import { imageCompareService } from '../automation/ImageCompareService.js';
 
 // 页面类型枚举
 export enum PageType {
@@ -29,6 +20,7 @@ interface CheckDetail {
   name: string;
   passed: boolean;
   message?: string;
+  confidence?: 'high' | 'medium' | 'low'; // 置信度
 }
 
 export class PatrolService {
@@ -38,6 +30,72 @@ export class PatrolService {
   constructor() {
     this.taskRepository = new PatrolTaskRepository();
     this.executionRepository = new PatrolExecutionRepository();
+  }
+
+  /**
+   * 尝试关闭常见的弹窗和遮罩层
+   */
+  private async dismissCommonPopups(page: Page): Promise<void> {
+    try {
+      console.log(`  Attempting to dismiss common popups...`);
+
+      // 常见的弹窗关闭按钮选择器
+      const closeSelectors = [
+        // 通用关闭按钮
+        'button[aria-label="Close"]',
+        'button[aria-label="close"]',
+        'button[aria-label="关闭"]',
+        '[class*="close-button"]',
+        '[class*="close-btn"]',
+        '[class*="modal-close"]',
+        '[class*="popup-close"]',
+        '[data-dismiss="modal"]',
+
+        // Cookie 同意弹窗
+        'button:has-text("Accept")',
+        'button:has-text("Accept all")',
+        'button:has-text("同意")',
+        'button:has-text("接受")',
+        '#onetrust-accept-btn-handler',
+        '.cookie-accept-button',
+
+        // Newsletter 弹窗
+        '[class*="newsletter"] button[class*="close"]',
+        '[class*="email-popup"] button[class*="close"]',
+
+        // X 图标
+        'button:has-text("×")',
+        'button:has-text("✕")',
+        '[aria-label="dismiss"]',
+      ];
+
+      let closedCount = 0;
+      for (const selector of closeSelectors) {
+        try {
+          const elements = await page.$$(selector);
+          for (const element of elements) {
+            const isVisible = await element.isVisible();
+            if (isVisible) {
+              await element.click({ timeout: 1000 });
+              closedCount++;
+              await page.waitForTimeout(500); // 等待弹窗关闭动画
+            }
+          }
+        } catch (error) {
+          // 忽略单个选择器的错误,继续尝试其他的
+        }
+      }
+
+      // 尝试按 ESC 键关闭弹窗
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(500);
+
+      if (closedCount > 0) {
+        console.log(`  ✓ Dismissed ${closedCount} popup(s)`);
+      }
+    } catch (error) {
+      console.log(`  Could not dismiss popups (this is usually fine):`, (error as Error).message);
+    }
   }
 
   /**
@@ -108,31 +166,55 @@ export class PatrolService {
     const checks: CheckDetail[] = [];
 
     try {
-      // 1. 导航栏检查
-      const navigationSelectors = [
-        'header nav',
-        'header',
-        '.header',
-        '.navigation',
-        'nav[class*="nav"]',
-        '[class*="header"]'
-      ];
+      // 1. 导航栏检查 - 改进的检测逻辑
+      const navigationResult = await page.evaluate(() => {
+        const selectors = [
+          'header nav',
+          'header',
+          '.header',
+          '.navigation',
+          'nav[class*="nav"]',
+          '[class*="header"]',
+          'nav'
+        ];
 
-      let navigationFound = false;
-      for (const selector of navigationSelectors) {
-        try {
-          const nav = await page.$(selector);
-          if (nav && await nav.isVisible()) {
-            navigationFound = true;
-            break;
+        for (const selector of selectors) {
+          const elements = document.querySelectorAll(selector);
+          for (const el of elements) {
+            const rect = el.getBoundingClientRect();
+            const style = window.getComputedStyle(el);
+
+            // 检查元素是否在视口顶部且可见
+            const isAtTop = rect.top < 200; // 允许一些偏移
+            const isVisible = style.display !== 'none' &&
+                            style.visibility !== 'hidden' &&
+                            style.opacity !== '0';
+            const hasSize = rect.width > 100 && rect.height > 20;
+
+            // 检查是否包含导航链接
+            const links = el.querySelectorAll('a');
+            const hasLinks = links.length >= 3;
+
+            if (isVisible && hasSize && (isAtTop || hasLinks)) {
+              return {
+                found: true,
+                confidence: (isAtTop && hasLinks) ? 'high' : 'medium',
+                linkCount: links.length,
+                position: `${Math.round(rect.top)}px from top`
+              };
+            }
           }
-        } catch {}
-      }
+        }
+        return { found: false, confidence: 'low' };
+      });
 
       checks.push({
         name: '导航栏',
-        passed: navigationFound,
-        message: navigationFound ? '导航栏存在且可见' : '未找到导航栏'
+        passed: navigationResult.found,
+        confidence: navigationResult.confidence as 'high' | 'medium' | 'low',
+        message: navigationResult.found
+          ? `导航栏存在且可见 (${navigationResult.linkCount} 个链接, ${navigationResult.position})`
+          : '未找到导航栏或被遮挡'
       });
 
       // 2. 主Banner/首屏内容检查
@@ -387,7 +469,7 @@ export class PatrolService {
   }
 
   /**
-   * 评估检查结果
+   * 评估检查结果 - 考虑置信度
    */
   private evaluateChecks(
     pageType: PageType,
@@ -396,6 +478,10 @@ export class PatrolService {
     const passedCount = checks.filter(c => c.passed).length;
     const totalCount = checks.length;
     const passRate = totalCount > 0 ? (passedCount / totalCount) * 100 : 0;
+
+    // 统计低置信度的检查
+    const lowConfidenceChecks = checks.filter(c => c.confidence === 'low' || c.confidence === 'medium');
+    const hasUncertainty = lowConfidenceChecks.length > 0;
 
     // 产品页特殊处理: 加购或购买至少一个可用
     if (pageType === PageType.ProductPage) {
@@ -411,15 +497,35 @@ export class PatrolService {
       }
     }
 
-    // 根据通过率判定
+    // 根据通过率和置信度判定
     if (passRate === 100) {
+      if (hasUncertainty) {
+        return {
+          status: 'pass',
+          message: `所有检查项通过 (注意: ${lowConfidenceChecks.length} 项置信度较低)`
+        };
+      }
       return { status: 'pass', message: '所有检查项通过' };
     } else if (passRate >= 60) {
+      const uncertaintyNote = hasUncertainty
+        ? ` (${lowConfidenceChecks.length} 项结果不确定)`
+        : '';
       return {
         status: 'warning',
-        message: `部分检查项未通过 (${passedCount}/${totalCount})`
+        message: `部分检查项未通过 (${passedCount}/${totalCount})${uncertaintyNote}`
       };
     } else {
+      // 如果大部分失败项都是低置信度,可能需要人工复查
+      const failedChecks = checks.filter(c => !c.passed);
+      const lowConfidenceFails = failedChecks.filter(c => c.confidence === 'low' || c.confidence === 'medium');
+
+      if (lowConfidenceFails.length === failedChecks.length && lowConfidenceFails.length > 0) {
+        return {
+          status: 'warning',
+          message: `多项检查失败 (${passedCount}/${totalCount}),但结果不确定,建议人工复查`
+        };
+      }
+
       return {
         status: 'fail',
         message: `多项检查失败 (${passedCount}/${totalCount})`
@@ -457,13 +563,91 @@ export class PatrolService {
   }
 
   /**
+   * 带重试机制的URL测试包装
+   */
+  private async testUrlWithRetry(
+    page: Page,
+    url: string,
+    name: string,
+    config: PatrolConfig,
+    deviceConfig?: { type: 'desktop' | 'mobile' | 'tablet'; name: string; viewport: { width: number; height: number } }
+  ): Promise<PatrolTestResult> {
+    const retryConfig = config.retry || { enabled: false, maxAttempts: 3, retryDelay: 2000, retryOnInfraError: true };
+    const maxAttempts = retryConfig.enabled ? (retryConfig.maxAttempts || 3) : 1;
+
+    let lastError: Error | null = null;
+    let lastResult: PatrolTestResult | null = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        console.log(`  Attempt ${attempt}/${maxAttempts} for ${name}`);
+
+        const result = await this.testUrl(page, url, name, config, deviceConfig);
+
+        // 如果成功或者非基础设施错误失败,直接返回
+        if (result.status === 'pass' || (result.status === 'fail' && !result.isInfrastructureError)) {
+          if (attempt > 1) {
+            console.log(`  ✓ ${name} succeeded on attempt ${attempt}`);
+          }
+          return result;
+        }
+
+        // 基础设施错误,检查是否需要重试
+        if (result.isInfrastructureError && retryConfig.retryOnInfraError && attempt < maxAttempts) {
+          console.warn(`  ⚠️  Infrastructure error on attempt ${attempt}, retrying...`);
+          lastResult = result;
+          await new Promise(resolve => setTimeout(resolve, retryConfig.retryDelay || 2000));
+          continue;
+        }
+
+        return result;
+      } catch (error) {
+        lastError = error as Error;
+
+        if (attempt < maxAttempts) {
+          console.error(`  ✗ Attempt ${attempt} failed:`, lastError.message);
+          await new Promise(resolve => setTimeout(resolve, retryConfig.retryDelay || 2000));
+        }
+      }
+    }
+
+    // 所有重试都失败了
+    console.error(`  ✗ All ${maxAttempts} attempts failed for ${name}`);
+
+    if (lastResult) {
+      return lastResult;
+    }
+
+    return {
+      url,
+      name,
+      status: 'fail',
+      errorMessage: `所有 ${maxAttempts} 次尝试都失败: ${lastError?.message || '未知错误'}`,
+      testDuration: 0,
+      isInfrastructureError: true,
+    };
+  }
+
+  /**
    * 执行单个 URL 的巡检测试
    */
-  private async testUrl(page: Page, url: string, name: string): Promise<PatrolTestResult> {
+  private async testUrl(
+    page: Page,
+    url: string,
+    name: string,
+    config: PatrolConfig,
+    deviceConfig?: { type: 'desktop' | 'mobile' | 'tablet'; name: string; viewport: { width: number; height: number } }
+  ): Promise<PatrolTestResult> {
     const startTime = Date.now();
 
     try {
-      console.log(`Testing URL: ${name} (${url})`);
+      // 设置设备视口(如果配置了)
+      if (deviceConfig) {
+        await page.setViewportSize(deviceConfig.viewport);
+        console.log(`Testing URL: ${name} (${url}) on ${deviceConfig.name} (${deviceConfig.viewport.width}x${deviceConfig.viewport.height})`);
+      } else {
+        console.log(`Testing URL: ${name} (${url})`);
+      }
 
       // 检测页面类型
       const pageType = this.detectPageType(url, name);
@@ -517,62 +701,8 @@ export class PatrolService {
       // 等待页面稳定
       await page.waitForTimeout(2000);
 
-      // ========== Core Web Vitals 性能采集 ==========
-      let coreWebVitalsData: any = undefined;
-      let performanceLevel: 'excellent' | 'good' | 'needs_improvement' | undefined = undefined;
-      let performanceScenario: any = undefined;
-
-      try {
-        console.log(`  Collecting Core Web Vitals...`);
-
-        // 采集性能数据(快速模式,不等待用户交互)
-        const vitals = await coreWebVitalsCollector.collectQuick(page);
-
-        // 获取适用的场景阈值(默认使用移动端4G电商场景 - 最通用)
-        const scenario = getThresholdsForScenario(
-          DeviceType.Mobile,
-          NetworkType.Mobile_4G,
-          BusinessType.Ecommerce
-        );
-
-        performanceScenario = {
-          deviceType: scenario.deviceType,
-          networkType: scenario.networkType,
-          businessType: scenario.businessType,
-        };
-
-        // 构建 Core Web Vitals 数据对象
-        coreWebVitalsData = {
-          lcp: vitals.lcp ? { value: vitals.lcp.value, rating: vitals.lcp.rating } : undefined,
-          fid: vitals.fid ? { value: vitals.fid.value, rating: vitals.fid.rating } : undefined,
-          cls: vitals.cls ? { value: vitals.cls.value, rating: vitals.cls.rating } : undefined,
-          fcp: vitals.fcp ? { value: vitals.fcp.value, rating: vitals.fcp.rating } : undefined,
-          tti: vitals.tti,
-          tbt: vitals.tbt,
-          ttfb: vitals.ttfb,
-          domLoad: vitals.domLoad,
-          onLoad: vitals.onLoad,
-        };
-
-        // 评估整体性能等级(基于 LCP - 最重要的指标)
-        if (vitals.lcp) {
-          const lcpThreshold = scenario.thresholds.find(t => t.metric === WebVitalMetric.LCP);
-          if (lcpThreshold) {
-            const level = evaluateMetric(vitals.lcp.value, lcpThreshold);
-            performanceLevel = level as 'excellent' | 'good' | 'needs_improvement';
-          }
-        }
-
-        console.log(`  ✓ Core Web Vitals collected:`, {
-          LCP: vitals.lcp?.value,
-          FID: vitals.fid?.value,
-          CLS: vitals.cls?.value,
-          level: performanceLevel,
-        });
-      } catch (error) {
-        console.warn(`  ⚠️  Core Web Vitals collection failed:`, error instanceof Error ? error.message : 'Unknown error');
-        // 性能采集失败不影响巡检继续
-      }
+      // 尝试关闭弹窗(在检查页面元素之前)
+      await this.dismissCommonPopups(page);
 
       // 基本可用性检查
       const bodyExists = await page.evaluate(() => {
@@ -605,10 +735,14 @@ export class PatrolService {
       // 评估检查结果
       const evaluation = this.evaluateChecks(pageType, checks);
 
-      // 构建检查详情消息
-      const checkMessages = checks.map(c =>
-        `${c.passed ? '✓' : '✗'} ${c.name}: ${c.message || ''}`
-      ).join('\n');
+      // 构建检查详情消息(包含置信度)
+      const checkMessages = checks.map(c => {
+        const icon = c.passed ? '✓' : '✗';
+        const confidenceLabel = c.confidence
+          ? ` [置信度: ${c.confidence === 'high' ? '高' : c.confidence === 'medium' ? '中' : '低'}]`
+          : '';
+        return `${icon} ${c.name}: ${c.message || ''}${confidenceLabel}`;
+      }).join('\n');
 
       const finalStatus = evaluation.status === 'pass' ? 'pass' : 'fail';
       const detailedMessage = `页面类型: ${pageType}\n${evaluation.message}\n\n检查详情:\n${checkMessages}`;
@@ -623,6 +757,42 @@ export class PatrolService {
         console.error(`  Failed to capture screenshot:`, error);
       }
 
+      // 视觉对比(如果启用)
+      let visualDiff: any = undefined;
+      if (config.visualComparison?.enabled && screenshotUrl) {
+        try {
+          console.log(`  Performing visual comparison...`);
+          const deviceType = deviceConfig?.type || 'desktop';
+          const screenshotPath = screenshotUrl.startsWith('/screenshots/')
+            ? `/tmp${screenshotUrl}`
+            : screenshotUrl;
+
+          const diffResult = await imageCompareService.compareImages(
+            screenshotPath,
+            url,
+            deviceType,
+            {
+              diffPercentageThreshold: config.visualComparison.diffThreshold || 5,
+              saveBaseline: config.visualComparison.saveBaseline || false,
+              generateDiffImage: true,
+            }
+          );
+
+          if (diffResult.hasDifference) {
+            console.warn(`  ⚠️  Visual difference detected: ${diffResult.diffPercentage}%`);
+          }
+
+          visualDiff = {
+            hasDifference: diffResult.hasDifference,
+            diffPercentage: diffResult.diffPercentage,
+            diffImageUrl: diffResult.diffImagePath?.replace('/tmp/screenshots', '/screenshots'),
+            baselineImageUrl: diffResult.previousImagePath?.replace('/tmp/screenshots', '/screenshots'),
+          };
+        } catch (error) {
+          console.error(`  Failed to perform visual comparison:`, error);
+        }
+      }
+
       console.log(`${finalStatus === 'pass' ? '✓' : '✗'} ${name} ${evaluation.status} (${statusCode}) - ${responseTime}ms`);
 
       return {
@@ -635,10 +805,10 @@ export class PatrolService {
         checkDetails: detailedMessage, // 始终包含检查详情
         screenshotUrl, // 截图URL
         testDuration: Date.now() - startTime,
-        // Core Web Vitals 性能数据
-        coreWebVitals: coreWebVitalsData,
-        performanceLevel,
-        performanceScenario,
+        visualDiff, // 视觉对比结果
+        deviceType: deviceConfig?.type,
+        deviceName: deviceConfig?.name,
+        viewport: deviceConfig?.viewport,
       };
     } catch (error) {
       const responseTime = Date.now() - startTime;
@@ -689,27 +859,69 @@ export class PatrolService {
 
       // 获取浏览器
       browser = await browserPool.acquire();
-      const context = await browser.newContext();
-      const page = await context.newPage();
+
+      // 解析配置
+      const config: PatrolConfig = task.config || {};
+      const devices = config.devices || []; // 默认无设备配置,使用桌面端
 
       // 测试所有 URL
       const testResults: PatrolTestResult[] = [];
       let passedUrls = 0;
       let failedUrls = 0;
 
-      for (const urlConfig of task.urls) {
-        const result = await this.testUrl(page, urlConfig.url, urlConfig.name);
-        testResults.push(result);
+      // 如果配置了多个设备,在每个设备上测试所有URL
+      if (devices.length > 0) {
+        for (const device of devices) {
+          console.log(`\n=== Testing on ${device.name} (${device.viewport.width}x${device.viewport.height}) ===`);
 
-        if (result.status === 'pass') {
-          passedUrls++;
-        } else {
-          failedUrls++;
+          const context = await browser.newContext({
+            viewport: device.viewport,
+            userAgent: device.userAgent,
+          });
+          const page = await context.newPage();
+
+          for (const urlConfig of task.urls) {
+            const result = await this.testUrlWithRetry(
+              page,
+              urlConfig.url,
+              urlConfig.name,
+              config,
+              device
+            );
+            testResults.push(result);
+
+            if (result.status === 'pass') {
+              passedUrls++;
+            } else {
+              failedUrls++;
+            }
+          }
+
+          await context.close();
         }
-      }
+      } else {
+        // 默认桌面端测试
+        const context = await browser.newContext();
+        const page = await context.newPage();
 
-      // 关闭浏览器上下文
-      await context.close();
+        for (const urlConfig of task.urls) {
+          const result = await this.testUrlWithRetry(
+            page,
+            urlConfig.url,
+            urlConfig.name,
+            config
+          );
+          testResults.push(result);
+
+          if (result.status === 'pass') {
+            passedUrls++;
+          } else {
+            failedUrls++;
+          }
+        }
+
+        await context.close();
+      }
 
       const durationMs = Date.now() - startTime;
 

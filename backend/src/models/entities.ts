@@ -341,6 +341,36 @@ export interface PatrolUrl {
   name: string;
 }
 
+// 巡检配置选项
+export interface PatrolConfig {
+  // 视觉对比配置
+  visualComparison?: {
+    enabled: boolean; // 是否启用视觉对比
+    diffThreshold?: number; // 差异百分比阈值,默认5%
+    saveBaseline?: boolean; // 是否自动更新基线
+  };
+
+  // 设备测试配置
+  devices?: Array<{
+    type: 'desktop' | 'mobile' | 'tablet';
+    name: string;
+    viewport: { width: number; height: number };
+    userAgent?: string;
+  }>;
+
+  // 重试配置
+  retry?: {
+    enabled: boolean; // 是否启用重试
+    maxAttempts?: number; // 最大重试次数,默认3
+    retryDelay?: number; // 重试间隔(毫秒),默认2000
+    retryOnInfraError?: boolean; // 是否对基础设施错误重试,默认true
+  };
+
+  // 其他配置
+  timeout?: number; // 页面加载超时(秒)
+  waitAfterLoad?: number; // 加载后等待时间(秒)
+}
+
 export interface PatrolTestResult {
   url: string;
   name: string;
@@ -353,27 +383,20 @@ export interface PatrolTestResult {
   checkDetails?: string; // 检查详情（包含所有检查项的结果）
   isInfrastructureError?: boolean; // 是否为基础设施错误（网络、超时等），不触发邮件通知
 
-  // Core Web Vitals 性能数据
-  coreWebVitals?: {
-    lcp?: { value: number; rating: 'good' | 'needs-improvement' | 'poor' };  // Largest Contentful Paint
-    fid?: { value: number; rating: 'good' | 'needs-improvement' | 'poor' };  // First Input Delay
-    cls?: { value: number; rating: 'good' | 'needs-improvement' | 'poor' };  // Cumulative Layout Shift
-    fcp?: { value: number; rating: 'good' | 'needs-improvement' | 'poor' };  // First Contentful Paint
-    tti?: number;  // Time to Interactive
-    tbt?: number;  // Total Blocking Time
-    ttfb?: number;  // Time to First Byte
-    domLoad?: number;  // DOM Content Loaded
-    onLoad?: number;  // Window Load
+  // 视觉对比结果
+  visualDiff?: {
+    hasDifference: boolean;
+    diffPercentage: number; // 差异百分比 0-100
+    diffImageUrl?: string; // 差异图像URL
+    baselineImageUrl?: string; // 基线图像URL
   };
 
-  // 性能等级评估（基于所选场景的阈值）
-  performanceLevel?: 'excellent' | 'good' | 'needs_improvement';
-
-  // 使用的性能评估场景
-  performanceScenario?: {
-    deviceType: string;  // desktop, mobile, low_end
-    networkType: string;  // wifi_5g, 4g, 3g, slow
-    businessType: string;  // ecommerce, content, tool, enterprise
+  // 设备类型（用于移动端测试）
+  deviceType?: 'desktop' | 'mobile' | 'tablet';
+  deviceName?: string; // 设备名称，如 "iPhone 14", "iPad Pro"
+  viewport?: {
+    width: number;
+    height: number;
   };
 }
 
