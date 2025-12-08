@@ -1,0 +1,3 @@
+# 禁用 Docker BuildKit
+# 在 Dockerfile 同目录创建此文件可能会影响某些构建系统的行为
+DOCKER_BUILDKIT=0
