@@ -105,17 +105,28 @@ router.post('/test', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // 执行测试
-    const page = await browser.newPage();
-    const results = [];
+    // 并行执行测试 - 为每个设备创建独立的 page
+    console.log(`Starting parallel tests on ${devicesToTest.length} devices...`);
+    const startTime = Date.now();
 
-    for (const device of devicesToTest) {
-      console.log(`Testing on ${device.name}...`);
-      const result = await responsiveTestingService.testOnDevice(page, url, device);
-      results.push(result);
-    }
+    const results = await Promise.all(
+      devicesToTest.map(async (device) => {
+        const page = await browser.newPage();
+        try {
+          console.log(`Testing on ${device.name}...`);
+          const result = await responsiveTestingService.testOnDevice(page, url, device);
+          return result;
+        } catch (error) {
+          console.error(`Failed to test on ${device.name}:`, error);
+          throw error;
+        } finally {
+          await page.close();
+        }
+      })
+    );
 
-    await page.close();
+    const totalTime = Date.now() - startTime;
+    console.log(`✓ Completed ${devicesToTest.length} device tests in ${totalTime}ms`);
 
     // 计算统计数据
     const stats = {

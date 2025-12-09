@@ -4,10 +4,10 @@ services:
   # PostgreSQL 数据库
   postgres:
     image: postgres:16-alpine
-    container_name: anita-postgres
+    container_name: anker-sentinel-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: web_automation_checker
+      POSTGRES_DB: anker_web_sentinel
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-your_secure_password_here}
     volumes:
@@ -25,7 +25,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: anita-backend
+    container_name: anker-sentinel-backend
     restart: unless-stopped
     depends_on:
       postgres:
@@ -33,7 +33,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-your_secure_password_here}@postgres:5432/web_automation_checker
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-your_secure_password_here}@postgres:5432/anker_web_sentinel
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
       SCREENSHOT_DIR: /app/screenshots
 
@@ -65,7 +65,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: anita-frontend
+    container_name: anker-sentinel-frontend
     restart: unless-stopped
     depends_on:
       - backend

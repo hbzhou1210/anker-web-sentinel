@@ -145,6 +145,7 @@ export class ScreenshotService {
   // Capture full page screenshot without highlighting
   async captureFullPage(page: Page): Promise<string> {
     try {
+      // 尝试完整页面截图
       const screenshot = await page.screenshot({
         fullPage: true,
         type: 'png',
@@ -166,8 +167,33 @@ export class ScreenshotService {
 
       return `/screenshots/${filename}`;
     } catch (error) {
-      console.error('Failed to capture full page screenshot:', error);
-      throw error;
+      // 如果完整页面截图失败(通常是因为页面太长超过WebP限制)
+      // 降级到视口截图
+      console.warn('Full page screenshot failed, falling back to viewport screenshot:', error instanceof Error ? error.message : error);
+
+      try {
+        const screenshot = await page.screenshot({
+          fullPage: false,  // 只截取当前视口
+          type: 'png',
+        });
+
+        const compressed = await sharp(screenshot)
+          .webp({ quality: 80 })
+          .toBuffer();
+
+        const filename = `${randomUUID()}.webp`;
+        const filepath = join(this.screenshotDir, filename);
+
+        await writeFile(filepath, compressed);
+
+        console.log(`✓ Viewport screenshot saved (fallback): ${filename}`);
+
+        return `/screenshots/${filename}`;
+      } catch (fallbackError) {
+        console.error('Failed to capture viewport screenshot:', fallbackError);
+        // 返回空字符串以避免中断测试流程
+        return '';
+      }
     }
   }
 

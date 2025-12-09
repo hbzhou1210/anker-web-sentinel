@@ -1,7 +1,7 @@
 {
-  "name": "web-automation-checker-frontend",
+  "name": "anker-web-sentinel-frontend",
   "version": "1.0.0",
-  "description": "Frontend UI for web automation checker",
+  "description": "Frontend UI for Anker Web Sentinel",
   "type": "module",
   "scripts": {
     "dev": "vite",

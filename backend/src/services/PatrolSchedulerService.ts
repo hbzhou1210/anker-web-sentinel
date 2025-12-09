@@ -2,7 +2,6 @@ import cron from 'node-cron';
 import { PatrolScheduleRepository } from '../database/repositories/PatrolScheduleRepository.js';
 import { PatrolSchedule } from '../models/entities.js';
 import { patrolService } from './PatrolService.js';
-import { patrolEmailService } from './PatrolEmailService.js';
 
 interface ScheduledTask {
   schedule: PatrolSchedule;
@@ -115,11 +114,8 @@ export class PatrolSchedulerService {
     console.log(`⏰ Executing scheduled patrol task: ${schedule.patrolTaskId} at ${now.toISOString()}`);
 
     try {
-      // 执行巡检
+      // 执行巡检 (邮件将在 PatrolService.runPatrolTests() 中自动发送)
       const executionId = await patrolService.executePatrol(schedule.patrolTaskId);
-
-      // 发送邮件报告
-      await patrolEmailService.sendPatrolReport(executionId);
 
       // 更新最后执行时间和下次执行时间
       const nextExecution = this.calculateNextExecution(schedule.cronExpression, schedule.timeZone);

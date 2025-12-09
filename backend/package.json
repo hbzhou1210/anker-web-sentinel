@@ -1,7 +1,7 @@
 {
-  "name": "web-automation-checker-backend",
+  "name": "anker-web-sentinel-backend",
   "version": "1.0.0",
-  "description": "Backend API for web automation checker",
+  "description": "Backend API for Anker Web Sentinel",
   "main": "dist/index.js",
   "type": "module",
   "scripts": {

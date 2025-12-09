@@ -64,6 +64,7 @@ interface PatrolTask {
     };
     timeout?: number;
     waitAfterLoad?: number;
+    requireFooterNewsletter?: boolean; // 是否检查页脚订阅功能
   };
   createdAt: string;
   updatedAt: string;
@@ -165,6 +166,7 @@ const PatrolManagement: React.FC = () => {
       },
       timeout: 30,
       waitAfterLoad: 2,
+      requireFooterNewsletter: false, // 默认不检查订阅功能
     },
   });
 
@@ -347,16 +349,55 @@ const PatrolManagement: React.FC = () => {
   };
 
   // 打开编辑模态框
-  const handleEditTask = (task: PatrolTask) => {
+  const handleEditTask = async (task: PatrolTask) => {
     setEditingTask(task);
+
+    // 查询该任务的调度配置
+    let scheduleType: 'daily_morning' | 'daily_afternoon' | 'daily_twice' | 'custom' = 'daily_morning';
+    let customCron = '';
+
+    try {
+      const schedulesResponse = await fetch(`/api/v1/patrol/schedules?taskId=${task.id}`);
+      if (schedulesResponse.ok) {
+        const schedules = await schedulesResponse.json();
+
+        if (schedules.length === 2) {
+          // 如果有2个调度,检查是否是9:00和14:00
+          const hasMorning = schedules.some((s: any) => s.cronExpression === '0 9 * * *');
+          const hasAfternoon = schedules.some((s: any) => s.cronExpression === '0 15 * * *');
+
+          if (hasMorning && hasAfternoon) {
+            scheduleType = 'daily_twice';
+          } else {
+            // 不是标准的每日两次,使用第一个调度的cron
+            customCron = schedules[0].cronExpression;
+            scheduleType = 'custom';
+          }
+        } else if (schedules.length === 1) {
+          // 单个调度,根据cron表达式判断类型
+          const cron = schedules[0].cronExpression;
+          if (cron === '0 9 * * *') {
+            scheduleType = 'daily_morning';
+          } else if (cron === '0 15 * * *') {
+            scheduleType = 'daily_afternoon';
+          } else {
+            scheduleType = 'custom';
+            customCron = cron;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('获取调度配置失败:', error);
+    }
+
     setFormData({
       name: task.name,
       description: task.description || '',
       urls: task.urls.length > 0 ? task.urls : [...DEFAULT_PATROL_URLS],
       notificationEmails: task.notificationEmails.length > 0 ? task.notificationEmails : [''],
       enabled: task.enabled,
-      scheduleType: 'daily_morning',
-      customCron: '',
+      scheduleType,
+      customCron,
       config: {
         visualComparison: task.config?.visualComparison || {
           enabled: false,
@@ -372,6 +413,7 @@ const PatrolManagement: React.FC = () => {
         },
         timeout: task.config?.timeout || 30,
         waitAfterLoad: task.config?.waitAfterLoad || 2,
+        requireFooterNewsletter: task.config?.requireFooterNewsletter || false,
       },
     });
     setShowEditModal(true);
@@ -529,6 +571,7 @@ const PatrolManagement: React.FC = () => {
     }
 
     try {
+      // 1. 更新任务基本信息
       const response = await fetch(`/api/v1/patrol/tasks/${editingTask.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -542,40 +585,95 @@ const PatrolManagement: React.FC = () => {
         }),
       });
 
-      if (response.ok) {
-        alert('更新成功');
-        setShowEditModal(false);
-        setEditingTask(null);
-        setFormData({
-          name: '',
-          description: '',
-          urls: [...DEFAULT_PATROL_URLS],
-          notificationEmails: [''],
-          enabled: true,
-          scheduleType: 'daily_morning',
-          customCron: '',
-          config: {
-            visualComparison: {
-              enabled: false,
-              diffThreshold: 5,
-              saveBaseline: false,
-            },
-            devices: [],
-            retry: {
-              enabled: false,
-              maxAttempts: 3,
-              retryDelay: 2000,
-              retryOnInfraError: true,
-            },
-            timeout: 30,
-            waitAfterLoad: 2,
-          },
-        });
-        loadTasks();
-      } else {
+      if (!response.ok) {
         const error = await response.json();
         alert(`更新失败: ${error.message || '未知错误'}`);
+        return;
       }
+
+      // 2. 更新调度配置
+      // 先获取现有的调度
+      const schedulesResponse = await fetch(`/api/v1/patrol/schedules?taskId=${editingTask.id}`);
+      if (schedulesResponse.ok) {
+        const existingSchedules = await schedulesResponse.json();
+
+        // 删除所有现有调度
+        for (const schedule of existingSchedules) {
+          await fetch(`/api/v1/patrol/schedules/${schedule.id}`, {
+            method: 'DELETE',
+          });
+        }
+      }
+
+      // 根据新的scheduleType创建调度
+      const cronExpressions: string[] = [];
+      const scheduleTypes: string[] = [];
+
+      switch (formData.scheduleType) {
+        case 'daily_morning':
+          cronExpressions.push('0 9 * * *');
+          scheduleTypes.push('daily_morning');
+          break;
+        case 'daily_afternoon':
+          cronExpressions.push('0 15 * * *');
+          scheduleTypes.push('daily_afternoon');
+          break;
+        case 'daily_twice':
+          cronExpressions.push('0 9 * * *', '0 15 * * *');
+          scheduleTypes.push('daily_morning', 'daily_afternoon');
+          break;
+        case 'custom':
+          if (formData.customCron.trim()) {
+            cronExpressions.push(formData.customCron.trim());
+            scheduleTypes.push('custom');
+          }
+          break;
+      }
+
+      // 创建新的调度
+      for (let i = 0; i < cronExpressions.length; i++) {
+        await fetch('/api/v1/patrol/schedules', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            patrolTaskId: editingTask.id,
+            cronExpression: cronExpressions[i],
+            scheduleType: scheduleTypes[i],
+            timeZone: 'Asia/Shanghai',
+            enabled: formData.enabled,
+          }),
+        });
+      }
+
+      alert('更新成功');
+      setShowEditModal(false);
+      setEditingTask(null);
+      setFormData({
+        name: '',
+        description: '',
+        urls: [...DEFAULT_PATROL_URLS],
+        notificationEmails: [''],
+        enabled: true,
+        scheduleType: 'daily_morning',
+        customCron: '',
+        config: {
+          visualComparison: {
+            enabled: false,
+            diffThreshold: 5,
+            saveBaseline: false,
+          },
+          devices: [],
+          retry: {
+            enabled: false,
+            maxAttempts: 3,
+            retryDelay: 2000,
+            retryOnInfraError: true,
+          },
+          timeout: 30,
+          waitAfterLoad: 2,
+        },
+      });
+      loadTasks();
     } catch (error) {
       console.error('更新任务失败:', error);
       alert('更新任务失败');
@@ -1253,6 +1351,35 @@ const PatrolManagement: React.FC = () => {
                   </p>
                 </div>
 
+                {/* 订阅检查 */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                      <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                      检查页脚订阅功能
+                    </label>
+                    <input
+                      type="checkbox"
+                      checked={formData.config.requireFooterNewsletter}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          config: {
+                            ...formData.config,
+                            requireFooterNewsletter: e.target.checked,
+                          },
+                        })
+                      }
+                      className="w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 pl-6">
+                    启用后将检查页脚是否包含邮箱输入框和订阅按钮
+                  </p>
+                </div>
+
                 {/* 通知邮箱列表 */}
                 <div>
                   <div className="flex items-center justify-between mb-3">
@@ -1765,6 +1892,35 @@ const PatrolManagement: React.FC = () => {
                   <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
                     <LinkIcon className="w-3 h-3" />
                     系统将定期检测这些URL的可用性
+                  </p>
+                </div>
+
+                {/* 订阅检查配置 */}
+                <div className="p-4 bg-purple-50 rounded-xl border-2 border-purple-100">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                      <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                      检查页脚订阅功能
+                    </label>
+                    <input
+                      type="checkbox"
+                      checked={formData.config.requireFooterNewsletter}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          config: {
+                            ...formData.config,
+                            requireFooterNewsletter: e.target.checked,
+                          },
+                        })
+                      }
+                      className="w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    启用后将检查页脚是否包含邮箱输入框和订阅按钮
                   </p>
                 </div>
 

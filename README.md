@@ -1,6 +1,6 @@
-# Anita - Web Automation Checker
+# Anker Web Sentinel
 
-可视化网页自动化巡检工具 - UI测试 + 性能分析 + 自动化巡检
+企业级网站质量监控与测试平台 - UI测试 + 性能分析 + 自动化巡检
 
 ## 功能特性
 
@@ -30,7 +30,7 @@
 npm install
 
 # 2. 配置数据库
-createdb web_automation_checker
+createdb anker_web_sentinel
 
 # 3. 配置环境变量
 cp backend/.env.example backend/.env
@@ -83,7 +83,7 @@ docker-compose up -d
 # 获取 PostgreSQL 连接字符串
 
 # 2. 打包项目
-zip -r anita-launch.zip . \
+zip -r anker-web-sentinel.zip . \
     -x "node_modules/*" -x ".git/*" -x "dist/*"
 
 # 3. 上传到 Launch 平台
@@ -97,7 +97,7 @@ FRONTEND_URL=https://web.anker-launch.com
 ## 项目结构
 
 ```
-anita-project/
+anker-web-sentinel/
 ├── backend/               # 后端 Node.js 服务
 │   ├── src/
 │   │   ├── api/          # Express API 路由
@@ -137,7 +137,7 @@ GET  /health                        - 健康检查
 
 **后端** (`backend/.env`):
 ```bash
-DATABASE_URL=postgresql://user:pass@localhost:5432/web_automation_checker
+DATABASE_URL=postgresql://user:pass@localhost:5432/anker_web_sentinel
 FRONTEND_URL=http://localhost:5173
 ANTHROPIC_API_KEY=sk-xxx           # Claude AI (可选)
 SMTP_HOST=smtp.gmail.com           # 邮件通知 (可选)

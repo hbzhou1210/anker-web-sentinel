@@ -366,6 +366,34 @@ export interface PatrolConfig {
     retryOnInfraError?: boolean; // 是否对基础设施错误重试,默认true
   };
 
+  // 页面检查配置
+  pageChecks?: {
+    // 首页/落地页检查项
+    homepage?: {
+      requireNavigation?: boolean; // 是否要求导航栏,默认true
+      requireBanner?: boolean; // 是否要求主Banner,默认true
+      requireFooter?: boolean; // 是否要求页脚,默认true
+      minContentModules?: number; // 最少内容模块数,默认3
+    };
+
+    // 页脚功能要求(可根据品牌特性自定义)
+    footer?: {
+      requireLinks?: boolean; // 是否要求导航链接,默认true
+      requireSocial?: boolean; // 是否要求社交媒体,默认false
+      requireNewsletter?: boolean; // 是否要求邮件订阅,默认false(对某些品牌很重要)
+      requireCopyright?: boolean; // 是否要求版权信息,默认true
+    };
+
+    // 产品页检查项
+    product?: {
+      requireTitle?: boolean; // 是否要求产品标题,默认true
+      requireImage?: boolean; // 是否要求产品图片,默认true
+      requirePrice?: boolean; // 是否要求价格信息,默认true
+      requireAddToCart?: boolean; // 是否要求加购按钮,默认true
+      requireBuyNow?: boolean; // 是否要求立即购买按钮,默认false
+    };
+  };
+
   // 其他配置
   timeout?: number; // 页面加载超时(秒)
   waitAfterLoad?: number; // 加载后等待时间(秒)

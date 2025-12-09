@@ -114,12 +114,90 @@ export class PatrolEmailService {
   }
 
   /**
+   * 解析检查详情,提取置信度和检查项
+   */
+  private parseCheckDetails(checkDetails?: string): {
+    pageType: string;
+    message: string;
+    checks: Array<{
+      passed: boolean;
+      name: string;
+      message: string;
+      confidence?: 'high' | 'medium' | 'low';
+    }>;
+  } | null {
+    if (!checkDetails) return null;
+
+    try {
+      const lines = checkDetails.split('\n');
+      const pageTypeLine = lines.find(l => l.startsWith('页面类型:'));
+      const pageType = pageTypeLine ? pageTypeLine.replace('页面类型:', '').trim() : '';
+
+      const messageLine = lines[1] || '';
+
+      // 解析检查详情
+      const checkStartIndex = lines.findIndex(l => l.includes('检查详情:'));
+      const checks: Array<{ passed: boolean; name: string; message: string; confidence?: 'high' | 'medium' | 'low' }> = [];
+
+      if (checkStartIndex !== -1) {
+        for (let i = checkStartIndex + 1; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line) continue;
+
+          const passed = line.startsWith('✓');
+          const failed = line.startsWith('✗');
+          if (!passed && !failed) continue;
+
+          // 提取置信度
+          let confidence: 'high' | 'medium' | 'low' | undefined;
+          const confidenceMatch = line.match(/\[置信度:\s*(高|中|低)\]/);
+          if (confidenceMatch) {
+            confidence = confidenceMatch[1] === '高' ? 'high' : confidenceMatch[1] === '中' ? 'medium' : 'low';
+          }
+
+          // 移除图标和置信度标签,提取内容
+          const content = line
+            .replace(/^[✓✗]\s*/, '')
+            .replace(/\[置信度:\s*(高|中|低)\]/, '')
+            .trim();
+
+          const colonIndex = content.indexOf(':');
+          const name = colonIndex !== -1 ? content.substring(0, colonIndex).trim() : content;
+          const message = colonIndex !== -1 ? content.substring(colonIndex + 1).trim() : '';
+
+          checks.push({ passed, name, message, confidence });
+        }
+      }
+
+      return { pageType, message: messageLine, checks };
+    } catch (error) {
+      console.error('Failed to parse check details:', error);
+      return null;
+    }
+  }
+
+  /**
    * 生成邮件 HTML 内容
    */
   private generateEmailHTML(task: PatrolTask, execution: PatrolExecution): string {
     const passRate = ((execution.passedUrls / execution.totalUrls) * 100).toFixed(1);
-    const statusColor = execution.failedUrls === 0 ? '#22c55e' : '#ef4444';
-    const statusText = execution.failedUrls === 0 ? '全部通过' : `${execution.failedUrls} 项失败`;
+
+    // 统计真正的失败数(排除低置信度的警告)
+    const realFailures = execution.testResults.filter(result => {
+      if (result.status === 'pass') return false;
+
+      // 解析检查详情,查看是否都是低置信度问题
+      const parsed = this.parseCheckDetails(result.checkDetails);
+      if (!parsed) return true; // 无法解析则按失败处理
+
+      const failedChecks = parsed.checks.filter(c => !c.passed);
+      const allLowConfidence = failedChecks.every(c => c.confidence === 'low');
+
+      return !allLowConfidence; // 如果不是全部低置信度,则算作真正的失败
+    }).length;
+
+    const statusColor = realFailures === 0 ? '#22c55e' : '#ef4444';
+    const statusText = realFailures === 0 ? '全部通过' : `${realFailures} 项失败`;
 
     // 格式化时间
     const executionTime = execution.startedAt.toLocaleString('zh-CN', {
@@ -133,19 +211,70 @@ export class PatrolEmailService {
     // 生成测试结果列表
     const resultsHTML = execution.testResults
       .map((result) => {
-        const statusIcon = result.status === 'pass' ? '✅' : '❌';
-        const statusClass = result.status === 'pass' ? 'pass' : 'fail';
-        const errorInfo = result.errorMessage ? `<div class="error">${result.errorMessage}</div>` : '';
+        const parsed = this.parseCheckDetails(result.checkDetails);
+
+        // 判断是否为警告(所有失败检查都是低置信度)
+        let isWarning = false;
+        if (result.status === 'fail' && parsed) {
+          const failedChecks = parsed.checks.filter(c => !c.passed);
+          isWarning = failedChecks.every(c => c.confidence === 'low');
+        }
+
+        const statusIcon = result.status === 'pass' ? '✅' : isWarning ? '⚠️' : '❌';
+        const statusClass = result.status === 'pass' ? 'pass' : isWarning ? 'warning' : 'fail';
+        const statusLabel = result.status === 'pass' ? '' : isWarning ? '<span class="warning-badge">需人工确认</span>' : '';
+
+        // 生成检查详情HTML
+        let checkDetailsHTML = '';
+        if (parsed && parsed.checks.length > 0) {
+          const checksListHTML = parsed.checks.map(check => {
+            const checkIcon = check.passed ? '✓' : '✗';
+            const checkClass = check.passed ? 'check-pass' : check.confidence === 'low' ? 'check-warning' : 'check-fail';
+            const confidenceLabel = check.confidence
+              ? `<span class="confidence-badge confidence-${check.confidence}">${
+                  check.confidence === 'high' ? '高置信度' :
+                  check.confidence === 'medium' ? '中置信度' :
+                  '低置信度'
+                }</span>`
+              : '';
+
+            return `
+              <li class="check-item ${checkClass}">
+                <span class="check-icon">${checkIcon}</span>
+                <span class="check-name">${check.name}:</span>
+                <span class="check-message">${check.message}</span>
+                ${confidenceLabel}
+              </li>
+            `;
+          }).join('');
+
+          checkDetailsHTML = `
+            <div class="check-details">
+              <div class="check-header">
+                <span class="page-type">${parsed.pageType}</span>
+                ${parsed.message ? `<span class="page-message">${parsed.message}</span>` : ''}
+              </div>
+              <ul class="checks-list">
+                ${checksListHTML}
+              </ul>
+            </div>
+          `;
+        } else if (result.errorMessage) {
+          checkDetailsHTML = `<div class="error">${result.errorMessage}</div>`;
+        }
 
         return `
         <tr>
           <td class="result-cell ${statusClass}">
-            <div class="url-name">${statusIcon} ${result.name}</div>
+            <div class="url-header">
+              <span class="url-name">${statusIcon} ${result.name}</span>
+              ${statusLabel}
+            </div>
             <div class="url-link">${result.url}</div>
-            ${errorInfo}
+            ${checkDetailsHTML}
           </td>
-          <td class="result-cell">${result.statusCode || '-'}</td>
-          <td class="result-cell">${result.responseTime ? `${result.responseTime}ms` : '-'}</td>
+          <td class="result-cell center">${result.statusCode || '-'}</td>
+          <td class="result-cell center">${result.responseTime ? `${result.responseTime}ms` : '-'}</td>
         </tr>
       `;
       })
@@ -254,15 +383,30 @@ export class PatrolEmailService {
       border-bottom: 1px solid #e5e7eb;
       font-size: 14px;
     }
+    .url-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
     .url-name {
       font-weight: 600;
       color: #111827;
-      margin-bottom: 4px;
     }
     .url-link {
       font-size: 12px;
       color: #6b7280;
       word-break: break-all;
+      margin-bottom: 8px;
+    }
+    .warning-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background-color: #fef3c7;
+      color: #92400e;
+      font-size: 11px;
+      font-weight: 600;
     }
     .error {
       margin-top: 8px;
@@ -275,8 +419,106 @@ export class PatrolEmailService {
     .pass {
       color: #22c55e;
     }
+    .warning {
+      color: #f59e0b;
+    }
     .fail {
       color: #ef4444;
+    }
+    .center {
+      text-align: center;
+    }
+
+    /* 检查详情样式 */
+    .check-details {
+      margin-top: 12px;
+      padding: 12px;
+      background-color: #f9fafb;
+      border-radius: 6px;
+      border: 1px solid #e5e7eb;
+    }
+    .check-header {
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .page-type {
+      display: inline-block;
+      padding: 2px 8px;
+      background-color: #dbeafe;
+      color: #1e40af;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-right: 8px;
+    }
+    .page-message {
+      font-size: 13px;
+      color: #374151;
+    }
+    .checks-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      padding: 6px 0;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .check-icon {
+      font-weight: bold;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .check-name {
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .check-message {
+      color: #6b7280;
+      flex: 1;
+    }
+    .check-pass {
+      color: #22c55e;
+    }
+    .check-pass .check-icon {
+      color: #22c55e;
+    }
+    .check-warning {
+      color: #f59e0b;
+    }
+    .check-warning .check-icon {
+      color: #f59e0b;
+    }
+    .check-fail {
+      color: #ef4444;
+    }
+    .check-fail .check-icon {
+      color: #ef4444;
+    }
+    .confidence-badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .confidence-high {
+      background-color: #d1fae5;
+      color: #065f46;
+    }
+    .confidence-medium {
+      background-color: #fef3c7;
+      color: #92400e;
+    }
+    .confidence-low {
+      background-color: #fee2e2;
+      color: #991b1b;
     }
     .footer {
       padding: 20px 30px;
@@ -341,6 +583,17 @@ export class PatrolEmailService {
     </div>
 
     <div class="footer">
+      <div style="margin-bottom: 15px; padding: 12px; background-color: #f3f4f6; border-radius: 6px; text-align: left;">
+        <p style="margin: 0 0 8px 0; font-weight: 600; color: #374151;">📊 置信度说明</p>
+        <ul style="margin: 0; padding-left: 20px; font-size: 12px; color: #6b7280; line-height: 1.8;">
+          <li><strong style="color: #065f46;">高置信度</strong>: 检查结果准确度高,可直接判定</li>
+          <li><strong style="color: #92400e;">中置信度</strong>: 检查结果基本可靠,建议复核</li>
+          <li><strong style="color: #991b1b;">低置信度</strong>: 检查结果不确定,需要人工确认</li>
+        </ul>
+        <p style="margin: 8px 0 0 0; font-size: 12px; color: #6b7280;">
+          ⚠️ 标记为 <strong>"需人工确认"</strong> 的项目,所有失败检查均为低置信度,可能是误报,请人工查看页面后确认
+        </p>
+      </div>
       <p>此邮件由 DTC 测试工具自动发送</p>
       <p>如需修改巡检配置,请登录系统进行设置</p>
     </div>

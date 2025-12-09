@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { Smartphone, Tablet, Monitor, CheckCircle, XCircle, AlertTriangle, Loader2, Download } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Smartphone, Tablet, Monitor, CheckCircle, XCircle, AlertTriangle, Loader2 } from 'lucide-react';
+import { CircularProgress } from '../components/CircularProgress';
 
 interface Device {
   id: number;
@@ -31,14 +32,39 @@ interface ResponsiveTestResult {
   testDuration: number;
 }
 
+interface Stats {
+  totalDevices: number;
+  passed: number;
+  failed: number;
+  totalIssues: number;
+}
+
 export default function ResponsiveTesting() {
-  const [url, setUrl] = useState('');
+  const [url, setUrl] = useState(() => {
+    // 从 localStorage 恢复 URL
+    return localStorage.getItem('responsiveTest_url') || '';
+  });
   const [devices, setDevices] = useState<Device[]>([]);
-  const [selectedDevices, setSelectedDevices] = useState<number[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [selectedDevices, setSelectedDevices] = useState<number[]>(() => {
+    // 从 localStorage 恢复选中的设备
+    const saved = localStorage.getItem('responsiveTest_selectedDevices');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [loading, setLoading] = useState(() => {
+    // 从 localStorage 恢复加载状态
+    return localStorage.getItem('responsiveTest_loading') === 'true';
+  });
   const [loadingDevices, setLoadingDevices] = useState(false);
-  const [results, setResults] = useState<ResponsiveTestResult[] | null>(null);
-  const [stats, setStats] = useState<any>(null);
+  const [results, setResults] = useState<ResponsiveTestResult[] | null>(() => {
+    // 从 localStorage 恢复测试结果
+    const saved = localStorage.getItem('responsiveTest_results');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [stats, setStats] = useState<Stats | null>(() => {
+    // 从 localStorage 恢复统计数据
+    const saved = localStorage.getItem('responsiveTest_stats');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [error, setError] = useState('');
   const [expandedResults, setExpandedResults] = useState<number[]>([]);
   const [filterStatus, setFilterStatus] = useState<'all' | 'passed' | 'failed'>('all');
@@ -67,9 +93,48 @@ export default function ResponsiveTesting() {
   };
 
   // 初始加载
-  useState(() => {
+  useEffect(() => {
     loadDevices();
-  });
+  }, []);
+
+  // 保存 URL 到 localStorage
+  useEffect(() => {
+    if (url) {
+      localStorage.setItem('responsiveTest_url', url);
+    } else {
+      localStorage.removeItem('responsiveTest_url');
+    }
+  }, [url]);
+
+  // 保存选中的设备到 localStorage
+  useEffect(() => {
+    localStorage.setItem('responsiveTest_selectedDevices', JSON.stringify(selectedDevices));
+  }, [selectedDevices]);
+
+  // 保存加载状态到 localStorage
+  useEffect(() => {
+    localStorage.setItem('responsiveTest_loading', loading.toString());
+  }, [loading]);
+
+  // 保存测试结果和统计数据到 localStorage
+  useEffect(() => {
+    if (results) {
+      localStorage.setItem('responsiveTest_results', JSON.stringify(results));
+    } else {
+      localStorage.removeItem('responsiveTest_results');
+    }
+
+    if (stats) {
+      localStorage.setItem('responsiveTest_stats', JSON.stringify(stats));
+    } else {
+      localStorage.removeItem('responsiveTest_stats');
+    }
+
+    // 当测试完成(有结果且不在加载中)时,清理加载状态
+    if (results && !loading) {
+      localStorage.setItem('responsiveTest_loading', 'false');
+    }
+  }, [results, stats, loading]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,10 +149,15 @@ export default function ResponsiveTesting() {
       return;
     }
 
+    // 开始新测试时清理之前的结果
     setLoading(true);
     setError('');
     setResults(null);
     setStats(null);
+
+    // 清理 localStorage 中的旧结果
+    localStorage.removeItem('responsiveTest_results');
+    localStorage.removeItem('responsiveTest_stats');
 
     try {
       const response = await fetch('http://localhost:3000/api/v1/responsive/test', {
@@ -147,14 +217,6 @@ export default function ResponsiveTesting() {
     }
   };
 
-  const getStatusIcon = (passed: boolean) => {
-    return passed ? (
-      <CheckCircle className="w-5 h-5 text-green-500" />
-    ) : (
-      <XCircle className="w-5 h-5 text-red-500" />
-    );
-  };
-
   const isPassed = (result: ResponsiveTestResult) => {
     return !result.hasHorizontalScroll &&
       result.hasViewportMeta &&
@@ -184,6 +246,17 @@ export default function ResponsiveTesting() {
       case 'info': return 'bg-blue-100 text-blue-800 border-blue-200';
     }
   };
+
+  const getDeviceTypeGroups = () => {
+    const groups = {
+      mobile: devices.filter(d => d.deviceType === 'mobile'),
+      tablet: devices.filter(d => d.deviceType === 'tablet'),
+      desktop: devices.filter(d => d.deviceType === 'desktop'),
+    };
+    return groups;
+  };
+
+  const deviceGroups = getDeviceTypeGroups();
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
@@ -255,36 +328,132 @@ export default function ResponsiveTesting() {
                   <span className="ml-2 text-gray-600">加载设备列表...</span>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                  {devices.map((device) => (
-                    <button
-                      key={device.id}
-                      type="button"
-                      onClick={() => toggleDevice(device.id)}
-                      className={`relative flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all hover:shadow-md ${
-                        selectedDevices.includes(device.id)
-                          ? 'border-blue-500 bg-blue-50 shadow-sm'
-                          : 'border-gray-200 hover:border-blue-300'
-                      }`}
-                    >
-                      {selectedDevices.includes(device.id) && (
-                        <div className="absolute top-2 right-2">
-                          <CheckCircle className="w-5 h-5 text-blue-600" />
-                        </div>
-                      )}
-                      <div className={`${selectedDevices.includes(device.id) ? 'text-blue-600' : 'text-gray-600'}`}>
-                        {getDeviceIcon(device.deviceType, 'lg')}
+                <div className="space-y-6">
+                  {/* 移动设备组 */}
+                  {deviceGroups.mobile.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <Smartphone className="w-5 h-5 text-gray-600" />
+                        <h3 className="text-sm font-semibold text-gray-700">移动设备</h3>
+                        <span className="text-xs text-gray-500">({deviceGroups.mobile.length})</span>
                       </div>
-                      <div className="text-center w-full">
-                        <div className={`font-medium text-sm ${selectedDevices.includes(device.id) ? 'text-blue-700' : 'text-gray-800'}`}>
-                          {device.name}
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          {device.viewportWidth}×{device.viewportHeight}
-                        </div>
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                        {deviceGroups.mobile.map((device) => (
+                          <button
+                            key={device.id}
+                            type="button"
+                            onClick={() => toggleDevice(device.id)}
+                            className={`relative flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all hover:shadow-md ${
+                              selectedDevices.includes(device.id)
+                                ? 'border-blue-500 bg-blue-50 shadow-sm'
+                                : 'border-gray-200 hover:border-blue-300'
+                            }`}
+                          >
+                            {selectedDevices.includes(device.id) && (
+                              <div className="absolute top-2 right-2">
+                                <CheckCircle className="w-5 h-5 text-blue-600" />
+                              </div>
+                            )}
+                            <div className={`${selectedDevices.includes(device.id) ? 'text-blue-600' : 'text-gray-600'}`}>
+                              {getDeviceIcon(device.deviceType, 'lg')}
+                            </div>
+                            <div className="text-center w-full">
+                              <div className={`font-medium text-sm ${selectedDevices.includes(device.id) ? 'text-blue-700' : 'text-gray-800'}`}>
+                                {device.name}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                {device.viewportWidth}×{device.viewportHeight}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
                       </div>
-                    </button>
-                  ))}
+                    </div>
+                  )}
+
+                  {/* 平板设备组 */}
+                  {deviceGroups.tablet.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <Tablet className="w-5 h-5 text-gray-600" />
+                        <h3 className="text-sm font-semibold text-gray-700">平板设备</h3>
+                        <span className="text-xs text-gray-500">({deviceGroups.tablet.length})</span>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                        {deviceGroups.tablet.map((device) => (
+                          <button
+                            key={device.id}
+                            type="button"
+                            onClick={() => toggleDevice(device.id)}
+                            className={`relative flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all hover:shadow-md ${
+                              selectedDevices.includes(device.id)
+                                ? 'border-blue-500 bg-blue-50 shadow-sm'
+                                : 'border-gray-200 hover:border-blue-300'
+                            }`}
+                          >
+                            {selectedDevices.includes(device.id) && (
+                              <div className="absolute top-2 right-2">
+                                <CheckCircle className="w-5 h-5 text-blue-600" />
+                              </div>
+                            )}
+                            <div className={`${selectedDevices.includes(device.id) ? 'text-blue-600' : 'text-gray-600'}`}>
+                              {getDeviceIcon(device.deviceType, 'lg')}
+                            </div>
+                            <div className="text-center w-full">
+                              <div className={`font-medium text-sm ${selectedDevices.includes(device.id) ? 'text-blue-700' : 'text-gray-800'}`}>
+                                {device.name}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                {device.viewportWidth}×{device.viewportHeight}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 桌面设备组 */}
+                  {deviceGroups.desktop.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <Monitor className="w-5 h-5 text-gray-600" />
+                        <h3 className="text-sm font-semibold text-gray-700">桌面设备</h3>
+                        <span className="text-xs text-gray-500">({deviceGroups.desktop.length})</span>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                        {deviceGroups.desktop.map((device) => (
+                          <button
+                            key={device.id}
+                            type="button"
+                            onClick={() => toggleDevice(device.id)}
+                            className={`relative flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all hover:shadow-md ${
+                              selectedDevices.includes(device.id)
+                                ? 'border-blue-500 bg-blue-50 shadow-sm'
+                                : 'border-gray-200 hover:border-blue-300'
+                            }`}
+                          >
+                            {selectedDevices.includes(device.id) && (
+                              <div className="absolute top-2 right-2">
+                                <CheckCircle className="w-5 h-5 text-blue-600" />
+                              </div>
+                            )}
+                            <div className={`${selectedDevices.includes(device.id) ? 'text-blue-600' : 'text-gray-600'}`}>
+                              {getDeviceIcon(device.deviceType, 'lg')}
+                            </div>
+                            <div className="text-center w-full">
+                              <div className={`font-medium text-sm ${selectedDevices.includes(device.id) ? 'text-blue-700' : 'text-gray-800'}`}>
+                                {device.name}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                {device.viewportWidth}×{device.viewportHeight}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -312,7 +481,7 @@ export default function ResponsiveTesting() {
           </form>
         </div>
 
-        {/* 统计摘要 - 优化版 */}
+        {/* 统计摘要 */}
         {stats && (
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
             <div className="flex items-center justify-between mb-6">
@@ -326,7 +495,6 @@ export default function ResponsiveTesting() {
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
-                  <span className="inline-block mr-1">⊙</span>
                   全部
                 </button>
                 <button
@@ -414,7 +582,7 @@ export default function ResponsiveTesting() {
           </div>
         )}
 
-        {/* 测试结果 - 优化版 */}
+        {/* 测试结果 */}
         {results && results.length > 0 && (
           <div className="space-y-4">
             {getFilteredResults().map((result, index) => {
@@ -428,6 +596,7 @@ export default function ResponsiveTesting() {
                 result.touchTargetsAdequate,
                 result.imagesResponsive
               ].filter(Boolean).length;
+              const passPercentage = (passedChecks / checksCount) * 100;
 
               return (
                 <div key={index} className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-200 hover:shadow-lg transition-shadow">
@@ -442,12 +611,22 @@ export default function ResponsiveTesting() {
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4 flex-1">
-                        {/* 设备图标和信息 */}
-                        <div className={`p-3 rounded-lg ${passed ? 'bg-green-200' : 'bg-red-200'}`}>
-                          {getDeviceIcon(result.deviceType, 'lg')}
+                        {/* 圆形进度指示器 */}
+                        <div>
+                          <CircularProgress
+                            percentage={passPercentage}
+                            size={80}
+                            strokeWidth={8}
+                            passed={passed}
+                          />
                         </div>
+
+                        {/* 设备信息 */}
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-1">
+                            <div className={`p-2 rounded-lg ${passed ? 'bg-green-200' : 'bg-red-200'}`}>
+                              {getDeviceIcon(result.deviceType, 'lg')}
+                            </div>
                             <h3 className="font-bold text-lg text-gray-900">{result.deviceName}</h3>
                             {passed ? (
                               <span className="px-3 py-1 bg-green-600 text-white rounded-full text-xs font-bold shadow-sm">
@@ -491,21 +670,6 @@ export default function ResponsiveTesting() {
                         </button>
                       </div>
                     </div>
-
-                    {/* 快速检测结果指示器 */}
-                    <div className="mt-4 flex items-center gap-2">
-                      <div className="flex-1 bg-gray-200 rounded-full h-2 overflow-hidden">
-                        <div
-                          className={`h-full transition-all duration-500 ${
-                            passed ? 'bg-green-600' : 'bg-red-600'
-                          }`}
-                          style={{ width: `${(passedChecks / checksCount) * 100}%` }}
-                        />
-                      </div>
-                      <span className="text-xs font-medium text-gray-600 min-w-[3rem] text-right">
-                        {((passedChecks / checksCount) * 100).toFixed(0)}%
-                      </span>
-                    </div>
                   </div>
 
                   {/* 展开的详细内容 */}
@@ -546,7 +710,7 @@ export default function ResponsiveTesting() {
                         </div>
                       </div>
 
-                      {/* 问题列表 - 优化版 */}
+                      {/* 问题列表 */}
                       {result.issues.length > 0 && (
                         <div className="mb-6">
                           <div className="flex items-center gap-2 mb-4">
@@ -610,7 +774,7 @@ export default function ResponsiveTesting() {
                         </div>
                       )}
 
-                      {/* 截图 - 优化版 */}
+                      {/* 截图 */}
                       <div>
                         <div className="flex items-center gap-2 mb-4">
                           <Smartphone className="w-5 h-5 text-blue-600" />

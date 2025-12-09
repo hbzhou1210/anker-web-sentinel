@@ -12,6 +12,7 @@ export function TestInput({ onTestCreated }: TestInputProps) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [timeout, setTimeout] = useState(30);
   const [waitTime, setWaitTime] = useState(5);
+  const [showPerformanceInfo, setShowPerformanceInfo] = useState(false);
 
   // Test options state
   const [testOptions, setTestOptions] = useState({
@@ -232,49 +233,107 @@ export function TestInput({ onTestCreated }: TestInputProps) {
                     <span className="checkbox-label">
                       <span className="checkbox-icon">⚡</span>
                       <span>性能测试</span>
+                      <button
+                        type="button"
+                        className="info-tooltip-trigger"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setShowPerformanceInfo(!showPerformanceInfo);
+                        }}
+                        title="了解性能指标"
+                      >
+                        ?
+                      </button>
                     </span>
                     <span className="checkbox-hint">检测加载速度和资源大小</span>
                   </label>
+
+                  {showPerformanceInfo && (
+                    <div className="performance-info-popup">
+                      <div className="performance-info-overlay" onClick={() => setShowPerformanceInfo(false)} />
+                      <div className="performance-info-content">
+                        <div className="performance-info-header">
+                          <h4>性能检测指标说明</h4>
+                          <button
+                            type="button"
+                            className="performance-info-close"
+                            onClick={() => setShowPerformanceInfo(false)}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        <div className="performance-info-body">
+                          <div className="performance-metric performance-metric-primary">
+                            <div className="metric-badge">最关注</div>
+                            <div className="metric-title">
+                              <span className="metric-icon">🎯</span>
+                              <strong>LCP - 最大内容绘制 (Largest Contentful Paint)</strong>
+                            </div>
+                            <p className="metric-desc">
+                              <strong>页面主要内容加载完成的时间</strong>，衡量用户感知加载速度的核心指标。
+                              通常是页面中最大的图片、视频或文本块完全渲染的时间点。
+                              <br />
+                              <span className="metric-threshold metric-threshold-primary">
+                                Google Core Web Vitals 标准: &lt;2.5秒为优秀，2.5-4秒需改进，&gt;4秒为差
+                              </span>
+                            </p>
+                          </div>
+
+                          <div className="performance-metric">
+                            <div className="metric-title">
+                              <span className="metric-icon">⚡</span>
+                              <strong>FCP - 首次内容绘制 (First Contentful Paint)</strong>
+                            </div>
+                            <p className="metric-desc">
+                              浏览器首次渲染任何内容（文本、图片等）到屏幕的时间。
+                              <br />
+                              <span className="metric-threshold">标准: &lt;1.8秒为优秀，1.8-3秒需改进，&gt;3秒为差</span>
+                            </p>
+                          </div>
+
+                          <div className="performance-metric">
+                            <div className="metric-title">
+                              <span className="metric-icon">🔄</span>
+                              <strong>TTFB - 首字节时间 (Time To First Byte)</strong>
+                            </div>
+                            <p className="metric-desc">
+                              服务器响应首字节的时间，反映服务器性能和网络延迟。
+                              <br />
+                              <span className="metric-threshold">标准: &lt;200ms为优秀，200-600ms为良好，&gt;600ms需要优化</span>
+                            </p>
+                          </div>
+
+                          <div className="performance-metric">
+                            <div className="metric-title">
+                              <span className="metric-icon">⏱️</span>
+                              <strong>Load Time - 完整加载时间</strong>
+                            </div>
+                            <p className="metric-desc">
+                              页面完全加载所需的时间，包括HTML、CSS、JavaScript和所有资源的下载和执行。
+                              <br />
+                              <span className="metric-threshold">标准: &lt;3秒为优秀，3-5秒为良好，&gt;5秒需要优化</span>
+                            </p>
+                          </div>
+
+                          <div className="performance-metric">
+                            <div className="metric-title">
+                              <span className="metric-icon">📦</span>
+                              <strong>Resource Size - 资源大小</strong>
+                            </div>
+                            <p className="metric-desc">
+                              页面所有资源（图片、脚本、样式表等）的总大小。
+                              <br />
+                              <span className="metric-threshold">标准: &lt;2MB为优秀，2-5MB为良好，&gt;5MB需要优化</span>
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Configuration Section */}
-              <div className="config-section">
-                <div className="section-header">
-                  <label>配置参数</label>
-                </div>
-                <div className="option-group">
-                  <label htmlFor="timeout">
-                    页面超时 (秒)
-                    <span className="option-hint">加载页面的最大等待时间</span>
-                  </label>
-                  <input
-                    id="timeout"
-                    type="number"
-                    value={timeout}
-                    onChange={(e) => setTimeout(Number(e.target.value))}
-                    min={5}
-                    max={120}
-                    disabled={isLoading}
-                  />
-                </div>
-
-                <div className="option-group">
-                  <label htmlFor="waitTime">
-                    JavaScript等待 (秒)
-                    <span className="option-hint">等待JavaScript执行的时间</span>
-                  </label>
-                  <input
-                    id="waitTime"
-                    type="number"
-                    value={waitTime}
-                    onChange={(e) => setWaitTime(Number(e.target.value))}
-                    min={0}
-                    max={30}
-                    disabled={isLoading}
-                  />
-                </div>
-              </div>
+              {/* Configuration Section - Hidden */}
             </div>
           )}
         </div>

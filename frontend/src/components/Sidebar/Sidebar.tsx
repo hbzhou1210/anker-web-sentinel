@@ -8,38 +8,23 @@ interface MenuItem {
   icon: string;
   path?: string;
   children?: MenuItem[];
+  badge?: string; // 徽章文本,如 "开发中", "新功能" 等
 }
 
 const menuItems: MenuItem[] = [
-  {
-    key: 'tools',
-    label: '工具管理',
-    icon: '🔧',
-    children: [
-      { key: 'tools-automation', label: 'Web自动化巡检', icon: '🤖', path: '/' },
-      { key: 'tools-responsive', label: '移动端/响应式测试', icon: '📱', path: '/tools/responsive' },
-      { key: 'tools-test-points', label: '测试点提取', icon: '📝', path: '/tools/test-points' },
-      { key: 'tools-patrol', label: '日常巡检', icon: '🔍', path: '/tools/patrol' },
-      { key: 'tools-monitor', label: '监控工具', icon: '📡', path: '/tools/monitor' },
-    ],
-  },
+  { key: 'tools-automation', label: 'Web自动化巡检', icon: '🤖', path: '/' },
+  { key: 'tools-responsive', label: '移动端/响应式测试', icon: '📱', path: '/tools/responsive' },
+  { key: 'tools-patrol', label: '日常巡检', icon: '🔍', path: '/tools/patrol' },
+  { key: 'tools-test-points', label: '测试点提取', icon: '📝', path: '/tools/test-points', badge: '开发中' },
+  { key: 'tools-monitor', label: '监控工具', icon: '📡', path: '/tools/monitor', badge: '开发中' },
 ];
 
 export const Sidebar: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
-  const [expandedKeys, setExpandedKeys] = useState<string[]>(['tools']); // 默认展开工具管理
   const location = useLocation();
 
   const toggleCollapse = () => {
     setCollapsed(!collapsed);
-  };
-
-  const toggleExpand = (key: string) => {
-    if (expandedKeys.includes(key)) {
-      setExpandedKeys(expandedKeys.filter((k) => k !== key));
-    } else {
-      setExpandedKeys([...expandedKeys, key]);
-    }
   };
 
   const isActive = (path?: string) => {
@@ -48,42 +33,7 @@ export const Sidebar: React.FC = () => {
   };
 
   const renderMenuItem = (item: MenuItem) => {
-    const hasChildren = item.children && item.children.length > 0;
-    const isExpanded = expandedKeys.includes(item.key);
     const active = isActive(item.path);
-
-    if (hasChildren) {
-      return (
-        <div key={item.key} className="menu-item-group">
-          <div
-            className={`menu-item ${isExpanded ? 'expanded' : ''}`}
-            onClick={() => toggleExpand(item.key)}
-          >
-            <span className="menu-icon">{item.icon}</span>
-            {!collapsed && (
-              <>
-                <span className="menu-label">{item.label}</span>
-                <span className="menu-arrow">{isExpanded ? '▼' : '▶'}</span>
-              </>
-            )}
-          </div>
-          {isExpanded && !collapsed && (
-            <div className="submenu">
-              {item.children!.map((child) => (
-                <Link
-                  key={child.key}
-                  to={child.path || '#'}
-                  className={`menu-item submenu-item ${isActive(child.path) ? 'active' : ''}`}
-                >
-                  <span className="menu-icon">{child.icon}</span>
-                  <span className="menu-label">{child.label}</span>
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
 
     return (
       <Link
@@ -92,7 +42,12 @@ export const Sidebar: React.FC = () => {
         className={`menu-item ${active ? 'active' : ''}`}
       >
         <span className="menu-icon">{item.icon}</span>
-        {!collapsed && <span className="menu-label">{item.label}</span>}
+        {!collapsed && (
+          <>
+            <span className="menu-label">{item.label}</span>
+            {item.badge && <span className="menu-badge">{item.badge}</span>}
+          </>
+        )}
       </Link>
     );
   };

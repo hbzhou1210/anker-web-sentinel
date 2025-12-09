@@ -1,7 +1,7 @@
 {
-  "name": "web-automation-checker",
+  "name": "anker-web-sentinel",
   "version": "1.0.0",
-  "description": "Visual web automation checker with UI testing and performance analysis",
+  "description": "Anker Web Sentinel - Comprehensive web quality monitoring and testing platform",
   "private": true,
   "workspaces": [
     "backend",
@@ -32,6 +32,6 @@
     "playwright",
     "lighthouse"
   ],
-  "author": "Anita Project Team",
+  "author": "Anker Innovation",
   "license": "MIT"
 }

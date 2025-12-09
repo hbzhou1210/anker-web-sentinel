@@ -367,7 +367,7 @@ router.delete('/schedules/:scheduleId', async (req: Request, res: Response) => {
 router.get('/executions', async (req: Request, res: Response) => {
   try {
     const taskId = req.query.taskId as string | undefined;
-    const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
 
     const executions = await patrolService.getExecutionHistory(taskId, limit);
     res.json(executions);
@@ -402,6 +402,46 @@ router.get('/executions/:executionId', async (req: Request, res: Response) => {
     res.status(500).json({
       error: 'Internal Server Error',
       message: '获取执行详情失败',
+    });
+  }
+});
+
+// ==================== 调度器管理 ====================
+
+/**
+ * POST /api/v1/patrol/scheduler/reload - 重新加载所有调度配置
+ */
+router.post('/scheduler/reload', async (_req: Request, res: Response) => {
+  try {
+    await patrolSchedulerService.reloadSchedules();
+    res.json({
+      success: true,
+      message: '调度配置已重新加载',
+    });
+  } catch (error) {
+    console.error('重新加载调度配置失败:', error);
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: '重新加载调度配置失败',
+    });
+  }
+});
+
+/**
+ * GET /api/v1/patrol/scheduler/status - 获取调度器状态
+ */
+router.get('/scheduler/status', (_req: Request, res: Response) => {
+  try {
+    const status = patrolSchedulerService.getScheduleStatus();
+    res.json({
+      success: true,
+      schedules: status,
+    });
+  } catch (error) {
+    console.error('获取调度器状态失败:', error);
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: '获取调度器状态失败',
     });
   }
 });

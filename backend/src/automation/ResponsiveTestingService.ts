@@ -32,14 +32,14 @@ export class ResponsiveTestingService {
         'User-Agent': device.userAgent,
       });
 
-      // 访问页面
+      // 访问页面 - 使用 domcontentloaded 代替 networkidle 加快速度
       await page.goto(url, {
-        waitUntil: 'networkidle',
+        waitUntil: 'domcontentloaded',  // 改为 domcontentloaded,更快
         timeout: 30000
       });
 
-      // 等待页面稳定
-      await page.waitForTimeout(2000);
+      // 等待页面稳定 - 减少等待时间
+      await page.waitForTimeout(1000);  // 从 2000ms 减少到 1000ms
 
       // 1. 检查是否有横向滚动条
       const hasHorizontalScroll = await this.checkHorizontalScroll(page, issues);
@@ -57,10 +57,7 @@ export class ResponsiveTestingService {
       const imagesResponsive = await this.checkImagesResponsive(page, issues);
 
       // 截图 - 竖屏
-      const screenshotPortraitUrl = await this.screenshotService.captureScreenshot(
-        page,
-        `responsive_${device.name.replace(/\s+/g, '_')}_portrait`
-      );
+      const screenshotPortraitUrl = await this.screenshotService.captureFullPage(page);
 
       // 如果是移动设备,测试横屏
       let screenshotLandscapeUrl: string | undefined;
@@ -69,12 +66,9 @@ export class ResponsiveTestingService {
           width: device.viewportHeight,
           height: device.viewportWidth,
         });
-        await page.waitForTimeout(1000);
+        await page.waitForTimeout(500);  // 从 1000ms 减少到 500ms
 
-        screenshotLandscapeUrl = await this.screenshotService.captureScreenshot(
-          page,
-          `responsive_${device.name.replace(/\s+/g, '_')}_landscape`
-        );
+        screenshotLandscapeUrl = await this.screenshotService.captureFullPage(page);
 
         // 恢复竖屏
         await page.setViewportSize({
