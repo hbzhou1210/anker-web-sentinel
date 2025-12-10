@@ -56,8 +56,13 @@ async function startServer() {
     await patrolSchedulerService.initialize();
     console.log('✓ Patrol scheduler ready');
 
-    // Setup automatic cleanup of stuck test requests
+    // Setup automatic cleanup of stuck test requests (only for PostgreSQL mode)
     const cleanupStuckTests = async () => {
+      // Skip cleanup in Bitable mode (test_requests table doesn't exist)
+      if (process.env.DATABASE_STORAGE === 'bitable') {
+        return;
+      }
+
       try {
         const result = await query(
           "UPDATE test_requests SET status = 'failed' WHERE status = 'running' AND requested_at < NOW() - INTERVAL '1 hour'"
