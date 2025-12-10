@@ -36,7 +36,7 @@ fi
 # 复制前端构建文件到 Nginx 目录
 echo "📦 复制前端文件..."
 rm -rf /usr/share/nginx/html/*
-cp -r /app/frontend/dist/* /usr/share/nginx/html/
+cp -r /app/dist/frontend/* /usr/share/nginx/html/
 
 # 更新 Nginx 配置
 echo "⚙️  配置 Nginx..."
