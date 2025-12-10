@@ -82,6 +82,12 @@ async function executeMigration(migration: Migration): Promise<void> {
 async function runMigrations(): Promise<void> {
   console.log('Starting database migrations...\n');
 
+  // Skip migrations if using Bitable storage
+  if (process.env.DATABASE_STORAGE === 'bitable') {
+    console.log('✓ Using Bitable storage mode - skipping PostgreSQL migrations');
+    return;
+  }
+
   try {
     // Ensure migrations tracking table exists
     await createMigrationsTable();

@@ -5,28 +5,33 @@ echo "==================================="
 echo "🚀 Anita 项目启动中..."
 echo "==================================="
 
-# 检查必需的环境变量
-if [ -z "$DATABASE_URL" ]; then
-    echo "⚠️  警告: DATABASE_URL 未设置"
-    echo "使用默认值: postgresql://postgres:postgres@localhost:5432/web_automation_checker"
-    export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/web_automation_checker"
-fi
-
-# 等待数据库就绪（如果使用外部数据库）
-echo "📊 检查数据库连接..."
-for i in {1..30}; do
-    if psql "$DATABASE_URL" -c "SELECT 1" > /dev/null 2>&1; then
-        echo "✅ 数据库连接成功"
-        break
+# 检查数据存储模式
+if [ "$DATABASE_STORAGE" = "bitable" ]; then
+    echo "📊 使用 Bitable 存储模式,跳过 PostgreSQL 检查和迁移"
+else
+    # 检查必需的环境变量
+    if [ -z "$DATABASE_URL" ]; then
+        echo "⚠️  警告: DATABASE_URL 未设置"
+        echo "使用默认值: postgresql://postgres:postgres@localhost:5432/web_automation_checker"
+        export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/web_automation_checker"
     fi
-    echo "⏳ 等待数据库... ($i/30)"
-    sleep 2
-done
 
-# 运行数据库迁移
-echo "🔄 运行数据库迁移..."
-cd /app/backend
-npm run migrate || echo "⚠️  数据库迁移失败，可能已经执行过"
+    # 等待数据库就绪(如果使用外部数据库)
+    echo "📊 检查 PostgreSQL 连接..."
+    for i in {1..30}; do
+        if psql "$DATABASE_URL" -c "SELECT 1" > /dev/null 2>&1; then
+            echo "✅ 数据库连接成功"
+            break
+        fi
+        echo "⏳ 等待数据库... ($i/30)"
+        sleep 2
+    done
+
+    # 运行数据库迁移
+    echo "🔄 运行数据库迁移..."
+    cd /app/backend
+    npm run migrate || echo "⚠️  数据库迁移失败,可能已经执行过"
+fi
 
 # 复制前端构建文件到 Nginx 目录
 echo "📦 复制前端文件..."
