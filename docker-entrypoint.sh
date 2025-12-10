@@ -5,9 +5,17 @@ echo "==================================="
 echo "🚀 Anita 项目启动中..."
 echo "==================================="
 
-# 检查数据存储模式
-if [ "$DATABASE_STORAGE" = "bitable" ]; then
+# 如果环境变量未设置,从 backend/.env 读取
+if [ -z "$DATABASE_STORAGE" ] && [ -f "/app/backend/.env" ]; then
+    export $(grep -v '^#' /app/backend/.env | grep DATABASE_STORAGE | xargs)
+fi
+
+# 检查数据存储模式(默认使用 bitable)
+if [ "$DATABASE_STORAGE" = "bitable" ] || [ -z "$DATABASE_STORAGE" ]; then
     echo "📊 使用 Bitable 存储模式,跳过 PostgreSQL 检查和迁移"
+
+    # 确保环境变量设置为 bitable
+    export DATABASE_STORAGE=bitable
 else
     # 检查必需的环境变量
     if [ -z "$DATABASE_URL" ]; then
