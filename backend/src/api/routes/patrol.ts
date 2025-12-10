@@ -5,7 +5,12 @@ import { patrolSchedulerService } from '../../services/PatrolSchedulerService.js
 import { PatrolScheduleType } from '../../models/entities.js';
 
 const router = Router();
-const scheduleRepository = new PatrolScheduleRepository();
+const DATABASE_STORAGE = process.env.DATABASE_STORAGE || 'postgres';
+
+// Only initialize schedule repository for PostgreSQL mode
+const scheduleRepository = DATABASE_STORAGE === 'bitable'
+  ? null
+  : new PatrolScheduleRepository();
 
 // ==================== 巡检任务管理 ====================
 
@@ -230,6 +235,15 @@ router.post('/tasks/:taskId/execute', async (req: Request, res: Response) => {
  */
 router.post('/schedules', async (req: Request, res: Response) => {
   try {
+    // Bitable mode does not support schedules yet
+    if (DATABASE_STORAGE === 'bitable') {
+      res.status(501).json({
+        error: 'Not Implemented',
+        message: '调度功能在 Bitable 模式下暂不支持',
+      });
+      return;
+    }
+
     const { patrolTaskId, cronExpression, scheduleType, timeZone, enabled } = req.body;
 
     // 验证必填字段
@@ -251,7 +265,7 @@ router.post('/schedules', async (req: Request, res: Response) => {
       return;
     }
 
-    const schedule = await scheduleRepository.create({
+    const schedule = await scheduleRepository!.create({
       patrolTaskId,
       cronExpression,
       scheduleType: scheduleType as PatrolScheduleType,
@@ -279,13 +293,22 @@ router.post('/schedules', async (req: Request, res: Response) => {
  */
 router.get('/schedules', async (req: Request, res: Response) => {
   try {
+    // Bitable mode does not support schedules yet
+    if (DATABASE_STORAGE === 'bitable') {
+      res.status(501).json({
+        error: 'Not Implemented',
+        message: '调度功能在 Bitable 模式下暂不支持',
+      });
+      return;
+    }
+
     const taskId = req.query.taskId as string | undefined;
 
     let schedules;
     if (taskId) {
-      schedules = await scheduleRepository.findByTaskId(taskId);
+      schedules = await scheduleRepository!.findByTaskId(taskId);
     } else {
-      schedules = await scheduleRepository.findAllEnabled();
+      schedules = await scheduleRepository!.findAllEnabled();
     }
 
     res.json(schedules);
@@ -303,10 +326,19 @@ router.get('/schedules', async (req: Request, res: Response) => {
  */
 router.put('/schedules/:scheduleId', async (req: Request, res: Response) => {
   try {
+    // Bitable mode does not support schedules yet
+    if (DATABASE_STORAGE === 'bitable') {
+      res.status(501).json({
+        error: 'Not Implemented',
+        message: '调度功能在 Bitable 模式下暂不支持',
+      });
+      return;
+    }
+
     const { scheduleId } = req.params;
     const updates = req.body;
 
-    const schedule = await scheduleRepository.update(scheduleId, updates);
+    const schedule = await scheduleRepository!.update(scheduleId, updates);
 
     if (!schedule) {
       res.status(404).json({
@@ -334,12 +366,21 @@ router.put('/schedules/:scheduleId', async (req: Request, res: Response) => {
  */
 router.delete('/schedules/:scheduleId', async (req: Request, res: Response) => {
   try {
+    // Bitable mode does not support schedules yet
+    if (DATABASE_STORAGE === 'bitable') {
+      res.status(501).json({
+        error: 'Not Implemented',
+        message: '调度功能在 Bitable 模式下暂不支持',
+      });
+      return;
+    }
+
     const { scheduleId } = req.params;
 
     // 从调度器中移除
     await patrolSchedulerService.removeSchedule(scheduleId);
 
-    const deleted = await scheduleRepository.delete(scheduleId);
+    const deleted = await scheduleRepository!.delete(scheduleId);
 
     if (!deleted) {
       res.status(404).json({
