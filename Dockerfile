@@ -29,7 +29,7 @@ RUN npm install \
     && npx playwright install chromium \
     && cd frontend && npm run build && cd .. \
     && mkdir -p /app/backend/screenshots /var/log/supervisor \
-    && chmod +x /docker-entrypoint.sh \
+    && chmod +x ./docker-entrypoint.sh \
     && rm -rf /root/.cache /root/.npm
 
 # 配置 Nginx
@@ -39,4 +39,4 @@ RUN cp frontend/nginx.conf /etc/nginx/sites-available/default
 EXPOSE 80 3000
 
 # 启动
-CMD ["/docker-entrypoint.sh"]
+CMD ["/app/docker-entrypoint.sh"]
