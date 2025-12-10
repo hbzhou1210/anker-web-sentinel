@@ -29,7 +29,23 @@
 - ✅ backend/src/api/routes/patrol.ts
 - ✅ backend/src/index.ts
 
-### 4. 其他已修复问题 ✅
+### 4. 前端 API 路径自动适配 ✅
+**问题**: 部署成功但功能无法使用,前端调用 `http://localhost:3000/api/v1` 导致生产环境 404
+
+**解决方案**:
+- 实现运行时环境自动检测
+- 生产环境使用相对路径 `/api/v1` (通过 Nginx 代理)
+- 本地开发使用完整 URL `http://localhost:3000/api/v1`
+- 保留 `VITE_API_BASE_URL` 环境变量覆盖能力
+- 创建 TypeScript 类型定义避免编译错误
+
+**效果**: 无需重新配置 Launch 平台,前端自动适配部署环境!
+
+**修改文件**:
+- ✅ [frontend/src/services/api.ts](frontend/src/services/api.ts) - 实现 `getApiBaseUrl()` 自动检测
+- ✅ [frontend/src/vite-env.d.ts](frontend/src/vite-env.d.ts) - 添加 TypeScript 类型定义
+
+### 5. 其他已修复问题 ✅
 - ✅ 端口冲突 (PORT 从 80 改为 3000)
 - ✅ Playwright 浏览器缓存保留
 - ✅ UUID 依赖添加
@@ -210,6 +226,18 @@ CPU: 2 核
 1. 打开浏览器开发者工具 Console
 2. 查看是否有 JavaScript 错误
 3. 查看 Network 标签中的 API 请求状态
+
+### Q: 部署成功但功能无法使用,API 返回 404
+**问题**: 前端调用 API 时返回 `Cannot GET /api/v1/xxx`
+
+**原因**: 前端使用了错误的 API Base URL (如 `http://localhost:3000/api/v1`)
+
+**解决**:
+1. 确认使用最新代码 (commit 9f4f834 或更新)
+2. 前端已实现自动环境检测,无需手动配置
+3. 在 Launch 平台触发重新部署即可
+
+**验证**: 打开浏览器开发者工具 Network 标签,检查 API 请求 URL 是否为相对路径 `/api/v1/xxx`
 
 ## ✨ 项目特点
 
