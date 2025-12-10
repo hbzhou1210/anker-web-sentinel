@@ -33,5 +33,8 @@
     "lighthouse"
   ],
   "author": "Anker Innovation",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@types/uuid": "^10.0.0"
+  }
 }

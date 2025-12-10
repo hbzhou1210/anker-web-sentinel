@@ -2,11 +2,21 @@ import { Router, Request, Response } from 'express';
 import browserPool from '../../automation/BrowserPool.js';
 import { ResponsiveTestingService } from '../../automation/ResponsiveTestingService.js';
 import { ResponsiveTestRepository } from '../../models/repositories/ResponsiveTestRepository.js';
-import { DeviceType } from '../../models/entities.js';
+import { BitableResponsiveTestRepository } from '../../models/repositories/BitableResponsiveTestRepository.js';
+import { DeviceType, ResponsiveTestResult, ResponsiveTestIssue } from '../../models/entities.js';
+
+// 根据环境变量选择数据存储方式
+const DATABASE_STORAGE = process.env.DATABASE_STORAGE || 'postgres';
 
 const router = Router();
 const responsiveTestingService = new ResponsiveTestingService();
-const responsiveTestRepository = new ResponsiveTestRepository();
+
+// 根据配置选择 Repository
+const responsiveTestRepository = DATABASE_STORAGE === 'bitable'
+  ? new BitableResponsiveTestRepository()
+  : new ResponsiveTestRepository();
+
+console.log(`[ResponsiveRoute] Using ${DATABASE_STORAGE} storage`);
 
 /**
  * GET /api/v1/responsive/devices
@@ -105,46 +115,45 @@ router.post('/test', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // 并行执行测试 - 为每个设备创建独立的 page
-    console.log(`Starting parallel tests on ${devicesToTest.length} devices...`);
+    // 并行执行测试 - 限制并发数量避免资源耗尽
+    const CONCURRENT_LIMIT = 3; // 同时最多测试3个设备
+    console.log(`Starting tests on ${devicesToTest.length} devices (max ${CONCURRENT_LIMIT} concurrent)...`);
     const startTime = Date.now();
 
-    const results = await Promise.all(
-      devicesToTest.map(async (device) => {
-        const page = await browser.newPage();
-        try {
-          console.log(`Testing on ${device.name}...`);
-          const result = await responsiveTestingService.testOnDevice(page, url, device);
-          return result;
-        } catch (error) {
-          console.error(`Failed to test on ${device.name}:`, error);
-          throw error;
-        } finally {
-          await page.close();
-        }
-      })
-    );
+    // 分批并行执行测试
+    const results: ResponsiveTestResult[] = [];
+    for (let i = 0; i < devicesToTest.length; i += CONCURRENT_LIMIT) {
+      const batch = devicesToTest.slice(i, i + CONCURRENT_LIMIT);
+      console.log(`Testing batch ${Math.floor(i / CONCURRENT_LIMIT) + 1}/${Math.ceil(devicesToTest.length / CONCURRENT_LIMIT)}: ${batch.map(d => d.name).join(', ')}`);
+
+      const batchResults = await Promise.all(
+        batch.map(async (device) => {
+          const page = await browser.newPage();
+          try {
+            console.log(`Testing on ${device.name}...`);
+            const result = await responsiveTestingService.testOnDevice(page, url, device);
+            return result;
+          } catch (error) {
+            console.error(`Failed to test on ${device.name}:`, error);
+            throw error;
+          } finally {
+            await page.close();
+          }
+        })
+      );
+
+      results.push(...batchResults);
+    }
 
     const totalTime = Date.now() - startTime;
     console.log(`✓ Completed ${devicesToTest.length} device tests in ${totalTime}ms`);
 
     // 计算统计数据
+    // 只有 error 级别的问题才算测试失败,warning 级别不影响通过状态
     const stats = {
       totalDevices: results.length,
-      passed: results.filter(r =>
-        !r.hasHorizontalScroll &&
-        r.hasViewportMeta &&
-        r.fontSizeReadable &&
-        r.touchTargetsAdequate &&
-        r.imagesResponsive
-      ).length,
-      failed: results.filter(r =>
-        r.hasHorizontalScroll ||
-        !r.hasViewportMeta ||
-        !r.fontSizeReadable ||
-        !r.touchTargetsAdequate ||
-        !r.imagesResponsive
-      ).length,
+      passed: results.filter(r => !r.issues.some(issue => issue.severity === 'error')).length,
+      failed: results.filter(r => r.issues.some(issue => issue.severity === 'error')).length,
       totalIssues: results.reduce((sum, r) => sum + r.issues.length, 0),
     };
 

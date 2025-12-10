@@ -2,10 +2,15 @@ import { Browser, Page, BrowserContext } from 'playwright';
 import browserPool from '../automation/BrowserPool.js';
 import { PatrolTaskRepository } from '../database/repositories/PatrolTaskRepository.js';
 import { PatrolExecutionRepository } from '../database/repositories/PatrolExecutionRepository.js';
+import { BitablePatrolTaskRepository } from '../models/repositories/BitablePatrolTaskRepository.js';
+import { BitablePatrolExecutionRepository } from '../models/repositories/BitablePatrolExecutionRepository.js';
 import { PatrolExecutionStatus, PatrolTestResult, PatrolTask, PatrolConfig } from '../models/entities.js';
 import screenshotService from '../automation/ScreenshotService.js';
 import { patrolEmailService } from './PatrolEmailService.js';
 import { imageCompareService } from '../automation/ImageCompareService.js';
+
+// 根据环境变量选择数据存储方式
+const DATABASE_STORAGE = process.env.DATABASE_STORAGE || 'postgres';
 
 // 页面类型枚举
 // Updated: Removed TypeScript type annotations from page.evaluate() functions
@@ -25,12 +30,19 @@ interface CheckDetail {
 }
 
 export class PatrolService {
-  private taskRepository: PatrolTaskRepository;
-  private executionRepository: PatrolExecutionRepository;
+  private taskRepository: PatrolTaskRepository | BitablePatrolTaskRepository;
+  private executionRepository: PatrolExecutionRepository | BitablePatrolExecutionRepository;
 
   constructor() {
-    this.taskRepository = new PatrolTaskRepository();
-    this.executionRepository = new PatrolExecutionRepository();
+    if (DATABASE_STORAGE === 'bitable') {
+      console.log('[PatrolService] Using Bitable storage');
+      this.taskRepository = new BitablePatrolTaskRepository();
+      this.executionRepository = new BitablePatrolExecutionRepository();
+    } else {
+      console.log('[PatrolService] Using PostgreSQL storage');
+      this.taskRepository = new PatrolTaskRepository();
+      this.executionRepository = new PatrolExecutionRepository();
+    }
   }
 
   /**
