@@ -27,7 +27,6 @@ COPY backend/.env.production backend/.env
 # 安装依赖和构建(单个 RUN 命令)
 RUN npm install \
     && npx playwright install chromium \
-    && cd backend && npm run build && cd .. \
     && cd frontend && npm run build && cd .. \
     && mkdir -p /app/backend/screenshots /var/log/supervisor \
     && chmod +x /docker-entrypoint.sh \

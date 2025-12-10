@@ -1,0 +1,46 @@
+# 最精简的 Dockerfile - 用于排查 Launch 平台构建问题
+FROM node:20-bookworm
+
+WORKDIR /app
+
+# 只复制必要的依赖文件
+COPY package*.json ./
+COPY backend/package*.json ./backend/
+COPY frontend/package*.json ./frontend/
+
+# 安装依赖
+RUN npm install
+
+# 复制源代码
+COPY . .
+
+# 复制生产环境配置
+COPY backend/.env.production backend/.env
+
+# 安装系统依赖
+RUN apt-get update && apt-get install -y \
+    chromium \
+    fonts-noto-color-emoji \
+    fonts-wqy-zenhei \
+    nginx \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# 设置 Playwright 使用系统 Chromium
+ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin/chromium
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
+# 构建项目
+RUN cd backend && npm run build && cd .. && \
+    cd frontend && npm run build && cd ..
+
+# 准备运行环境
+RUN mkdir -p /app/backend/screenshots && \
+    chmod +x /docker-entrypoint.sh
+
+# 配置 Nginx
+COPY frontend/nginx.conf /etc/nginx/sites-available/default
+
+EXPOSE 80
+
+CMD ["/docker-entrypoint.sh"]
