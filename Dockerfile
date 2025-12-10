@@ -30,7 +30,7 @@ RUN npm install \
     && cd frontend && npm run build && cd .. \
     && mkdir -p /app/backend/screenshots /var/log/supervisor \
     && chmod +x ./docker-entrypoint.sh \
-    && rm -rf /root/.cache /root/.npm
+    && rm -rf /root/.npm
 
 # 配置 Nginx
 RUN cp frontend/nginx.conf /etc/nginx/sites-available/default
