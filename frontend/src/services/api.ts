@@ -1,7 +1,23 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 
 // API Base Configuration
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api/v1';
+// 优先使用环境变量,否则根据 window.location 判断使用相对路径或完整 URL
+const getApiBaseUrl = (): string => {
+  // 如果设置了环境变量,直接使用
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+
+  // 如果在浏览器环境且不是 localhost,使用相对路径(生产环境通过 Nginx 代理)
+  if (typeof window !== 'undefined' && !window.location.hostname.includes('localhost')) {
+    return '/api/v1';
+  }
+
+  // 本地开发环境使用完整 URL
+  return 'http://localhost:3000/api/v1';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 // Create axios instance with default config
 const apiClient: AxiosInstance = axios.create({
