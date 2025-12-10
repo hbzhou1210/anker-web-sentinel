@@ -28,6 +28,13 @@ export class PatrolSchedulerService {
 
     console.log('Initializing PatrolSchedulerService...');
 
+    // Skip scheduler initialization in Bitable mode (PatrolSchedule not yet implemented for Bitable)
+    if (process.env.DATABASE_STORAGE === 'bitable') {
+      console.log('✓ Skipping PatrolSchedulerService in Bitable mode (not yet implemented)');
+      this.isInitialized = true;
+      return;
+    }
+
     try {
       const enabledSchedules = await this.scheduleRepository.findAllEnabled();
       console.log(`Found ${enabledSchedules.length} enabled patrol schedules`);
