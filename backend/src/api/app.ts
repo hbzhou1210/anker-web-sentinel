@@ -22,13 +22,17 @@ app.use(
       // 允许无 origin 的请求（如 Postman、curl）
       if (!origin) return callback(null, true);
 
-      // 开发环境允许所有 localhost
-      if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      // 开发环境允许所有 localhost 和内网 IP (10.x.x.x, 172.16-31.x.x, 192.168.x.x)
+      if (origin.includes('localhost') ||
+          origin.includes('127.0.0.1') ||
+          origin.match(/^https?:\/\/(10|172\.(1[6-9]|2[0-9]|3[01])|192\.168)\./)) {
         return callback(null, true);
       }
 
       // 检查是否在允许列表中，或者是 Launch 平台的子路径
-      if (allowedOrigins.includes(origin) || origin.includes('anker-launch.com') || origin.includes('.launch.anker-in.com')) {
+      if (allowedOrigins.includes(origin) ||
+          origin.includes('anker-launch.com') ||
+          origin.includes('.launch.anker-in.com')) {
         callback(null, true);
       } else {
         console.warn(`[CORS] Blocked origin: ${origin}`);
