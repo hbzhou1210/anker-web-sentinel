@@ -134,27 +134,37 @@ export class ResponsiveTestingService {
    */
   private async checkHorizontalScroll(page: Page, issues: ResponsiveTestIssue[]): Promise<boolean> {
     try {
-      const hasScroll = await page.evaluate(() => {
-        return document.documentElement.scrollWidth > document.documentElement.clientWidth;
+      const scrollInfo = await page.evaluate(() => {
+        const scrollWidth = document.documentElement.scrollWidth;
+        const clientWidth = document.documentElement.clientWidth;
+        const overflow = scrollWidth - clientWidth;
+
+        // 允许1px的误差,避免浏览器舍入误差导致的误报
+        const hasScroll = overflow > 1;
+
+        return {
+          hasScroll,
+          scrollWidth,
+          clientWidth,
+          overflow
+        };
       });
 
-      if (hasScroll) {
-        const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
-        const clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
-
+      if (scrollInfo.hasScroll) {
         issues.push({
           type: 'horizontal_scroll',
           severity: 'error',
-          message: `页面宽度(${scrollWidth}px)超出视口宽度(${clientWidth}px),出现横向滚动条`,
+          message: `页面宽度(${scrollInfo.scrollWidth}px)超出视口宽度(${scrollInfo.clientWidth}px),出现横向滚动条`,
           details: {
-            scrollWidth,
-            clientWidth,
-            overflow: scrollWidth - clientWidth,
+            scrollWidth: scrollInfo.scrollWidth,
+            clientWidth: scrollInfo.clientWidth,
+            overflow: scrollInfo.overflow,
           },
         });
       }
 
-      return !hasScroll;
+      // 返回是否有横向滚动: true = 有滚动条(失败), false = 无滚动条(通过)
+      return scrollInfo.hasScroll;
     } catch (error) {
       console.error('Failed to check horizontal scroll:', error);
       return true;

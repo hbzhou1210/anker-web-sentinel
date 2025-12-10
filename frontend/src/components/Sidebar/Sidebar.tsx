@@ -12,9 +12,9 @@ interface MenuItem {
 }
 
 const menuItems: MenuItem[] = [
-  { key: 'tools-automation', label: 'Web自动化巡检', icon: '🤖', path: '/' },
+  { key: 'tools-quality-check', label: '网页质量检测', icon: '🎯', path: '/' },
   { key: 'tools-responsive', label: '移动端/响应式测试', icon: '📱', path: '/tools/responsive' },
-  { key: 'tools-patrol', label: '日常巡检', icon: '🔍', path: '/tools/patrol' },
+  { key: 'tools-patrol', label: '定时巡检管理', icon: '🔍', path: '/tools/patrol' },
   { key: 'tools-test-points', label: '测试点提取', icon: '📝', path: '/tools/test-points', badge: '开发中' },
   { key: 'tools-monitor', label: '监控工具', icon: '📡', path: '/tools/monitor', badge: '开发中' },
 ];

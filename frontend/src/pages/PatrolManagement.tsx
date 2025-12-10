@@ -135,6 +135,7 @@ const PatrolManagement: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showAllExecutions, setShowAllExecutions] = useState(false); // 是否显示全部执行记录
 
   // 创建/编辑任务表单状态
   const [formData, setFormData] = useState({
@@ -182,11 +183,12 @@ const PatrolManagement: React.FC = () => {
   };
 
   // 加载执行历史
-  const loadExecutions = async (taskId?: string) => {
+  const loadExecutions = async (taskId?: string, loadAll: boolean = false) => {
     try {
+      const limit = loadAll ? 100 : 10; // 显示全部时加载100条,否则只加载10条
       const url = taskId
-        ? `/api/v1/patrol/executions?taskId=${taskId}&limit=10`
-        : '/api/v1/patrol/executions?limit=20';
+        ? `/api/v1/patrol/executions?taskId=${taskId}&limit=${limit}`
+        : `/api/v1/patrol/executions?limit=${limit}`;
       const response = await fetch(url);
       const data = await response.json();
       setExecutions(data);
@@ -198,18 +200,18 @@ const PatrolManagement: React.FC = () => {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      await Promise.all([loadTasks(), loadExecutions()]);
+      await Promise.all([loadTasks(), loadExecutions(undefined, showAllExecutions)]);
       setLoading(false);
     };
     loadData();
 
     // 定期刷新执行历史(每5秒)
     const interval = setInterval(() => {
-      loadExecutions(selectedTask || undefined);
+      loadExecutions(selectedTask || undefined, showAllExecutions);
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [selectedTask]);
+  }, [selectedTask, showAllExecutions]);
 
   // ESC键关闭截图模态框
   useEffect(() => {
@@ -295,7 +297,7 @@ const PatrolManagement: React.FC = () => {
       if (response.ok) {
         alert('巡检任务已开始执行,请稍候查看结果');
         setTimeout(() => {
-          loadExecutions();
+          loadExecutions(undefined, showAllExecutions);
           setRunningTasks(prev => {
             const newSet = new Set(prev);
             newSet.delete(taskId);
@@ -936,7 +938,8 @@ const PatrolManagement: React.FC = () => {
                   <button
                     onClick={() => {
                       setSelectedTask(task.id);
-                      loadExecutions(task.id);
+                      setShowAllExecutions(false);
+                      loadExecutions(task.id, false);
                     }}
                     className="flex items-center justify-center gap-2 px-3 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl hover:from-purple-600 hover:to-pink-600 transition-all shadow-sm hover:shadow-md font-medium"
                   >
@@ -964,21 +967,37 @@ const PatrolManagement: React.FC = () => {
                 <Activity className="w-5 h-5 text-white" />
               </div>
               <h2 className="text-2xl font-bold text-gray-900">
-                {selectedTask ? '任务执行历史' : '最近执行记录'}
+                {selectedTask ? '任务执行历史' : showAllExecutions ? '全部执行记录' : '最近执行记录'}
               </h2>
             </div>
-            {selectedTask && (
-              <button
-                onClick={() => {
-                  setSelectedTask(null);
-                  loadExecutions();
-                }}
-                className="flex items-center gap-1 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
-              >
-                查看全部
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {selectedTask && (
+                <button
+                  onClick={() => {
+                    setSelectedTask(null);
+                    setShowAllExecutions(false);
+                    loadExecutions(undefined, false);
+                  }}
+                  className="flex items-center gap-1 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                >
+                  返回全部
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              )}
+              {!selectedTask && (
+                <button
+                  onClick={() => {
+                    const newShowAll = !showAllExecutions;
+                    setShowAllExecutions(newShowAll);
+                    loadExecutions(undefined, newShowAll);
+                  }}
+                  className="flex items-center gap-1 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 rounded-lg transition-all shadow-sm hover:shadow-md"
+                >
+                  {showAllExecutions ? '显示最近' : '查看全部'}
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
 
           {executions.length === 0 ? (

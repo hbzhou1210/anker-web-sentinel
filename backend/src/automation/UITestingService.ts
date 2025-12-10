@@ -58,6 +58,50 @@ export class UITestingService {
             continue;
           }
 
+          // Check if link contains 'beta' in the URL (subdomain or path)
+          const lowerHref = href.toLowerCase();
+          const hasBeta = lowerHref.includes('beta.') || lowerHref.includes('/beta/') || lowerHref.includes('/beta');
+
+          if (hasBeta) {
+            // Capture screenshot for beta link
+            const selector = `a[href="${href}"]`;
+            const screenshotUrl = await screenshotService.captureWithHighlight(
+              page,
+              selector,
+              'Beta Link'
+            );
+
+            const errorMessage = 'Link contains beta URL (subdomain or path)';
+            const analysis = failureAnalysisService.analyzeUITestFailure(
+              UITestType.Link,
+              TestResultStatus.Warning,
+              errorMessage,
+              { href, text, hasBeta: true }
+            );
+
+            results.push({
+              id: '',
+              testReportId: '',
+              testType: UITestType.Link,
+              elementId: selector,
+              status: TestResultStatus.Warning,
+              errorMessage,
+              diagnostics: {
+                href,
+                text,
+                hasBeta: true,
+                analysis: analysis ? {
+                  cause: analysis.cause,
+                  recommendation: analysis.recommendation,
+                  severity: analysis.severity,
+                  fixComplexity: analysis.fixComplexity,
+                } : undefined,
+              },
+              screenshotUrl: screenshotUrl || undefined,
+            });
+            continue;
+          }
+
           // Check if link is visible and enabled
           const isVisible = await link.isVisible();
           const isEnabled = await link.isEnabled();

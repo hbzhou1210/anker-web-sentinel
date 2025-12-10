@@ -2,17 +2,29 @@ import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 import { PatrolTaskRepository } from '../database/repositories/PatrolTaskRepository.js';
 import { PatrolExecutionRepository } from '../database/repositories/PatrolExecutionRepository.js';
+import { BitablePatrolTaskRepository } from '../models/repositories/BitablePatrolTaskRepository.js';
+import { BitablePatrolExecutionRepository } from '../models/repositories/BitablePatrolExecutionRepository.js';
 import { PatrolExecution, PatrolTask } from '../models/entities.js';
+
+// 根据环境变量选择数据存储方式
+const DATABASE_STORAGE = process.env.DATABASE_STORAGE || 'postgres';
 
 export class PatrolEmailService {
   private transporter: Transporter | null = null;
   private isEnabled: boolean;
-  private taskRepository: PatrolTaskRepository;
-  private executionRepository: PatrolExecutionRepository;
+  private taskRepository: PatrolTaskRepository | BitablePatrolTaskRepository;
+  private executionRepository: PatrolExecutionRepository | BitablePatrolExecutionRepository;
 
   constructor() {
-    this.taskRepository = new PatrolTaskRepository();
-    this.executionRepository = new PatrolExecutionRepository();
+    if (DATABASE_STORAGE === 'bitable') {
+      console.log('[PatrolEmailService] Using Bitable storage');
+      this.taskRepository = new BitablePatrolTaskRepository();
+      this.executionRepository = new BitablePatrolExecutionRepository();
+    } else {
+      console.log('[PatrolEmailService] Using PostgreSQL storage');
+      this.taskRepository = new PatrolTaskRepository();
+      this.executionRepository = new PatrolExecutionRepository();
+    }
 
     // 检查邮件服务是否配置
     this.isEnabled = !!(

@@ -110,8 +110,8 @@ export function Home() {
   return (
     <div className="home-page">
       <div className="page-header">
-        <h2 className="page-title">Web 自动化巡检</h2>
-        <p className="page-description">自动化网页功能与性能检测工具</p>
+        <h2 className="page-title">网页质量检测</h2>
+        <p className="page-description">一键检测网页功能、性能与响应式表现</p>
       </div>
 
       <main className="home-main">
