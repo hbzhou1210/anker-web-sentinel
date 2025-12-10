@@ -1,7 +1,8 @@
-# Anita 项目 - 简化部署版本
-# 使用传统 Docker 构建,避免 BuildKit 问题
+# Anita 项目 - Launch 平台部署版本
+# 使用稳定的 Node.js 镜像,避免构建问题
 
-FROM node:20-slim
+# 使用官方 Node.js 20 镜像(完整版,更稳定)
+FROM node:20
 
 # 一次性安装所有系统依赖
 RUN apt-get update && apt-get install -y \
@@ -19,6 +20,9 @@ WORKDIR /app
 
 # 复制所有文件(利用 .dockerignore 排除不需要的)
 COPY . .
+
+# 复制生产环境配置文件
+COPY backend/.env.production backend/.env
 
 # 安装依赖和构建(单个 RUN 命令)
 RUN npm install \

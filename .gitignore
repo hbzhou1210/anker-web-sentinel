@@ -20,6 +20,9 @@ build/
 .env.test.local
 .env.production.local
 
+# 允许 backend/.env.production 提交到 Git (用于 Launch 部署)
+!backend/.env.production
+
 # Logs
 logs/
 *.log

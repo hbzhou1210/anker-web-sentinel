@@ -1,0 +1,4 @@
+# Docker 构建配置
+# 禁用 BuildKit 以避免 Launch 平台构建问题
+DOCKER_BUILDKIT=0
+COMPOSE_DOCKER_CLI_BUILD=0
