@@ -10,6 +10,8 @@ app.use(express.urlencoded({ extended: true }));
 // CORS configuration
 const allowedOrigins = [
   process.env.FRONTEND_URL || 'http://localhost:5173',
+  'http://localhost:80',  // Docker 一体式部署
+  'http://localhost',  // Docker 一体式部署(默认端口)
   'https://web.anker-launch.com', // Launch 平台域名
   'https://web-uat.anker-launch.com', // Launch UAT 环境
 ];
@@ -20,10 +22,16 @@ app.use(
       // 允许无 origin 的请求（如 Postman、curl）
       if (!origin) return callback(null, true);
 
+      // 开发环境允许所有 localhost
+      if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+        return callback(null, true);
+      }
+
       // 检查是否在允许列表中，或者是 Launch 平台的子路径
-      if (allowedOrigins.includes(origin) || origin.includes('anker-launch.com')) {
+      if (allowedOrigins.includes(origin) || origin.includes('anker-launch.com') || origin.includes('.launch.anker-in.com')) {
         callback(null, true);
       } else {
+        console.warn(`[CORS] Blocked origin: ${origin}`);
         callback(new Error('Not allowed by CORS'));
       }
     },
