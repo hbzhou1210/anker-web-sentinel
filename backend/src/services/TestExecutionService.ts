@@ -4,7 +4,7 @@ import uiTestingService from '../automation/UITestingService.js';
 import performanceAnalysisService from '../performance/PerformanceAnalysisService.js';
 import testRequestRepository from '../models/repositories/InMemoryTestRequestRepository.js';
 import testReportRepository from '../models/repositories/BitableTestReportRepository.js';
-import { TestRequestStatus, TestReport, TestResultStatus } from '../models/entities.js';
+import { TestRequestStatus, TestReport, TestResultStatus, UITestResult, PerformanceResult } from '../models/entities.js';
 import { emailService } from './EmailService.js';
 
 export class TestExecutionService {

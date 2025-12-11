@@ -62,6 +62,10 @@ export class FeishuBitableService {
    * @returns 飞书记录 ID (record_id)
    */
   async createTestReport(report: Omit<TestReport, 'id'> & { requestId?: string }): Promise<string> {
+    // 清理测试结果,移除过大的 base64 数据
+    const sanitizedUIResults = sanitizeTestResults(report.uiTestResults || []);
+    const sanitizedPerfResults = sanitizeTestResults(report.performanceResults || []);
+
     // 将 TypeScript 对象转换为飞书字段格式
     const fields = {
       url: report.url,
@@ -74,9 +78,12 @@ export class FeishuBitableService {
       completed_at: report.completedAt ? new Date(report.completedAt).getTime() : Date.now(),
       status: 'completed',  // 默认状态
       request_id: report.requestId || report.testRequestId,  // 存储 UUID
+      // 将测试结果序列化为 JSON 字符串存储
+      ui_test_results: JSON.stringify(sanitizedUIResults),
+      performance_results: JSON.stringify(sanitizedPerfResults),
     };
 
-    console.log('[FeishuBitable] Creating test report with fields:', fields);
+    console.log('[FeishuBitable] Creating test report with', sanitizedUIResults.length, 'UI results and', sanitizedPerfResults.length, 'performance results');
 
     try {
       const recordId = await feishuApiService.createRecord(this.tableIds.testReports, fields);
@@ -186,6 +193,34 @@ export class FeishuBitableService {
       return '';
     };
 
+    // 解析 JSON 字符串格式的测试结果
+    let uiTestResults: any[] = [];
+    let performanceResults: any[] = [];
+
+    try {
+      if (fields.ui_test_results) {
+        const jsonStr = extractText(fields.ui_test_results);
+        if (jsonStr) {
+          uiTestResults = JSON.parse(jsonStr);
+          console.log('[FeishuBitable] Parsed', uiTestResults.length, 'UI test results');
+        }
+      }
+    } catch (error) {
+      console.error('[FeishuBitable] Failed to parse ui_test_results:', error);
+    }
+
+    try {
+      if (fields.performance_results) {
+        const jsonStr = extractText(fields.performance_results);
+        if (jsonStr) {
+          performanceResults = JSON.parse(jsonStr);
+          console.log('[FeishuBitable] Parsed', performanceResults.length, 'performance results');
+        }
+      }
+    } catch (error) {
+      console.error('[FeishuBitable] Failed to parse performance_results:', error);
+    }
+
     return {
       id: extractText(fields.request_id),
       testRequestId: extractText(fields.request_id),
@@ -197,8 +232,8 @@ export class FeishuBitableService {
       warningChecks: fields.warning_checks || 0,
       testDuration: fields.test_duration || 0,
       completedAt: new Date(fields.completed_at),
-      uiTestResults: [],
-      performanceResults: [],
+      uiTestResults,
+      performanceResults,
     };
   }
 
