@@ -14,6 +14,20 @@ export interface BitableRecord {
   fields: Record<string, any>;
 }
 
+/**
+ * 清理 testResults,移除过大的 base64 数据
+ * base64 图片数据太大(可能100KB+),存储在 Bitable 文本字段会导致 JSON 被截断
+ */
+function sanitizeTestResults(testResults: any[]): any[] {
+  if (!Array.isArray(testResults)) return [];
+  return testResults.map(result => {
+    const sanitized = { ...result };
+    // 移除 screenshotBase64,保留 screenshotUrl
+    delete sanitized.screenshotBase64;
+    return sanitized;
+  });
+}
+
 export interface BitableSearchParams {
   filter?: {
     conjunction?: 'and' | 'or';
@@ -344,7 +358,7 @@ export class FeishuBitableService {
       total_urls: execution.totalUrls || 0,
       passed_urls: execution.passedUrls || 0,
       failed_urls: execution.failedUrls || 0,
-      test_results: JSON.stringify(execution.testResults || []),
+      test_results: JSON.stringify(sanitizeTestResults(execution.testResults || [])),
       email_sent: execution.emailSent || false,
       email_sent_at: execution.emailSentAt ? new Date(execution.emailSentAt).getTime() : undefined,
       error_message: execution.errorMessage || '',
@@ -427,7 +441,7 @@ export class FeishuBitableService {
     if (updates.passedUrls !== undefined) fields.passed_urls = updates.passedUrls;
     if (updates.failedUrls !== undefined) fields.failed_urls = updates.failedUrls;
     if (updates.testResults !== undefined) {
-      fields.test_results = JSON.stringify(updates.testResults);
+      fields.test_results = JSON.stringify(sanitizeTestResults(updates.testResults));
     }
     if (updates.emailSent !== undefined) fields.email_sent = updates.emailSent;
     if (updates.emailSentAt !== undefined) {

@@ -36,6 +36,19 @@ export class BitablePatrolExecutionRepository {
     const testResultsText = this.extractText(fields.test_results);
     const errorText = this.extractText(fields.error_message);
 
+    // 安全解析 test_results JSON,防止格式错误导致崩溃
+    let testResults = [];
+    if (testResultsText) {
+      try {
+        testResults = JSON.parse(testResultsText);
+      } catch (error) {
+        console.error(`[BitablePatrolExecutionRepository] Failed to parse test_results for execution ${idText}:`, error);
+        console.error(`[BitablePatrolExecutionRepository] Corrupted JSON (first 200 chars):`, testResultsText.substring(0, 200));
+        // 返回空数组,避免整个记录无法加载
+        testResults = [];
+      }
+    }
+
     return {
       id: idText,
       patrolTaskId: taskIdText,
@@ -45,7 +58,7 @@ export class BitablePatrolExecutionRepository {
       totalUrls: fields.total_urls || 0,
       passedUrls: fields.passed_urls || 0,
       failedUrls: fields.failed_urls || 0,
-      testResults: testResultsText ? JSON.parse(testResultsText) : [],
+      testResults,
       emailSent: fields.email_sent === true,
       emailSentAt: fields.email_sent_at ? new Date(fields.email_sent_at) : undefined,
       errorMessage: errorText || undefined,
@@ -54,10 +67,26 @@ export class BitablePatrolExecutionRepository {
   }
 
   /**
+   * 清理 testResults,移除过大的 base64 数据
+   * base64 图片数据太大(可能100KB+),存储在 Bitable 文本字段会导致 JSON 被截断
+   */
+  private sanitizeTestResults(testResults: any[]): any[] {
+    return testResults.map(result => {
+      const sanitized = { ...result };
+      // 移除 screenshotBase64,保留 screenshotUrl
+      delete sanitized.screenshotBase64;
+      return sanitized;
+    });
+  }
+
+  /**
    * 创建执行记录
    */
   async create(execution: Omit<PatrolExecution, 'id'>): Promise<PatrolExecution> {
     const id = uuidv4();
+
+    // 清理 testResults,移除过大的 base64 数据
+    const sanitizedTestResults = this.sanitizeTestResults(execution.testResults || []);
 
     const fields = {
       id,
@@ -68,7 +97,7 @@ export class BitablePatrolExecutionRepository {
       total_urls: execution.totalUrls,
       passed_urls: execution.passedUrls,
       failed_urls: execution.failedUrls,
-      test_results: JSON.stringify(execution.testResults),
+      test_results: JSON.stringify(sanitizedTestResults),
       email_sent: execution.emailSent,
       email_sent_at: execution.emailSentAt ? execution.emailSentAt.getTime() : null,
       error_message: execution.errorMessage || '',
@@ -188,7 +217,9 @@ export class BitablePatrolExecutionRepository {
       fields.failed_urls = updates.failedUrls;
     }
     if (updates.testResults !== undefined) {
-      fields.test_results = JSON.stringify(updates.testResults);
+      // 清理 testResults,移除过大的 base64 数据
+      const sanitizedTestResults = this.sanitizeTestResults(updates.testResults);
+      fields.test_results = JSON.stringify(sanitizedTestResults);
     }
     if (updates.emailSent !== undefined) {
       fields.email_sent = updates.emailSent;
