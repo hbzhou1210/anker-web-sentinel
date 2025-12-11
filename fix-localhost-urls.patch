@@ -1,0 +1,194 @@
+diff --git a/frontend/src/services/api.ts b/frontend/src/services/api.ts
+index 1234567..abcdefg 100644
+--- a/frontend/src/services/api.ts
++++ b/frontend/src/services/api.ts
+@@ -18,6 +18,26 @@ const getApiBaseUrl = (): string => {
+ };
+
+ const API_BASE_URL = getApiBaseUrl();
++
++/**
++ * 获取完整的 API URL
++ * 在生产环境使用相对路径,在开发环境使用完整 URL
++ */
++export const getFullApiUrl = (path: string): string => {
++  // 如果已经是完整 URL,直接返回
++  if (path.startsWith('http://') || path.startsWith('https://')) {
++    return path;
++  }
++
++  // 如果是相对路径,根据环境拼接
++  if (typeof window !== 'undefined' && !window.location.hostname.includes('localhost')) {
++    // 生产环境:使用当前域名
++    return path.startsWith('/') ? path : `/${path}`;
++  }
++
++  // 开发环境:使用 localhost:3000
++  const cleanPath = path.startsWith('/') ? path : `/${path}`;
++  return `http://localhost:3000${cleanPath}`;
++};
+
+ // Create axios instance with default config
+ const apiClient: AxiosInstance = axios.create({
+diff --git a/frontend/src/pages/ResponsiveTesting.tsx b/frontend/src/pages/ResponsiveTesting.tsx
+index 1234567..abcdefg 100644
+--- a/frontend/src/pages/ResponsiveTesting.tsx
++++ b/frontend/src/pages/ResponsiveTesting.tsx
+@@ -1,6 +1,7 @@
+ import { useState, useEffect } from 'react';
+ import { Smartphone, Tablet, Monitor, CheckCircle, XCircle, AlertTriangle, Loader2 } from 'lucide-react';
+ import { CircularProgress } from '../components/CircularProgress';
++import { getFullApiUrl } from '../services/api';
+
+ interface Device {
+   id: number;
+@@ -74,7 +75,7 @@ export default function ResponsiveTesting() {
+   const loadDevices = async () => {
+     setLoadingDevices(true);
+     try {
+-      const response = await fetch('http://localhost:3000/api/v1/responsive/devices');
++      const response = await fetch(getFullApiUrl('/api/v1/responsive/devices'));
+       const data = await response.json();
+
+       if (data.success) {
+@@ -160,7 +161,7 @@ export default function ResponsiveTesting() {
+     localStorage.removeItem('responsiveTest_stats');
+
+     try {
+-      const response = await fetch('http://localhost:3000/api/v1/responsive/test', {
++      const response = await fetch(getFullApiUrl('/api/v1/responsive/test'), {
+         method: 'POST',
+         headers: {
+           'Content-Type': 'application/json',
+@@ -804,14 +805,14 @@ export default function ResponsiveTesting() {
+                             <div className="group relative">
+                               <div className="relative overflow-hidden rounded-lg border-2 border-gray-200 hover:border-blue-400 transition-all shadow-sm hover:shadow-md">
+                                 <img
+-                                  src={`http://localhost:3000${result.screenshotPortraitUrl}`}
++                                  src={`${getFullApiUrl(result.screenshotPortraitUrl)}`}
+                                   alt="竖屏截图"
+                                   className="w-full cursor-pointer transition-transform group-hover:scale-105"
+-                                  onClick={() => setSelectedScreenshot(`http://localhost:3000${result.screenshotPortraitUrl}`)}
++                                  onClick={() => setSelectedScreenshot(`${getFullApiUrl(result.screenshotPortraitUrl)}`)}
+                                 />
+                                 <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all flex items-center justify-center">
+                                   <button
+-                                    onClick={() => setSelectedScreenshot(`http://localhost:3000${result.screenshotPortraitUrl}`)}
++                                    onClick={() => setSelectedScreenshot(`${getFullApiUrl(result.screenshotPortraitUrl)}`)}
+                                     className="opacity-0 group-hover:opacity-100 transition-opacity bg-white rounded-full p-3 shadow-lg"
+                                   >
+                                     <span className="text-2xl text-blue-600">🔍</span>
+@@ -830,14 +831,14 @@ export default function ResponsiveTesting() {
+                             <div className="group relative">
+                               <div className="relative overflow-hidden rounded-lg border-2 border-gray-200 hover:border-blue-400 transition-all shadow-sm hover:shadow-md">
+                                 <img
+-                                  src={`http://localhost:3000${result.screenshotLandscapeUrl}`}
++                                  src={`${getFullApiUrl(result.screenshotLandscapeUrl)}`}
+                                   alt="横屏截图"
+                                   className="w-full cursor-pointer transition-transform group-hover:scale-105"
+-                                  onClick={() => setSelectedScreenshot(`http://localhost:3000${result.screenshotLandscapeUrl}`)}
++                                  onClick={() => setSelectedScreenshot(`${getFullApiUrl(result.screenshotLandscapeUrl)}`)}
+                                 />
+                                 <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all flex items-center justify-center">
+                                   <button
+-                                    onClick={() => setSelectedScreenshot(`http://localhost:3000${result.screenshotLandscapeUrl}`)}
++                                    onClick={() => setSelectedScreenshot(`${getFullApiUrl(result.screenshotLandscapeUrl)}`)}
+                                     className="opacity-0 group-hover:opacity-100 transition-opacity bg-white rounded-full p-3 shadow-lg"
+                                   >
+                                     <span className="text-2xl text-blue-600">🔍</span>
+diff --git a/frontend/src/pages/PatrolManagement.tsx b/frontend/src/pages/PatrolManagement.tsx
+index 1234567..abcdefg 100644
+--- a/frontend/src/pages/PatrolManagement.tsx
++++ b/frontend/src/pages/PatrolManagement.tsx
+@@ -7,6 +7,7 @@ import {
+   BarChart3, Eye, EyeOff, Loader2, Edit, ZoomIn, ZoomOut, Maximize2, Download
+ } from 'lucide-react';
++import { getFullApiUrl } from '../services/api';
+
+ interface PatrolUrl {
+   id: string;
+@@ -281,7 +282,7 @@ export default function PatrolManagement() {
+     if (!expandedScreenshot) return;
+
+     const link = document.createElement('a');
+-    link.href = `http://localhost:3000${expandedScreenshot}`;
++    link.href = getFullApiUrl(expandedScreenshot);
+     link.download = `screenshot-${Date.now()}.png`;
+     document.body.appendChild(link);
+     link.click();
+@@ -1222,7 +1223,7 @@ export default function PatrolManagement() {
+                                     <div className="relative group">
+                                       <div className="relative overflow-hidden rounded border border-gray-200">
+                                         <img
+-                                          src={`http://localhost:3000${result.screenshotUrl}`}
++                                          src={`${getFullApiUrl(result.screenshotUrl)}`}
+                                           alt="截图"
+                                           className="w-full h-auto cursor-pointer transition-transform group-hover:scale-105"
+                                           onClick={() => setExpandedScreenshot(result.screenshotUrl)}
+@@ -2179,7 +2180,7 @@ export default function PatrolManagement() {
+               <div className="relative bg-black rounded-lg overflow-hidden">
+                 <img
+-                  src={`http://localhost:3000${expandedScreenshot}`}
++                  src={`${getFullApiUrl(expandedScreenshot)}`}
+                   alt="截图预览"
+                   className="w-full h-auto"
+                   style={{
+diff --git a/frontend/src/pages/TestPointExtraction.tsx b/frontend/src/pages/TestPointExtraction.tsx
+index 1234567..abcdefg 100644
+--- a/frontend/src/pages/TestPointExtraction.tsx
++++ b/frontend/src/pages/TestPointExtraction.tsx
+@@ -1,5 +1,6 @@
+ import React, { useState } from 'react';
+ import './TestPointExtraction.css';
++import { getFullApiUrl } from '../services/api';
+
+ interface TestPoint {
+   id: string;
+@@ -57,7 +58,7 @@ const TestPointExtraction: React.FC = () => {
+       setIsProcessing(true);
+
+       // 先检查云文档是否需要保存
+-      const checkResponse = await fetch('http://localhost:3000/api/v1/test-points/extract-and-save', {
++      const checkResponse = await fetch(getFullApiUrl('/api/v1/test-points/extract-and-save'), {
+         method: 'POST',
+         headers: {
+           'Content-Type': 'application/json',
+@@ -79,7 +80,7 @@ const TestPointExtraction: React.FC = () => {
+       if (checkData.needFetch) {
+         setStatus('正在从飞书获取文档内容...');
+         try {
+-          const fetchResponse = await fetch('http://localhost:3000/api/v1/feishu/fetch-document', {
++          const fetchResponse = await fetch(getFullApiUrl('/api/v1/feishu/fetch-document'), {
+             method: 'POST',
+             headers: {
+               'Content-Type': 'application/json',
+@@ -123,7 +124,7 @@ const TestPointExtraction: React.FC = () => {
+       }
+
+       // 执行测试点提取
+-      const response = await fetch('http://localhost:3000/api/v1/test-points/extract-and-save', {
++      const response = await fetch(getFullApiUrl('/api/v1/test-points/extract-and-save'), {
+         method: 'POST',
+         headers: {
+           'Content-Type': 'application/json',
+diff --git a/frontend/src/components/UITestResults/UITestResults.tsx b/frontend/src/components/UITestResults/UITestResults.tsx
+index 1234567..abcdefg 100644
+--- a/frontend/src/components/UITestResults/UITestResults.tsx
++++ b/frontend/src/components/UITestResults/UITestResults.tsx
+@@ -1,6 +1,7 @@
+ import React, { useState } from 'react';
+ import { UITestResult } from '../../services/api';
+ import './UITestResults.css';
++import { getFullApiUrl } from '../../services/api';
+
+ interface UITestResultsProps {
+   results: UITestResult[];
+@@ -287,7 +288,7 @@ export default function UITestResults({ results, onViewScreenshot }: UITestResu
+                           <div className="flex flex-col gap-2">
+                             <div className="w-full">
+                               <img
+-                                src={`http://localhost:3000${result.screenshotUrl}`}
++                                src={`${getFullApiUrl(result.screenshotUrl)}`}
+                                 alt="截图预览"
+                                 className="w-full rounded border border-gray-200 cursor-pointer hover:border-blue-400 transition-colors"
+                                 onClick={() => onViewScreenshot && result.screenshotUrl && onViewScreenshot(result.screenshotUrl)}

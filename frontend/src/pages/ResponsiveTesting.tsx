@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Smartphone, Tablet, Monitor, CheckCircle, XCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import { CircularProgress } from '../components/CircularProgress';
+import { getFullApiUrl } from '../services/api';
 
 interface Device {
   id: number;
@@ -74,7 +75,7 @@ export default function ResponsiveTesting() {
   const loadDevices = async () => {
     setLoadingDevices(true);
     try {
-      const response = await fetch('http://localhost:3000/api/v1/responsive/devices');
+      const response = await fetch(getFullApiUrl('/api/v1/responsive/devices'));
       const data = await response.json();
 
       if (data.success) {
@@ -160,7 +161,7 @@ export default function ResponsiveTesting() {
     localStorage.removeItem('responsiveTest_stats');
 
     try {
-      const response = await fetch('http://localhost:3000/api/v1/responsive/test', {
+      const response = await fetch(getFullApiUrl('/api/v1/responsive/test'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -804,14 +805,14 @@ export default function ResponsiveTesting() {
                             <div className="group relative">
                               <div className="relative overflow-hidden rounded-lg border-2 border-gray-200 hover:border-blue-400 transition-all shadow-sm hover:shadow-md">
                                 <img
-                                  src={`http://localhost:3000${result.screenshotPortraitUrl}`}
+                                  src={`${getFullApiUrl(result.screenshotPortraitUrl)}`}
                                   alt="竖屏截图"
                                   className="w-full cursor-pointer transition-transform group-hover:scale-105"
-                                  onClick={() => setSelectedScreenshot(`http://localhost:3000${result.screenshotPortraitUrl}`)}
+                                  onClick={() => setSelectedScreenshot(`${getFullApiUrl(result.screenshotPortraitUrl)}`)}
                                 />
                                 <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all flex items-center justify-center">
                                   <button
-                                    onClick={() => setSelectedScreenshot(`http://localhost:3000${result.screenshotPortraitUrl}`)}
+                                    onClick={() => setSelectedScreenshot(`${getFullApiUrl(result.screenshotPortraitUrl)}`)}
                                     className="opacity-0 group-hover:opacity-100 transition-opacity bg-white rounded-full p-3 shadow-lg"
                                   >
                                     <span className="text-2xl text-blue-600">🔍</span>
@@ -830,14 +831,14 @@ export default function ResponsiveTesting() {
                             <div className="group relative">
                               <div className="relative overflow-hidden rounded-lg border-2 border-gray-200 hover:border-blue-400 transition-all shadow-sm hover:shadow-md">
                                 <img
-                                  src={`http://localhost:3000${result.screenshotLandscapeUrl}`}
+                                  src={`${getFullApiUrl(result.screenshotLandscapeUrl)}`}
                                   alt="横屏截图"
                                   className="w-full cursor-pointer transition-transform group-hover:scale-105"
-                                  onClick={() => setSelectedScreenshot(`http://localhost:3000${result.screenshotLandscapeUrl}`)}
+                                  onClick={() => setSelectedScreenshot(`${getFullApiUrl(result.screenshotLandscapeUrl)}`)}
                                 />
                                 <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all flex items-center justify-center">
                                   <button
-                                    onClick={() => setSelectedScreenshot(`http://localhost:3000${result.screenshotLandscapeUrl}`)}
+                                    onClick={() => setSelectedScreenshot(`${getFullApiUrl(result.screenshotLandscapeUrl)}`)}
                                     className="opacity-0 group-hover:opacity-100 transition-opacity bg-white rounded-full p-3 shadow-lg"
                                   >
                                     <span className="text-2xl text-blue-600">🔍</span>

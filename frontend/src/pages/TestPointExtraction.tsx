@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './TestPointExtraction.css';
+import { getFullApiUrl } from '../services/api';
 
 interface TestPoint {
   id: string;
@@ -57,7 +58,7 @@ export const TestPointExtraction: React.FC = () => {
 
       if (!content.trim()) {
         // 发送请求到后端,获取文档ID
-        const checkResponse = await fetch('http://localhost:3000/api/v1/test-points/extract-and-save', {
+        const checkResponse = await fetch(getFullApiUrl('/api/v1/test-points/extract-and-save'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -79,7 +80,7 @@ export const TestPointExtraction: React.FC = () => {
           const documentId = checkResult.data.documentId;
 
           try {
-            const fetchResponse = await fetch('http://localhost:3000/api/v1/feishu/fetch-document', {
+            const fetchResponse = await fetch(getFullApiUrl('/api/v1/feishu/fetch-document'), {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -123,7 +124,7 @@ export const TestPointExtraction: React.FC = () => {
       }
 
       // 步骤2: 使用文档内容提取测试点
-      const response = await fetch('http://localhost:3000/api/v1/test-points/extract-and-save', {
+      const response = await fetch(getFullApiUrl('/api/v1/test-points/extract-and-save'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

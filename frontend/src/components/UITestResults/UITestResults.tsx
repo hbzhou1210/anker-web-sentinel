@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { UITestResult } from '../../services/api';
 import './UITestResults.css';
+import { getFullApiUrl } from '../../services/api';
 
 interface UITestResultsProps {
   results: UITestResult[];
@@ -287,7 +288,7 @@ export function UITestResults({ results }: UITestResultsProps) {
                         <div className="detail-section screenshot-section">
                           <h5>📷 元素截图</h5>
                           <img
-                            src={`http://localhost:3000${result.screenshotUrl}`}
+                            src={`${getFullApiUrl(result.screenshotUrl)}`}
                             alt="元素截图"
                             className="result-screenshot"
                             onClick={(e) => {

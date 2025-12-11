@@ -6,6 +6,7 @@ import {
   BarChart3, Eye, EyeOff, Loader2, Edit, ZoomIn, ZoomOut, Maximize2, Download
 } from 'lucide-react';
 
+import { getFullApiUrl } from '../services/api';
 interface PatrolUrl {
   url: string;
   name: string;
@@ -281,7 +282,7 @@ const PatrolManagement: React.FC = () => {
   const downloadImage = () => {
     if (expandedScreenshot) {
       const link = document.createElement('a');
-      link.href = `http://localhost:3000${expandedScreenshot}`;
+      link.href = getFullApiUrl(expandedScreenshot);
       link.download = `screenshot-${Date.now()}.png`;
       link.click();
     }
@@ -1222,7 +1223,7 @@ const PatrolManagement: React.FC = () => {
                                     onClick={() => setExpandedScreenshot(result.screenshotUrl!)}
                                   >
                                     <img
-                                      src={`http://localhost:3000${result.screenshotUrl}`}
+                                      src={`${getFullApiUrl(result.screenshotUrl)}`}
                                       alt={`${result.name}截图`}
                                       className="w-full h-48 object-cover object-top"
                                       loading="lazy"
@@ -2179,7 +2180,7 @@ const PatrolManagement: React.FC = () => {
           >
             <div className="min-h-full flex items-start justify-center p-4">
               <img
-                src={`http://localhost:3000${expandedScreenshot}`}
+                src={`${getFullApiUrl(expandedScreenshot)}`}
                 alt="完整截图"
                 className="transition-transform duration-200"
                 style={{

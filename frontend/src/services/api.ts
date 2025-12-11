@@ -19,6 +19,27 @@ const getApiBaseUrl = (): string => {
 
 const API_BASE_URL = getApiBaseUrl();
 
+/**
+ * 获取完整的 API URL
+ * 在生产环境使用相对路径,在开发环境使用完整 URL
+ */
+export const getFullApiUrl = (path: string): string => {
+  // 如果已经是完整 URL,直接返回
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
+
+  // 如果是相对路径,根据环境拼接
+  if (typeof window !== 'undefined' && !window.location.hostname.includes('localhost')) {
+    // 生产环境:使用当前域名
+    return path.startsWith('/') ? path : `/${path}`;
+  }
+
+  // 开发环境:使用 localhost:3000
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  return `http://localhost:3000${cleanPath}`;
+};
+
 // Create axios instance with default config
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
