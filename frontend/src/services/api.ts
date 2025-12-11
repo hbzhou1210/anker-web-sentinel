@@ -180,8 +180,24 @@ export const api = {
         notificationEmail: params.notificationEmail,
       };
       console.log('[API] Request body to send:', requestBody);
-      const response = await apiClient.post<TestRequest>('/tests', requestBody);
-      return response.data;
+
+      // 使用 fetch + getFullApiUrl 确保生产环境正确
+      const apiUrl = getFullApiUrl('/api/v1/tests');
+      console.log('[API] Calling:', apiUrl);
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      return await response.json();
     } catch (error) {
       return handleAPIError(error);
     }
