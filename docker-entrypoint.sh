@@ -5,9 +5,15 @@ echo "==================================="
 echo "🚀 Anita 项目启动中..."
 echo "==================================="
 
-# 如果环境变量未设置,从 backend/.env 读取
-if [ -z "$DATABASE_STORAGE" ] && [ -f "/app/backend/.env" ]; then
-    export $(grep -v '^#' /app/backend/.env | grep DATABASE_STORAGE | xargs)
+# 从 backend/.env 读取所有环境变量(如果环境变量未设置)
+# Launch 平台的环境变量会覆盖 .env 文件中的值
+if [ -f "/app/backend/.env" ]; then
+    echo "📝 加载环境配置..."
+    # 只导出未设置的环境变量
+    set -a  # 自动导出所有变量
+    source <(grep -v '^#' /app/backend/.env | sed 's/\r$//')
+    set +a
+    echo "✓ 环境配置已加载"
 fi
 
 # 检查数据存储模式(默认使用 bitable)

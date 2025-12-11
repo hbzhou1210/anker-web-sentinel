@@ -56,8 +56,17 @@ export class FeishuApiService {
     this.appSecret = process.env.FEISHU_APP_SECRET || FEISHU_BITABLE_CONFIG.appSecret;
     this.appToken = FEISHU_BITABLE_CONFIG.appToken;
 
+    console.log('[FeishuApi] Initializing with:', {
+      hasEnvAppId: !!process.env.FEISHU_APP_ID,
+      hasEnvAppSecret: !!process.env.FEISHU_APP_SECRET,
+      finalAppId: this.appId,
+      finalAppSecretLength: this.appSecret?.length || 0,
+      appToken: this.appToken,
+    });
+
     if (!this.appId || !this.appSecret) {
       console.warn('[FeishuApi] Warning: FEISHU_APP_ID or FEISHU_APP_SECRET not configured');
+      console.warn('[FeishuApi] This will cause authentication failures when accessing Feishu APIs');
     }
 
     this.axiosInstance = axios.create({
@@ -94,6 +103,11 @@ export class FeishuApiService {
     }
 
     console.log('[FeishuApi] Getting new access token...');
+    console.log('[FeishuApi] Using credentials:', {
+      appId: this.appId,
+      appSecretLength: this.appSecret?.length || 0,
+      baseUrl: this.baseUrl,
+    });
 
     try {
       const response = await this.axiosInstance.post<AccessTokenResponse>(
@@ -103,6 +117,13 @@ export class FeishuApiService {
           app_secret: this.appSecret,
         }
       );
+
+      console.log('[FeishuApi] Token response:', {
+        code: response.data.code,
+        msg: response.data.msg,
+        hasToken: !!response.data.tenant_access_token,
+        expire: response.data.expire,
+      });
 
       if (response.data.code !== 0) {
         throw new Error(`Failed to get access token: ${response.data.msg}`);
@@ -116,6 +137,10 @@ export class FeishuApiService {
       return this.accessToken;
     } catch (error) {
       console.error('[FeishuApi] Failed to get access token:', error);
+      if (axios.isAxiosError(error) && error.response) {
+        console.error('[FeishuApi] Response data:', error.response.data);
+        console.error('[FeishuApi] Response status:', error.response.status);
+      }
       throw error;
     }
   }
