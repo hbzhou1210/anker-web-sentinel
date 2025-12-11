@@ -175,11 +175,17 @@ const PatrolManagement: React.FC = () => {
   // 加载巡检任务列表
   const loadTasks = async () => {
     try {
-      const response = await fetch('/api/v1/patrol/tasks');
+      const response = await fetch(getFullApiUrl('/api/v1/patrol/tasks'));
+      if (!response.ok) {
+        console.error('获取任务失败:', response.status);
+        setTasks([]);
+        return;
+      }
       const data = await response.json();
       setTasks(data);
     } catch (error) {
       console.error('加载巡检任务失败:', error);
+      setTasks([]);
     }
   };
 
@@ -190,11 +196,17 @@ const PatrolManagement: React.FC = () => {
       const url = taskId
         ? `/api/v1/patrol/executions?taskId=${taskId}&limit=${limit}`
         : `/api/v1/patrol/executions?limit=${limit}`;
-      const response = await fetch(url);
+      const response = await fetch(getFullApiUrl(url));
+      if (!response.ok) {
+        console.error('获取执行历史失败:', response.status);
+        setExecutions([]);
+        return;
+      }
       const data = await response.json();
       setExecutions(data);
     } catch (error) {
       console.error('加载执行历史失败:', error);
+      setExecutions([]);
     }
   };
 
@@ -292,20 +304,28 @@ const PatrolManagement: React.FC = () => {
   const handleExecute = async (taskId: string) => {
     try {
       setRunningTasks(prev => new Set(prev).add(taskId));
-      const response = await fetch(`/api/v1/patrol/tasks/${taskId}/execute`, {
+      const response = await fetch(getFullApiUrl(`/api/v1/patrol/tasks/${taskId}/execute`), {
         method: 'POST',
       });
-      if (response.ok) {
-        alert('巡检任务已开始执行,请稍候查看结果');
-        setTimeout(() => {
-          loadExecutions(undefined, showAllExecutions);
-          setRunningTasks(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(taskId);
-            return newSet;
-          });
-        }, 3000);
+      if (!response.ok) {
+        console.error('执行巡检失败:', response.status);
+        alert('执行巡检失败');
+        setRunningTasks(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(taskId);
+          return newSet;
+        });
+        return;
       }
+      alert('巡检任务已开始执行,请稍候查看结果');
+      setTimeout(() => {
+        loadExecutions(undefined, showAllExecutions);
+        setRunningTasks(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(taskId);
+          return newSet;
+        });
+      }, 3000);
     } catch (error) {
       console.error('执行巡检失败:', error);
       alert('执行巡检失败');
@@ -322,13 +342,16 @@ const PatrolManagement: React.FC = () => {
     if (!confirm('确定要删除这个巡检任务吗?')) return;
 
     try {
-      const response = await fetch(`/api/v1/patrol/tasks/${taskId}`, {
+      const response = await fetch(getFullApiUrl(`/api/v1/patrol/tasks/${taskId}`), {
         method: 'DELETE',
       });
-      if (response.ok) {
-        alert('删除成功');
-        loadTasks();
+      if (!response.ok) {
+        console.error('删除任务失败:', response.status);
+        alert('删除任务失败');
+        return;
       }
+      alert('删除成功');
+      loadTasks();
     } catch (error) {
       console.error('删除任务失败:', error);
       alert('删除任务失败');
@@ -338,14 +361,16 @@ const PatrolManagement: React.FC = () => {
   // 启用/禁用任务
   const handleToggleEnabled = async (task: PatrolTask) => {
     try {
-      const response = await fetch(`/api/v1/patrol/tasks/${task.id}`, {
+      const response = await fetch(getFullApiUrl(`/api/v1/patrol/tasks/${task.id}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: !task.enabled }),
       });
-      if (response.ok) {
-        loadTasks();
+      if (!response.ok) {
+        console.error('更新任务状态失败:', response.status);
+        return;
       }
+      loadTasks();
     } catch (error) {
       console.error('更新任务状态失败:', error);
     }
@@ -360,7 +385,7 @@ const PatrolManagement: React.FC = () => {
     let customCron = '';
 
     try {
-      const schedulesResponse = await fetch(`/api/v1/patrol/schedules?taskId=${task.id}`);
+      const schedulesResponse = await fetch(getFullApiUrl(`/api/v1/patrol/schedules?taskId=${task.id}`));
       if (schedulesResponse.ok) {
         const schedules = await schedulesResponse.json();
 
@@ -455,7 +480,7 @@ const PatrolManagement: React.FC = () => {
 
     try {
       // 创建巡检任务
-      const taskResponse = await fetch('/api/v1/patrol/tasks', {
+      const taskResponse = await fetch(getFullApiUrl('/api/v1/patrol/tasks'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -494,7 +519,7 @@ const PatrolManagement: React.FC = () => {
       }
 
       // 创建调度配置
-      const scheduleResponse = await fetch('/api/v1/patrol/schedules', {
+      const scheduleResponse = await fetch(getFullApiUrl('/api/v1/patrol/schedules'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -575,7 +600,7 @@ const PatrolManagement: React.FC = () => {
 
     try {
       // 1. 更新任务基本信息
-      const response = await fetch(`/api/v1/patrol/tasks/${editingTask.id}`, {
+      const response = await fetch(getFullApiUrl(`/api/v1/patrol/tasks/${editingTask.id}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -596,13 +621,13 @@ const PatrolManagement: React.FC = () => {
 
       // 2. 更新调度配置
       // 先获取现有的调度
-      const schedulesResponse = await fetch(`/api/v1/patrol/schedules?taskId=${editingTask.id}`);
+      const schedulesResponse = await fetch(getFullApiUrl(`/api/v1/patrol/schedules?taskId=${editingTask.id}`));
       if (schedulesResponse.ok) {
         const existingSchedules = await schedulesResponse.json();
 
         // 删除所有现有调度
         for (const schedule of existingSchedules) {
-          await fetch(`/api/v1/patrol/schedules/${schedule.id}`, {
+          await fetch(getFullApiUrl(`/api/v1/patrol/schedules/${schedule.id}`), {
             method: 'DELETE',
           });
         }
@@ -635,7 +660,7 @@ const PatrolManagement: React.FC = () => {
 
       // 创建新的调度
       for (let i = 0; i < cronExpressions.length; i++) {
-        await fetch('/api/v1/patrol/schedules', {
+        await fetch(getFullApiUrl('/api/v1/patrol/schedules'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
