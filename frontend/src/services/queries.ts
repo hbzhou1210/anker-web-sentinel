@@ -44,12 +44,25 @@ export function useTestStatus(testId: string | null, options?: { enabled?: boole
     queryKey: queryKeys.testStatus(testId || ''),
     queryFn: () => api.getTestStatus(testId!),
     enabled: !!testId && (options?.enabled !== false),
-    // Poll every 2 seconds if test is still running
+    // 渐进式退避轮询策略: 减少长时间运行任务的请求频率
+    // 前 10 秒: 2s 间隔 (快速反馈)
+    // 10-30 秒: 3s 间隔
+    // 30 秒后: 5s 间隔 (长时间任务)
     refetchInterval: (query) => {
       const data = query.state.data as TestRequest | undefined;
       if (!data) return false;
+
       const isRunning = data.status === 'pending' || data.status === 'running';
-      return isRunning ? 2000 : false;
+      if (!isRunning) return false;
+
+      // 计算测试已运行时长
+      const startTime = data.requestedAt ? new Date(data.requestedAt).getTime() : Date.now();
+      const elapsedSeconds = (Date.now() - startTime) / 1000;
+
+      // 渐进式退避
+      if (elapsedSeconds < 10) return 2000;  // 前10秒: 2秒间隔
+      if (elapsedSeconds < 30) return 3000;  // 10-30秒: 3秒间隔
+      return 5000;                           // 30秒后: 5秒间隔
     },
     // Keep polling even when window is not focused
     refetchIntervalInBackground: true,
