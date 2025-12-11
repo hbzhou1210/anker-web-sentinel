@@ -18,7 +18,9 @@ export function Home() {
   const [testError, setTestError] = useState<string | null>(null);
 
   // Poll current test status
-  const { data: testStatus } = useTestStatus(currentTestId, { enabled: pollingEnabled });
+  const { data: testStatus, error: testStatusError } = useTestStatus(currentTestId, {
+    enabled: pollingEnabled,
+  });
 
   // Load recent reports
   const { data: reportList, isLoading: reportsLoading } = useReportList({ limit: 5 });
@@ -75,6 +77,20 @@ export function Home() {
       }
     }
   }, [testStatus]);
+
+  // 处理 404 错误: 测试ID不存在(后端重启导致内存数据丢失)
+  useEffect(() => {
+    if (testStatusError && (testStatusError as any)?.response?.status === 404) {
+      console.warn('[Home] Test ID not found (404), clearing invalid test ID');
+      // 停止轮询
+      setPollingEnabled(false);
+      // 清除无效的测试ID
+      setCurrentTestId(null);
+      localStorage.removeItem('currentTestId');
+      // 显示友好的错误提示
+      setTestError('检测任务已过期或服务已重启。请重新提交检测任务。');
+    }
+  }, [testStatusError]);
 
   // Get status display
   const getStatusDisplay = (status: string): { text: string; color: string; icon: string } => {

@@ -66,8 +66,17 @@ export function useTestStatus(testId: string | null, options?: { enabled?: boole
     },
     // Keep polling even when window is not focused
     refetchIntervalInBackground: true,
-    // Retry on error (network issues during long-running test)
-    retry: 3,
+    // 404 错误不重试(测试ID不存在,后端可能重启导致内存数据丢失)
+    // 其他错误重试 3 次(网络问题)
+    retry: (failureCount, error: any) => {
+      // 404 说明测试ID不存在(后端重启或数据已清理),不再重试
+      if (error?.response?.status === 404) {
+        console.warn('[useTestStatus] Test ID not found (404), stopping polling');
+        return false;
+      }
+      // 其他错误重试 3 次
+      return failureCount < 3;
+    },
     retryDelay: 1000,
   });
 }
