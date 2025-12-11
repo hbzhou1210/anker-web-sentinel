@@ -1126,10 +1126,19 @@ export class PatrolService {
 
       // 截图保存页面状态
       let screenshotUrl: string | undefined;
+      let screenshotBase64: string | undefined;
       try {
         console.log(`  Capturing screenshot...`);
         screenshotUrl = await screenshotService.captureFullPage(page);
         console.log(`  Screenshot saved: ${screenshotUrl}`);
+
+        // 同时生成 base64 格式用于 Bitable 存储
+        try {
+          screenshotBase64 = await screenshotService.captureFullPageBase64(page);
+          console.log(`  Screenshot base64 captured`);
+        } catch (base64Error) {
+          console.error(`  Failed to capture base64 screenshot:`, base64Error);
+        }
       } catch (error) {
         console.error(`  Failed to capture screenshot:`, error);
       }
@@ -1181,6 +1190,7 @@ export class PatrolService {
         errorMessage: finalStatus === 'fail' ? detailedMessage : undefined,
         checkDetails: detailedMessage, // 始终包含检查详情
         screenshotUrl, // 截图URL
+        screenshotBase64, // Base64 截图(用于 Bitable)
         testDuration: Date.now() - startTime,
         visualDiff, // 视觉对比结果
         deviceType: deviceConfig?.type,
@@ -1200,10 +1210,19 @@ export class PatrolService {
 
       // 尝试保存截图,即使检查失败
       let screenshotUrl: string | undefined;
+      let screenshotBase64: string | undefined;
       try {
         console.log(`  Capturing screenshot for failed test...`);
         screenshotUrl = await screenshotService.captureFullPage(page);
         console.log(`  Screenshot saved: ${screenshotUrl}`);
+
+        // 同时生成 base64 格式用于 Bitable 存储
+        try {
+          screenshotBase64 = await screenshotService.captureFullPageBase64(page);
+          console.log(`  Screenshot base64 captured`);
+        } catch (base64Error) {
+          console.error(`  Failed to capture base64 screenshot:`, base64Error);
+        }
       } catch (screenshotError) {
         console.error(`  Failed to capture screenshot:`, screenshotError);
       }
@@ -1215,6 +1234,7 @@ export class PatrolService {
         responseTime,
         errorMessage: isInfraError ? `基础设施错误: ${errorMessage}` : errorMessage,
         screenshotUrl, // 包含截图URL(如果成功保存)
+        screenshotBase64, // Base64 截图(用于 Bitable)
         testDuration: responseTime,
         isInfrastructureError: isInfraError,
       };

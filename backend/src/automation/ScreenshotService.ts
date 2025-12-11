@@ -67,6 +67,35 @@ export class ScreenshotService {
     }
   }
 
+  /**
+   * 捕获全屏截图并返回 base64 编码
+   * 用于直接保存到 Bitable
+   */
+  async captureFullPageBase64(page: Page): Promise<string> {
+    try {
+      // Capture full page screenshot as PNG
+      const screenshot = await page.screenshot({
+        fullPage: true,
+        type: 'png',
+      });
+
+      // Compress to WebP format at 80% quality
+      const compressed = await sharp(screenshot)
+        .webp({ quality: 80 })
+        .toBuffer();
+
+      // Convert to base64
+      const base64 = compressed.toString('base64');
+
+      console.log(`✓ Screenshot captured as base64 (${(compressed.length / 1024).toFixed(2)}KB)`);
+
+      return `data:image/webp;base64,${base64}`;
+    } catch (error) {
+      console.error('Failed to capture screenshot as base64:', error);
+      throw error;
+    }
+  }
+
   // Capture screenshot with highlighted element and error overlay
   async captureWithHighlight(
     page: Page,
