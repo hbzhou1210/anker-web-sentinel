@@ -122,9 +122,9 @@ curl -X POST http://10.5.3.150:10038/api/v1/patrol/tasks/{taskId}/execute
    }
    ```
 
-**修复优先级**: 🟡 中等 (可使用手动触发替代)
+**修复优先级**: 🟡 中等
 
-**修复状态**: ⚠️ 功能限制,需要开发支持
+**修复状态**: ✅ 已修复 (commit: f751740)
 
 ---
 
@@ -331,52 +331,62 @@ private getDefaultDevices(): DevicePreset[] {
 
 **修复优先级**: 🔴 高 (影响核心功能)
 
-**修复状态**: ⚠️ 待实现
+**修复状态**: ✅ 已修复 (commit: f751740)
 
 ---
 
 ## 修复总结
 
-| 问题 | 严重程度 | 修复状态 | 预计工作量 |
+| 问题 | 严重程度 | 修复状态 | 实际工作量 |
 |-----|---------|---------|----------|
-| 响应式测试页面刷新空白 | 🔴 高 | ✅ 已修复 | 10 分钟 |
-| 定时巡检调度不执行 | 🟡 中 | ⚠️ 功能限制 | 4-8 小时 |
-| 设备列表为空 | 🔴 高 | ⚠️ 待实现 | 1-2 小时 |
+| 响应式测试页面刷新空白 | 🔴 高 | ✅ 已修复 (3b76ceb) | 10 分钟 |
+| 定时巡检调度不执行 | 🟡 中 | ✅ 已修复 (f751740) | 4 小时 |
+| 设备列表为空 | 🔴 高 | ✅ 已修复 (f751740) | 1 小时 |
+
+## 测试结果
+
+### 本地集成测试 (2025-12-11)
+
+✅ **所有功能测试通过**:
+
+1. **设备列表 API** ✅
+   - 成功从 Bitable 读取 12 个设备
+   - 数据完整(包含所有必要字段)
+   - 按设备类型正确排序(mobile < tablet < desktop)
+
+2. **调度配置 API** ✅
+   - 创建调度: ✅ 成功创建并自动注册到调度器
+   - 查询调度: ✅ 成功返回调度列表
+   - 更新调度: ✅ 成功更新 cron 表达式和启用状态
+   - 删除调度: ✅ 成功删除并从调度器注销
+
+3. **调度器服务** ✅
+   - Bitable 模式初始化成功
+   - 自动注册启用的调度任务
+   - Cron 任务正确配置(时区: Asia/Shanghai)
+   - 下次执行时间自动计算
+
+**测试环境**:
+- Node.js v20
+- DATABASE_STORAGE=bitable
+- 飞书多维表格: X66Mb4mPRagcrSsBlRQcNrHQnKh
+
+**关键日志**:
+```
+Initializing PatrolSchedulerService (bitable mode)...
+Found 0 enabled patrol schedules
+✓ PatrolSchedulerService initialized successfully
+✓ Scheduled patrol task c580fa78... with cron: 0 9 * * * (Asia/Shanghai)
+```
 
 ## 下一步行动
 
 ### 立即执行
 
-1. **提交 Dockerfile 修复**
-   ```bash
-   git add Dockerfile
-   git commit -m "fix: 复制前端构建文件到 Nginx root 目录"
-   git push coding master
-   ```
-
-2. **在 Launch 平台重新部署**
-   - 触发重新构建
-   - 验证响应式测试页面可以正常刷新
-
-### 短期修复 (1-2 小时)
-
-3. **实现设备列表默认值**
-   - 修改 `BitableResponsiveTestRepository.ts`
-   - 添加 `getDefaultDevices()` 方法
-   - 提交并部署
-
-4. **创建设备初始化脚本**
-   - 创建 `init-device-presets.ts`
-   - 运行脚本初始化 Bitable 数据
-   - 验证设备列表正常显示
-
-### 中期优化 (4-8 小时)
-
-5. **实现 Bitable 调度支持**
-   - 创建 `BitablePatrolScheduleRepository`
-   - 修改 `PatrolSchedulerService`
-   - 测试定时执行功能
-   - 更新文档
+1. **在 Launch 平台触发重新部署**
+   - 拉取最新代码 (commit 3b76ceb, f751740)
+   - 验证三个问题全部修复
+   - 确认调度器在生产环境正常工作
 
 ---
 
