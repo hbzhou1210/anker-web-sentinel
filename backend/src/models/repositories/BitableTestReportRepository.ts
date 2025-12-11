@@ -26,8 +26,8 @@ export class BitableTestReportRepository {
    * 创建测试报告
    */
   async create(data: CreateTestReportData): Promise<TestReport> {
-    // 生成 UUID 作为 ID
-    const id = uuidv4();
+    // 使用 testRequestId 作为报告 ID,保持一致性
+    const id = data.testRequestId;
     const completedAt = new Date();
 
     // 创建报告对象
@@ -47,11 +47,10 @@ export class BitableTestReportRepository {
     };
 
     // 调用飞书服务创建记录
-    // TODO: 需要在飞书记录中存储我们生成的 UUID
+    // 使用 testRequestId 作为 request_id,以便后续查询
     const recordId = await feishuBitableService.createTestReport({
       ...report,
-      // 添加 request_id 字段存储我们的 UUID
-      requestId: id,
+      requestId: data.testRequestId,
     });
 
     console.log(`[BitableRepo] Created test report with ID: ${id}, Record ID: ${recordId}`);
