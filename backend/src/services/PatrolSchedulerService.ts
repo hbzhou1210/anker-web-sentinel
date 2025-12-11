@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { PatrolScheduleRepository } from '../database/repositories/PatrolScheduleRepository.js';
+import { BitablePatrolScheduleRepository } from '../models/repositories/BitablePatrolScheduleRepository.js';
 import { PatrolSchedule } from '../models/entities.js';
 import { patrolService } from './PatrolService.js';
 
@@ -9,12 +10,17 @@ interface ScheduledTask {
 }
 
 export class PatrolSchedulerService {
-  private scheduleRepository: PatrolScheduleRepository;
+  private scheduleRepository: PatrolScheduleRepository | BitablePatrolScheduleRepository;
   private scheduledTasks: Map<string, ScheduledTask> = new Map();
   private isInitialized: boolean = false;
 
   constructor() {
-    this.scheduleRepository = new PatrolScheduleRepository();
+    // 根据环境变量选择存储方式
+    if (process.env.DATABASE_STORAGE === 'bitable') {
+      this.scheduleRepository = new BitablePatrolScheduleRepository();
+    } else {
+      this.scheduleRepository = new PatrolScheduleRepository();
+    }
   }
 
   /**
@@ -26,14 +32,8 @@ export class PatrolSchedulerService {
       return;
     }
 
-    console.log('Initializing PatrolSchedulerService...');
-
-    // Skip scheduler initialization in Bitable mode (PatrolSchedule not yet implemented for Bitable)
-    if (process.env.DATABASE_STORAGE === 'bitable') {
-      console.log('✓ Skipping PatrolSchedulerService in Bitable mode (not yet implemented)');
-      this.isInitialized = true;
-      return;
-    }
+    const storageMode = process.env.DATABASE_STORAGE || 'postgres';
+    console.log(`Initializing PatrolSchedulerService (${storageMode} mode)...`);
 
     try {
       const enabledSchedules = await this.scheduleRepository.findAllEnabled();

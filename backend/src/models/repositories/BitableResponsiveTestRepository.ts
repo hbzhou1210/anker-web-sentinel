@@ -160,107 +160,6 @@ export class BitableResponsiveTestRepository {
       });
   }
 
-  /**
-   * 获取默认设备列表 (当 Bitable 中没有数据时使用)
-   */
-  private getDefaultDevices(): DevicePreset[] {
-    return [
-      // 移动设备
-      {
-        id: 1,
-        name: 'iPhone 13',
-        deviceType: DeviceType.Mobile,
-        viewportWidth: 390,
-        viewportHeight: 844,
-        userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1',
-        pixelRatio: 3,
-        hasTouch: true,
-        isMobile: true,
-        enabled: true,
-        createdAt: new Date(),
-      },
-      {
-        id: 2,
-        name: 'Samsung Galaxy S21',
-        deviceType: DeviceType.Mobile,
-        viewportWidth: 360,
-        viewportHeight: 800,
-        userAgent: 'Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.45 Mobile Safari/537.36',
-        pixelRatio: 3,
-        hasTouch: true,
-        isMobile: true,
-        enabled: true,
-        createdAt: new Date(),
-      },
-      {
-        id: 3,
-        name: 'Google Pixel 6',
-        deviceType: DeviceType.Mobile,
-        viewportWidth: 412,
-        viewportHeight: 915,
-        userAgent: 'Mozilla/5.0 (Linux; Android 12; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.45 Mobile Safari/537.36',
-        pixelRatio: 2.625,
-        hasTouch: true,
-        isMobile: true,
-        enabled: true,
-        createdAt: new Date(),
-      },
-      // 平板设备
-      {
-        id: 4,
-        name: 'iPad Pro 12.9"',
-        deviceType: DeviceType.Tablet,
-        viewportWidth: 1024,
-        viewportHeight: 1366,
-        userAgent: 'Mozilla/5.0 (iPad; CPU OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1',
-        pixelRatio: 2,
-        hasTouch: true,
-        isMobile: false,
-        enabled: true,
-        createdAt: new Date(),
-      },
-      {
-        id: 5,
-        name: 'Samsung Galaxy Tab S7',
-        deviceType: DeviceType.Tablet,
-        viewportWidth: 753,
-        viewportHeight: 1037,
-        userAgent: 'Mozilla/5.0 (Linux; Android 11; SM-T870) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.45 Safari/537.36',
-        pixelRatio: 2.125,
-        hasTouch: true,
-        isMobile: false,
-        enabled: true,
-        createdAt: new Date(),
-      },
-      // 桌面设备
-      {
-        id: 6,
-        name: 'Desktop 1920x1080',
-        deviceType: DeviceType.Desktop,
-        viewportWidth: 1920,
-        viewportHeight: 1080,
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36',
-        pixelRatio: 1,
-        hasTouch: false,
-        isMobile: false,
-        enabled: true,
-        createdAt: new Date(),
-      },
-      {
-        id: 7,
-        name: 'Desktop 1366x768',
-        deviceType: DeviceType.Desktop,
-        viewportWidth: 1366,
-        viewportHeight: 768,
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36',
-        pixelRatio: 1,
-        hasTouch: false,
-        isMobile: false,
-        enabled: true,
-        createdAt: new Date(),
-      },
-    ];
-  }
 
   /**
    * 获取所有启用的设备预设
@@ -281,12 +180,6 @@ export class BitableResponsiveTestRepository {
     });
 
     const devices = result.items.map((record: any) => this.recordToDevicePreset(record));
-
-    // 如果 Bitable 中没有设备数据,返回默认设备列表
-    if (devices.length === 0) {
-      console.warn('[ResponsiveTest] No devices found in Bitable, using default devices');
-      return this.getDefaultDevices();
-    }
 
     return devices.sort((a: DevicePreset, b: DevicePreset) => {
       // 排序: mobile < tablet < desktop, 然后按名称
@@ -321,12 +214,6 @@ export class BitableResponsiveTestRepository {
     });
 
     const devices = result.items.map((record: any) => this.recordToDevicePreset(record));
-
-    // 如果 Bitable 中没有设备数据,从默认设备列表中筛选
-    if (devices.length === 0) {
-      console.warn(`[ResponsiveTest] No ${deviceType} devices found in Bitable, using default devices`);
-      return this.getDefaultDevices().filter(d => d.deviceType === deviceType);
-    }
 
     return devices.sort((a: DevicePreset, b: DevicePreset) => a.name.localeCompare(b.name));
   }
