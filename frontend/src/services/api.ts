@@ -5,15 +5,18 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
 const getApiBaseUrl = (): string => {
   // 如果设置了环境变量,直接使用
   if (import.meta.env.VITE_API_BASE_URL) {
+    console.log('[API] Using VITE_API_BASE_URL:', import.meta.env.VITE_API_BASE_URL);
     return import.meta.env.VITE_API_BASE_URL;
   }
 
   // 如果在浏览器环境且不是 localhost,使用相对路径(生产环境通过 Nginx 代理)
   if (typeof window !== 'undefined' && !window.location.hostname.includes('localhost')) {
+    console.log('[API] Production mode detected, hostname:', window.location.hostname, '-> using /api/v1');
     return '/api/v1';
   }
 
   // 本地开发环境使用完整 URL
+  console.log('[API] Development mode detected -> using http://localhost:3000/api/v1');
   return 'http://localhost:3000/api/v1';
 };
 
@@ -24,18 +27,23 @@ const getApiBaseUrl = (): string => {
 export const getFullApiUrl = (path: string): string => {
   // 如果已经是完整 URL,直接返回
   if (path.startsWith('http://') || path.startsWith('https://')) {
+    console.log('[API] getFullApiUrl: Already full URL:', path);
     return path;
   }
 
   // 如果是相对路径,根据环境拼接
   if (typeof window !== 'undefined' && !window.location.hostname.includes('localhost')) {
     // 生产环境:使用当前域名
-    return path.startsWith('/') ? path : `/${path}`;
+    const result = path.startsWith('/') ? path : `/${path}`;
+    console.log('[API] getFullApiUrl (production):', path, '->', result);
+    return result;
   }
 
   // 开发环境:使用 localhost:3000
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
-  return `http://localhost:3000${cleanPath}`;
+  const result = `http://localhost:3000${cleanPath}`;
+  console.log('[API] getFullApiUrl (development):', path, '->', result);
+  return result;
 };
 
 // Create axios instance with default config
