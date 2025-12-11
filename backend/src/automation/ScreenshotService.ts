@@ -3,6 +3,7 @@ import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import sharp from 'sharp';
 import { randomUUID } from 'crypto';
+import feishuApiService from '../services/FeishuApiService.js';
 
 export class ScreenshotService {
   private screenshotDir = process.env.SCREENSHOT_DIR || '/tmp/screenshots';
@@ -260,6 +261,41 @@ export class ScreenshotService {
     } catch (error) {
       console.error('Failed to cleanup old screenshots:', error);
       return 0;
+    }
+  }
+
+  /**
+   * 捕获全屏截图并上传到飞书
+   * @param page Playwright Page 对象
+   * @returns 飞书图片 URL
+   */
+  async captureAndUploadToFeishu(page: Page): Promise<string> {
+    try {
+      console.log('  Capturing screenshot for Feishu upload...');
+
+      // Capture full page screenshot as PNG
+      const screenshot = await page.screenshot({
+        fullPage: true,
+        type: 'png',
+      });
+
+      // Compress to WebP format at 80% quality
+      const compressed = await sharp(screenshot)
+        .webp({ quality: 80 })
+        .toBuffer();
+
+      console.log(`  Screenshot captured (${(compressed.length / 1024).toFixed(2)}KB), uploading to Feishu...`);
+
+      // Upload to Feishu
+      const filename = `screenshot-${Date.now()}.webp`;
+      const feishuUrl = await feishuApiService.uploadImage(compressed, filename);
+
+      console.log(`  ✓ Screenshot uploaded to Feishu: ${feishuUrl}`);
+
+      return feishuUrl;
+    } catch (error) {
+      console.error('  Failed to capture and upload screenshot to Feishu:', error);
+      throw error;
     }
   }
 }

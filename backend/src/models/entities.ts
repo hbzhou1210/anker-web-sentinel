@@ -406,8 +406,7 @@ export interface PatrolTestResult {
   responseTime?: number;
   statusCode?: number;
   errorMessage?: string;
-  screenshotUrl?: string;
-  screenshotBase64?: string; // Base64 编码的截图，用于直接存储到 Bitable
+  screenshotUrl?: string; // 飞书图片URL
   testDuration?: number;
   checkDetails?: string; // 检查详情（包含所有检查项的结果）
   isInfrastructureError?: boolean; // 是否为基础设施错误（网络、超时等），不触发邮件通知

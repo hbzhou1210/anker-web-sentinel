@@ -1124,23 +1124,12 @@ export class PatrolService {
       const finalStatus = evaluation.status === 'pass' ? 'pass' : 'fail';
       const detailedMessage = `页面类型: ${pageType}\n${evaluation.message}\n\n检查详情:\n${checkMessages}`;
 
-      // 截图保存页面状态
+      // 截图保存页面状态 - 上传到飞书
       let screenshotUrl: string | undefined;
-      let screenshotBase64: string | undefined;
       try {
-        console.log(`  Capturing screenshot...`);
-        screenshotUrl = await screenshotService.captureFullPage(page);
-        console.log(`  Screenshot saved: ${screenshotUrl}`);
-
-        // 同时生成 base64 格式用于 Bitable 存储
-        try {
-          screenshotBase64 = await screenshotService.captureFullPageBase64(page);
-          console.log(`  Screenshot base64 captured`);
-        } catch (base64Error) {
-          console.error(`  Failed to capture base64 screenshot:`, base64Error);
-        }
+        screenshotUrl = await screenshotService.captureAndUploadToFeishu(page);
       } catch (error) {
-        console.error(`  Failed to capture screenshot:`, error);
+        console.error(`  Failed to capture and upload screenshot:`, error);
       }
 
       // 视觉对比(如果启用)
@@ -1189,8 +1178,7 @@ export class PatrolService {
         responseTime,
         errorMessage: finalStatus === 'fail' ? detailedMessage : undefined,
         checkDetails: detailedMessage, // 始终包含检查详情
-        screenshotUrl, // 截图URL
-        screenshotBase64, // Base64 截图(用于 Bitable)
+        screenshotUrl, // 截图URL(来自飞书)
         testDuration: Date.now() - startTime,
         visualDiff, // 视觉对比结果
         deviceType: deviceConfig?.type,
@@ -1208,23 +1196,14 @@ export class PatrolService {
         console.error(`✗ ${name} failed:`, errorMessage);
       }
 
-      // 尝试保存截图,即使检查失败
+      // 尝试保存截图到飞书,即使检查失败
       let screenshotUrl: string | undefined;
-      let screenshotBase64: string | undefined;
       try {
         console.log(`  Capturing screenshot for failed test...`);
-        screenshotUrl = await screenshotService.captureFullPage(page);
-        console.log(`  Screenshot saved: ${screenshotUrl}`);
-
-        // 同时生成 base64 格式用于 Bitable 存储
-        try {
-          screenshotBase64 = await screenshotService.captureFullPageBase64(page);
-          console.log(`  Screenshot base64 captured`);
-        } catch (base64Error) {
-          console.error(`  Failed to capture base64 screenshot:`, base64Error);
-        }
+        screenshotUrl = await screenshotService.captureAndUploadToFeishu(page);
+        console.log(`  Screenshot uploaded to Feishu: ${screenshotUrl}`);
       } catch (screenshotError) {
-        console.error(`  Failed to capture screenshot:`, screenshotError);
+        console.error(`  Failed to capture and upload screenshot:`, screenshotError);
       }
 
       return {
@@ -1233,8 +1212,7 @@ export class PatrolService {
         status: 'fail',
         responseTime,
         errorMessage: isInfraError ? `基础设施错误: ${errorMessage}` : errorMessage,
-        screenshotUrl, // 包含截图URL(如果成功保存)
-        screenshotBase64, // Base64 截图(用于 Bitable)
+        screenshotUrl, // 包含截图URL(来自飞书)
         testDuration: responseTime,
         isInfrastructureError: isInfraError,
       };

@@ -327,6 +327,54 @@ export class FeishuApiService {
       throw error;
     }
   }
+
+  /**
+   * 上传图片到飞书云文档
+   * @param imageBuffer 图片 Buffer
+   * @param fileName 文件名
+   * @returns 图片的公开访问 URL
+   */
+  async uploadImage(imageBuffer: Buffer, fileName: string): Promise<string> {
+    const token = await this.getAccessToken();
+
+    console.log('[FeishuApi] Uploading image:', fileName, `(${(imageBuffer.length / 1024).toFixed(2)}KB)`);
+
+    try {
+      const FormData = (await import('form-data')).default;
+      const formData = new FormData();
+
+      formData.append('image_type', 'message');
+      formData.append('image', imageBuffer, {
+        filename: fileName,
+        contentType: 'image/webp',
+      });
+
+      const response = await this.axiosInstance.post(
+        '/im/v1/images',
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            ...formData.getHeaders(),
+          },
+        }
+      );
+
+      if (response.data.code !== 0) {
+        throw new Error(`Failed to upload image: ${response.data.msg}`);
+      }
+
+      const imageKey = response.data.data.image_key;
+      console.log('[FeishuApi] Image uploaded successfully, key:', imageKey);
+
+      // 返回图片的访问 URL
+      // 飞书图片 URL 格式: https://open.feishu.cn/open-apis/im/v1/images/{image_key}
+      return `https://open.feishu.cn/open-apis/im/v1/images/${imageKey}`;
+    } catch (error) {
+      console.error('[FeishuApi] Failed to upload image:', error);
+      throw error;
+    }
+  }
 }
 
 // 导出单例
