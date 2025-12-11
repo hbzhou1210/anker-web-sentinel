@@ -155,8 +155,16 @@ export class BitablePatrolExecutionRepository {
       page_size: limit,
     });
 
+    // 使用 flatMap + try-catch 过滤掉损坏的记录
     return result.items
-      .map((record: any) => this.recordToEntity(record))
+      .flatMap((record: any) => {
+        try {
+          return [this.recordToEntity(record)];
+        } catch (error) {
+          console.error('[BitablePatrolExecutionRepository] Skipping corrupted record:', error);
+          return []; // 跳过损坏的记录
+        }
+      })
       .sort((a: PatrolExecution, b: PatrolExecution) => b.startedAt.getTime() - a.startedAt.getTime());
   }
 
@@ -168,8 +176,16 @@ export class BitablePatrolExecutionRepository {
       page_size: limit,
     });
 
+    // 使用 flatMap + try-catch 过滤掉损坏的记录
     return result.items
-      .map((record: any) => this.recordToEntity(record))
+      .flatMap((record: any) => {
+        try {
+          return [this.recordToEntity(record)];
+        } catch (error) {
+          console.error('[BitablePatrolExecutionRepository] Skipping corrupted record:', error);
+          return []; // 跳过损坏的记录
+        }
+      })
       .sort((a: PatrolExecution, b: PatrolExecution) => b.startedAt.getTime() - a.startedAt.getTime());
   }
 
