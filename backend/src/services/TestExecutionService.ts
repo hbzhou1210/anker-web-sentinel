@@ -2,10 +2,8 @@ import { Browser } from 'playwright';
 import browserPool from '../automation/BrowserPool.js';
 import uiTestingService from '../automation/UITestingService.js';
 import performanceAnalysisService from '../performance/PerformanceAnalysisService.js';
-import testRequestRepository from '../models/repositories/TestRequestRepository.js';
-import testReportRepository from '../models/repositories/TestReportRepository.js';
-import uiTestResultRepository from '../models/repositories/UITestResultRepository.js';
-import performanceResultRepository from '../models/repositories/PerformanceResultRepository.js';
+import testRequestRepository from '../models/repositories/InMemoryTestRequestRepository.js';
+import testReportRepository from '../models/repositories/BitableTestReportRepository.js';
 import { TestRequestStatus, TestReport, TestResultStatus } from '../models/entities.js';
 import { emailService } from './EmailService.js';
 
@@ -120,23 +118,6 @@ export class TestExecutionService {
         testDuration,
       });
 
-      // Save UI test results
-      const uiResultsToSave = allUIResults.map((result) => ({
-        ...result,
-        testReportId: report.id,
-      }));
-      const savedUIResults = await uiTestResultRepository.batchCreate(uiResultsToSave);
-
-      // Save performance results (if any)
-      let savedPerfResults: any[] = [];
-      if (performanceResults.length > 0) {
-        const perfResultsToSave = performanceResults.map((result) => ({
-          ...result,
-          testReportId: report.id,
-        }));
-        savedPerfResults = await performanceResultRepository.batchCreate(perfResultsToSave);
-      }
-
       // Update test request status to completed
       await testRequestRepository.updateStatus(testRequestId, TestRequestStatus.Completed);
 
@@ -169,12 +150,8 @@ export class TestExecutionService {
         console.log(`Email notification skipped: email=${testRequest?.notificationEmail}, service available=${emailService.isAvailable()}`);
       }
 
-      // Return complete report with results
-      return {
-        ...report,
-        uiTestResults: savedUIResults,
-        performanceResults: savedPerfResults,
-      };
+      // Return complete report
+      return report;
     } catch (error) {
       console.error('Test execution failed:', error);
 

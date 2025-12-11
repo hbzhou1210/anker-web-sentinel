@@ -1,20 +1,15 @@
 import { Router, Request, Response } from 'express';
 import { validateUrl } from '../middleware/validateUrl.js';
 import { rateLimit } from '../middleware/rateLimit.js';
-import { useBitable } from '../../config/database.config.js';
 
-// 根据配置选择不同的 Repository
-import testRequestRepository from '../../models/repositories/TestRequestRepository.js';
-import postgresTestReportRepository from '../../models/repositories/TestReportRepository.js';
-import bitableTestReportRepository from '../../models/repositories/BitableTestReportRepository.js';
-import uiTestResultRepository from '../../models/repositories/UITestResultRepository.js';
-import performanceResultRepository from '../../models/repositories/PerformanceResultRepository.js';
+// 使用内存版 TestRequest Repository (只用于追踪异步任务状态)
+import testRequestRepository from '../../models/repositories/InMemoryTestRequestRepository.js';
+
+// 使用 Bitable 存储测试报告
+import testReportRepository from '../../models/repositories/BitableTestReportRepository.js';
 import testExecutionService from '../../services/TestExecutionService.js';
 
-// 选择使用的 Repository
-const testReportRepository = useBitable() ? bitableTestReportRepository : postgresTestReportRepository;
-
-console.log(`[Tests Route] Using ${useBitable() ? 'Feishu Bitable' : 'PostgreSQL'} for test reports`);
+console.log(`[Tests Route] Using in-memory storage for test requests, Bitable for test reports`);
 
 const router = Router();
 
@@ -113,16 +108,9 @@ router.get('/:testId/report', async (req: Request, res: Response) => {
       return;
     }
 
-    // Get UI test results and performance results
-    // 注意: 使用 Bitable 时,这些数据暂时为空
-    let uiTestResults = report.uiTestResults || [];
-    let performanceResults = report.performanceResults || [];
-
-    // 只有使用 PostgreSQL 时才查询相关结果
-    if (!useBitable()) {
-      uiTestResults = await uiTestResultRepository.findByReportId(report.id);
-      performanceResults = await performanceResultRepository.findByReportId(report.id);
-    }
+    // Get UI test results and performance results from Bitable report
+    const uiTestResults = report.uiTestResults || [];
+    const performanceResults = report.performanceResults || [];
 
     // Return complete report
     res.json({
