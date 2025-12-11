@@ -1,17 +1,13 @@
 import { Router, Request, Response } from 'express';
 import { patrolService } from '../../services/PatrolService.js';
-import { PatrolScheduleRepository } from '../../database/repositories/PatrolScheduleRepository.js';
 import { BitablePatrolScheduleRepository } from '../../models/repositories/BitablePatrolScheduleRepository.js';
 import { patrolSchedulerService } from '../../services/PatrolSchedulerService.js';
 import { PatrolScheduleType } from '../../models/entities.js';
 
 const router = Router();
-const DATABASE_STORAGE = process.env.DATABASE_STORAGE || 'postgres';
 
-// Initialize schedule repository based on storage mode
-const scheduleRepository = DATABASE_STORAGE === 'bitable'
-  ? new BitablePatrolScheduleRepository()
-  : new PatrolScheduleRepository();
+// Use Bitable for schedule repository
+const scheduleRepository = new BitablePatrolScheduleRepository();
 
 // ==================== 巡检任务管理 ====================
 

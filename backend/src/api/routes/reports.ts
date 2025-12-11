@@ -1,16 +1,10 @@
 import { Router, Request, Response } from 'express';
-import { useBitable } from '../../config/database.config.js';
-
-// 根据配置选择不同的 Repository
-import postgresTestReportRepository from '../../models/repositories/TestReportRepository.js';
 import bitableTestReportRepository from '../../models/repositories/BitableTestReportRepository.js';
-import uiTestResultRepository from '../../models/repositories/UITestResultRepository.js';
-import performanceResultRepository from '../../models/repositories/PerformanceResultRepository.js';
 
-// 选择使用的 Repository
-const testReportRepository = useBitable() ? bitableTestReportRepository : postgresTestReportRepository;
+// Use Bitable for test reports
+const testReportRepository = bitableTestReportRepository;
 
-console.log(`[Reports Route] Using ${useBitable() ? 'Feishu Bitable' : 'PostgreSQL'} for test reports`);
+console.log('[Reports Route] Using Feishu Bitable for test reports');
 
 const router = Router();
 
@@ -30,16 +24,9 @@ router.get('/:reportId', async (req: Request, res: Response) => {
       return;
     }
 
-    // Get UI test results and performance results
-    // 注意: 使用 Bitable 时,这些数据暂时为空
-    let uiTestResults = report.uiTestResults || [];
-    let performanceResults = report.performanceResults || [];
-
-    // 只有使用 PostgreSQL 时才查询相关结果
-    if (!useBitable()) {
-      uiTestResults = await uiTestResultRepository.findByReportId(reportId);
-      performanceResults = await performanceResultRepository.findByReportId(reportId);
-    }
+    // Get UI test results and performance results from Bitable report
+    const uiTestResults = report.uiTestResults || [];
+    const performanceResults = report.performanceResults || [];
 
     // Return complete report
     res.json({

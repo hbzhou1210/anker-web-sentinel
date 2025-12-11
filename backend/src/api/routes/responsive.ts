@@ -1,22 +1,16 @@
 import { Router, Request, Response } from 'express';
 import browserPool from '../../automation/BrowserPool.js';
 import { ResponsiveTestingService } from '../../automation/ResponsiveTestingService.js';
-import { ResponsiveTestRepository } from '../../models/repositories/ResponsiveTestRepository.js';
 import { BitableResponsiveTestRepository } from '../../models/repositories/BitableResponsiveTestRepository.js';
 import { DeviceType, ResponsiveTestResult, ResponsiveTestIssue } from '../../models/entities.js';
-
-// 根据环境变量选择数据存储方式
-const DATABASE_STORAGE = process.env.DATABASE_STORAGE || 'postgres';
 
 const router = Router();
 const responsiveTestingService = new ResponsiveTestingService();
 
-// 根据配置选择 Repository
-const responsiveTestRepository = DATABASE_STORAGE === 'bitable'
-  ? new BitableResponsiveTestRepository()
-  : new ResponsiveTestRepository();
+// Use Bitable for responsive test repository
+const responsiveTestRepository = new BitableResponsiveTestRepository();
 
-console.log(`[ResponsiveRoute] Using ${DATABASE_STORAGE} storage`);
+console.log('[ResponsiveRoute] Using bitable storage');
 
 /**
  * GET /api/v1/responsive/devices

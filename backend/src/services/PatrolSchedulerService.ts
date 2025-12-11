@@ -1,5 +1,4 @@
 import cron from 'node-cron';
-import { PatrolScheduleRepository } from '../database/repositories/PatrolScheduleRepository.js';
 import { BitablePatrolScheduleRepository } from '../models/repositories/BitablePatrolScheduleRepository.js';
 import { PatrolSchedule } from '../models/entities.js';
 import { patrolService } from './PatrolService.js';
@@ -10,17 +9,13 @@ interface ScheduledTask {
 }
 
 export class PatrolSchedulerService {
-  private scheduleRepository: PatrolScheduleRepository | BitablePatrolScheduleRepository;
+  private scheduleRepository: BitablePatrolScheduleRepository;
   private scheduledTasks: Map<string, ScheduledTask> = new Map();
   private isInitialized: boolean = false;
 
   constructor() {
-    // 根据环境变量选择存储方式
-    if (process.env.DATABASE_STORAGE === 'bitable') {
-      this.scheduleRepository = new BitablePatrolScheduleRepository();
-    } else {
-      this.scheduleRepository = new PatrolScheduleRepository();
-    }
+    // Use Bitable for schedule repository
+    this.scheduleRepository = new BitablePatrolScheduleRepository();
   }
 
   /**
