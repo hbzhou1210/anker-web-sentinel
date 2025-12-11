@@ -17,8 +17,6 @@ const getApiBaseUrl = (): string => {
   return 'http://localhost:3000/api/v1';
 };
 
-const API_BASE_URL = getApiBaseUrl();
-
 /**
  * 获取完整的 API URL
  * 在生产环境使用相对路径,在开发环境使用完整 URL
@@ -42,11 +40,17 @@ export const getFullApiUrl = (path: string): string => {
 
 // Create axios instance with default config
 const apiClient: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL,
   timeout: 120000, // 2 minutes (tests can take time)
   headers: {
     'Content-Type': 'application/json',
   },
+});
+
+// 使用请求拦截器动态设置 baseURL
+apiClient.interceptors.request.use((config) => {
+  // 在每次请求时动态计算 baseURL
+  config.baseURL = getApiBaseUrl();
+  return config;
 });
 
 // Types
