@@ -332,7 +332,10 @@ export class FeishuApiService {
    * 上传图片到飞书云文档
    * @param imageBuffer 图片 Buffer
    * @param fileName 文件名
-   * @returns 图片的公开访问 URL
+   * @returns 图片 Key(需要通过后端代理访问)
+   *
+   * 注意: 返回的是 image_key,前端需要通过后端代理路由来访问
+   * 因为飞书 IM 图片需要 access_token 认证,不能直接在浏览器中访问
    */
   async uploadImage(imageBuffer: Buffer, fileName: string): Promise<string> {
     const token = await this.getAccessToken();
@@ -367,11 +370,36 @@ export class FeishuApiService {
       const imageKey = response.data.data.image_key;
       console.log('[FeishuApi] Image uploaded successfully, key:', imageKey);
 
-      // 返回图片的访问 URL
-      // 飞书图片 URL 格式: https://open.feishu.cn/open-apis/im/v1/images/{image_key}
-      return `https://open.feishu.cn/open-apis/im/v1/images/${imageKey}`;
+      // 返回 image_key,前端通过后端代理访问
+      return imageKey;
     } catch (error) {
       console.error('[FeishuApi] Failed to upload image:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 获取飞书图片内容(用于代理访问)
+   * @param imageKey 图片key
+   * @returns 图片 Buffer
+   */
+  async getImage(imageKey: string): Promise<Buffer> {
+    const token = await this.getAccessToken();
+
+    try {
+      const response = await this.axiosInstance.get(
+        `/im/v1/images/${imageKey}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          responseType: 'arraybuffer',
+        }
+      );
+
+      return Buffer.from(response.data);
+    } catch (error) {
+      console.error('[FeishuApi] Failed to get image:', error);
       throw error;
     }
   }

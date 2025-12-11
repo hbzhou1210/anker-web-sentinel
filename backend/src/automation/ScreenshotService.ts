@@ -267,7 +267,7 @@ export class ScreenshotService {
   /**
    * 捕获全屏截图并上传到飞书
    * @param page Playwright Page 对象
-   * @returns 飞书图片 URL
+   * @returns 飞书图片 Key
    */
   async captureAndUploadToFeishu(page: Page): Promise<string> {
     try {
@@ -286,13 +286,13 @@ export class ScreenshotService {
 
       console.log(`  Screenshot captured (${(compressed.length / 1024).toFixed(2)}KB), uploading to Feishu...`);
 
-      // Upload to Feishu
+      // Upload to Feishu and get image key
       const filename = `screenshot-${Date.now()}.webp`;
-      const feishuUrl = await feishuApiService.uploadImage(compressed, filename);
+      const imageKey = await feishuApiService.uploadImage(compressed, filename);
 
-      console.log(`  ✓ Screenshot uploaded to Feishu: ${feishuUrl}`);
+      console.log(`  ✓ Screenshot uploaded to Feishu, key: ${imageKey}`);
 
-      return feishuUrl;
+      return imageKey;
     } catch (error) {
       console.error('  Failed to capture and upload screenshot to Feishu:', error);
       throw error;

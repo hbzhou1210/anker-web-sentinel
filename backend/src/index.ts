@@ -10,6 +10,7 @@ import feishuDocumentsRouter from './api/routes/feishuDocuments.js';
 import feishuRouter from './api/routes/feishu.js';
 import responsiveRouter from './api/routes/responsive.js';
 import patrolRouter from './api/routes/patrol.js';
+import imagesRouter from './api/routes/images.js';
 import { patrolSchedulerService } from './services/PatrolSchedulerService.js';
 import { imageCompareService } from './automation/ImageCompareService.js';
 
@@ -29,6 +30,7 @@ app.use('/api/v1/feishu-documents', feishuDocumentsRouter);
 app.use('/api/v1/feishu', feishuRouter);
 app.use('/api/v1/responsive', responsiveRouter);
 app.use('/api/v1/patrol', patrolRouter);
+app.use('/api/v1/images', imagesRouter);
 
 // Start server
 async function startServer() {
