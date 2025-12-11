@@ -34,7 +34,7 @@ RUN npm install \
 
 # 配置 Nginx 并复制前端构建文件
 RUN cp frontend/nginx.conf /etc/nginx/sites-available/default \
-    && cp -r frontend/dist/* /usr/share/nginx/html/
+    && cp -r dist/frontend/* /usr/share/nginx/html/
 
 # 暴露端口
 EXPOSE 80 3000
