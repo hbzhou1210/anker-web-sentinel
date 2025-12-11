@@ -1127,7 +1127,9 @@ export class PatrolService {
       // 截图保存页面状态 - 上传到飞书
       let screenshotUrl: string | undefined;
       try {
-        screenshotUrl = await screenshotService.captureAndUploadToFeishu(page);
+        const imageKey = await screenshotService.captureAndUploadToFeishu(page);
+        // 转换为后端代理 URL
+        screenshotUrl = `/api/v1/images/feishu/${imageKey}`;
       } catch (error) {
         console.error(`  Failed to capture and upload screenshot:`, error);
       }
@@ -1200,7 +1202,9 @@ export class PatrolService {
       let screenshotUrl: string | undefined;
       try {
         console.log(`  Capturing screenshot for failed test...`);
-        screenshotUrl = await screenshotService.captureAndUploadToFeishu(page);
+        const imageKey = await screenshotService.captureAndUploadToFeishu(page);
+        // 转换为后端代理 URL
+        screenshotUrl = `/api/v1/images/feishu/${imageKey}`;
         console.log(`  Screenshot uploaded to Feishu: ${screenshotUrl}`);
       } catch (screenshotError) {
         console.error(`  Failed to capture and upload screenshot:`, screenshotError);
