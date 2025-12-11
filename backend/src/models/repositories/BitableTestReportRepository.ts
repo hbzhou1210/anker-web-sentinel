@@ -5,7 +5,7 @@
  */
 
 import feishuBitableService from '../../services/FeishuBitableService.js';
-import { TestReport } from '../entities.js';
+import { TestReport, UITestResult, PerformanceResult } from '../entities.js';
 import { v4 as uuidv4 } from 'uuid';
 
 interface CreateTestReportData {
@@ -17,6 +17,8 @@ interface CreateTestReportData {
   failedChecks: number;
   warningChecks: number;
   testDuration: number;
+  uiTestResults: UITestResult[];
+  performanceResults: PerformanceResult[];
 }
 
 export class BitableTestReportRepository {
@@ -40,8 +42,8 @@ export class BitableTestReportRepository {
       warningChecks: data.warningChecks,
       testDuration: data.testDuration,
       completedAt,
-      uiTestResults: [],
-      performanceResults: [],
+      uiTestResults: data.uiTestResults,
+      performanceResults: data.performanceResults,
     };
 
     // 调用飞书服务创建记录

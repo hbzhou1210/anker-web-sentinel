@@ -87,7 +87,7 @@ export class TestExecutionService {
       await context.close();
 
       // Run WebPageTest performance analysis conditionally (allow it to fail gracefully)
-      let performanceResults: Array<{ status: TestResultStatus }> = [];
+      let performanceResults: PerformanceResult[] = [];
       if (testOptions.performance) {
         try {
           console.log('Running WebPageTest performance analysis...');
@@ -116,6 +116,8 @@ export class TestExecutionService {
         failedChecks,
         warningChecks,
         testDuration,
+        uiTestResults: allUIResults,
+        performanceResults,
       });
 
       // Update test request status to completed
@@ -169,8 +171,8 @@ export class TestExecutionService {
 
   // Calculate overall health score from test results
   private calculateScore(
-    uiResults: Array<{ status: TestResultStatus }>,
-    performanceResults: Array<{ status: TestResultStatus }>
+    uiResults: UITestResult[],
+    performanceResults: PerformanceResult[]
   ): {
     overallScore: number;
     totalChecks: number;
