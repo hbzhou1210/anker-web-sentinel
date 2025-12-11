@@ -32,8 +32,9 @@ RUN npm install \
     && chmod +x ./docker-entrypoint.sh \
     && rm -rf /root/.npm
 
-# 配置 Nginx
-RUN cp frontend/nginx.conf /etc/nginx/sites-available/default
+# 配置 Nginx 并复制前端构建文件
+RUN cp frontend/nginx.conf /etc/nginx/sites-available/default \
+    && cp -r frontend/dist/* /usr/share/nginx/html/
 
 # 暴露端口
 EXPOSE 80 3000
