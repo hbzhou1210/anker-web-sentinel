@@ -8,6 +8,11 @@
 import { FEISHU_BITABLE_CONFIG } from '../config/feishu-bitable.config.js';
 import feishuApiService from './FeishuApiService.js';
 import type { TestReport, ResponsiveTestResult, PatrolTask, PatrolExecution } from '../models/entities.js';
+import * as zlib from 'zlib';
+import { promisify } from 'util';
+
+const gzipAsync = promisify(zlib.gzip);
+const gunzipAsync = promisify(zlib.gunzip);
 
 export interface BitableRecord {
   record_id?: string;
@@ -26,6 +31,46 @@ function sanitizeTestResults(testResults: any[]): any[] {
     delete sanitized.screenshotBase64;
     return sanitized;
   });
+}
+
+/**
+ * 压缩JSON数据为Base64字符串
+ * 解决飞书文本字段长度限制问题(通常限制5000字符)
+ */
+async function compressJSON(data: any): Promise<string> {
+  try {
+    const jsonStr = JSON.stringify(data);
+    const compressed = await gzipAsync(Buffer.from(jsonStr, 'utf-8'));
+    return compressed.toString('base64');
+  } catch (error) {
+    console.error('[FeishuBitable] Failed to compress JSON:', error);
+    return JSON.stringify(data); // 降级方案:返回原始JSON
+  }
+}
+
+/**
+ * 解压Base64字符串为JSON对象
+ */
+async function decompressJSON(compressedStr: string): Promise<any> {
+  try {
+    // 检查是否是压缩数据(Base64编码的gzip)
+    if (!compressedStr || compressedStr.startsWith('[') || compressedStr.startsWith('{')) {
+      // 旧数据或未压缩数据,直接解析JSON
+      return JSON.parse(compressedStr || '[]');
+    }
+
+    const buffer = Buffer.from(compressedStr, 'base64');
+    const decompressed = await gunzipAsync(buffer);
+    return JSON.parse(decompressed.toString('utf-8'));
+  } catch (error) {
+    console.error('[FeishuBitable] Failed to decompress JSON:', error);
+    // 降级方案:尝试直接解析
+    try {
+      return JSON.parse(compressedStr || '[]');
+    } catch {
+      return [];
+    }
+  }
 }
 
 export interface BitableSearchParams {
@@ -66,6 +111,13 @@ export class FeishuBitableService {
     const sanitizedUIResults = sanitizeTestResults(report.uiTestResults || []);
     const sanitizedPerfResults = sanitizeTestResults(report.performanceResults || []);
 
+    // 压缩测试结果数据
+    const compressedUIResults = await compressJSON(sanitizedUIResults);
+    const compressedPerfResults = await compressJSON(sanitizedPerfResults);
+
+    console.log('[FeishuBitable] Creating test report with', sanitizedUIResults.length, 'UI results and', sanitizedPerfResults.length, 'performance results');
+    console.log('[FeishuBitable] Compressed sizes: UI', compressedUIResults.length, 'chars, Perf', compressedPerfResults.length, 'chars');
+
     // 将 TypeScript 对象转换为飞书字段格式
     const fields = {
       url: report.url,
@@ -78,12 +130,10 @@ export class FeishuBitableService {
       completed_at: report.completedAt ? new Date(report.completedAt).getTime() : Date.now(),
       status: 'completed',  // 默认状态
       request_id: report.requestId || report.testRequestId,  // 存储 UUID
-      // 将测试结果序列化为 JSON 字符串存储
-      ui_test_results: JSON.stringify(sanitizedUIResults),
-      performance_results: JSON.stringify(sanitizedPerfResults),
+      // 将测试结果压缩后存储 (gzip + base64编码)
+      ui_test_results: compressedUIResults,
+      performance_results: compressedPerfResults,
     };
-
-    console.log('[FeishuBitable] Creating test report with', sanitizedUIResults.length, 'UI results and', sanitizedPerfResults.length, 'performance results');
 
     try {
       const recordId = await feishuApiService.createRecord(this.tableIds.testReports, fields);
@@ -120,7 +170,7 @@ export class FeishuBitableService {
         return null;
       }
 
-      return this.mapBitableRecordToTestReport(result.items[0]);
+      return await this.mapBitableRecordToTestReport(result.items[0]);
     } catch (error) {
       console.error('[FeishuBitable] Failed to get test report:', error);
       return null;
@@ -162,7 +212,9 @@ export class FeishuBitableService {
 
       const result = await feishuApiService.searchRecords(this.tableIds.testReports, searchParams);
 
-      const reports = result.items?.map((item: any) => this.mapBitableRecordToTestReport(item)) || [];
+      const reports = await Promise.all(
+        result.items?.map((item: any) => this.mapBitableRecordToTestReport(item)) || []
+      );
 
       return {
         reports,
@@ -180,7 +232,7 @@ export class FeishuBitableService {
   /**
    * 将飞书记录转换为 TestReport 实体
    */
-  private mapBitableRecordToTestReport(record: any): TestReport {
+  private async mapBitableRecordToTestReport(record: any): Promise<TestReport> {
     const fields = record.fields;
 
     // 辅助函数: 提取文本字段值
@@ -193,32 +245,32 @@ export class FeishuBitableService {
       return '';
     };
 
-    // 解析 JSON 字符串格式的测试结果
+    // 解析并解压测试结果数据
     let uiTestResults: any[] = [];
     let performanceResults: any[] = [];
 
     try {
       if (fields.ui_test_results) {
-        const jsonStr = extractText(fields.ui_test_results);
-        if (jsonStr) {
-          uiTestResults = JSON.parse(jsonStr);
-          console.log('[FeishuBitable] Parsed', uiTestResults.length, 'UI test results');
+        const compressedStr = extractText(fields.ui_test_results);
+        if (compressedStr) {
+          uiTestResults = await decompressJSON(compressedStr);
+          console.log('[FeishuBitable] Decompressed', uiTestResults.length, 'UI test results');
         }
       }
     } catch (error) {
-      console.error('[FeishuBitable] Failed to parse ui_test_results:', error);
+      console.error('[FeishuBitable] Failed to decompress ui_test_results:', error);
     }
 
     try {
       if (fields.performance_results) {
-        const jsonStr = extractText(fields.performance_results);
-        if (jsonStr) {
-          performanceResults = JSON.parse(jsonStr);
-          console.log('[FeishuBitable] Parsed', performanceResults.length, 'performance results');
+        const compressedStr = extractText(fields.performance_results);
+        if (compressedStr) {
+          performanceResults = await decompressJSON(compressedStr);
+          console.log('[FeishuBitable] Decompressed', performanceResults.length, 'performance results');
         }
       }
     } catch (error) {
-      console.error('[FeishuBitable] Failed to parse performance_results:', error);
+      console.error('[FeishuBitable] Failed to decompress performance_results:', error);
     }
 
     return {
