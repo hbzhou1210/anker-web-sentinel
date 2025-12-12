@@ -14,6 +14,7 @@ interface MenuItem {
 const menuItems: MenuItem[] = [
   { key: 'tools-quality-check', label: '网页质量检测', icon: '🎯', path: '/' },
   { key: 'tools-responsive', label: '移动端/响应式测试', icon: '📱', path: '/tools/responsive' },
+  { key: 'tools-discount-rule', label: '买赠规则查询', icon: '🎁', path: '/tools/discount-rule' },
   { key: 'tools-patrol', label: '定时巡检管理', icon: '🔍', path: '/tools/patrol' },
   { key: 'tools-link-crawler', label: '链接爬取工具', icon: '🕷️', path: '/tools/link-crawler' },
   { key: 'tools-test-points', label: '测试点提取', icon: '📝', path: '/tools/test-points', badge: '开发中' },

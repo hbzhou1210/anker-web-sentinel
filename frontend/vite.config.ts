@@ -13,6 +13,14 @@ export default defineConfig({
         target: 'http://localhost:3000',
         changeOrigin: true,
       },
+      '/discount-rule-output': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+      '/discount-rule-tool': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
     },
   },
   build: {

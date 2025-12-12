@@ -1,0 +1,16 @@
+{
+  "name": "function-discount-checker",
+  "version": "1.0.0",
+  "description": "智能体：查询function买赠折扣在metafield中的生效状态",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "server": "node src/server.js"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2",
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  }
+}
