@@ -10,6 +10,7 @@ import { TestPointExtraction } from './pages/TestPointExtraction';
 import ResponsiveTesting from './pages/ResponsiveTesting';
 import PatrolManagement from './pages/PatrolManagement';
 import LinkCrawler from './pages/LinkCrawler';
+import DiscountRuleQuery from './pages/DiscountRuleQuery';
 import './App.css';
 
 // Create QueryClient instance
@@ -52,6 +53,7 @@ function App() {
             {/* 工具管理 */}
             <Route path="tools/test-points" element={<TestPointExtraction />} />
             <Route path="tools/responsive" element={<ResponsiveTesting />} />
+            <Route path="tools/discount-rule" element={<DiscountRuleQuery />} />
             <Route path="tools/patrol" element={<PatrolManagement />} />
             <Route path="tools/link-crawler" element={<LinkCrawler />} />
             <Route path="tools/monitor" element={<ComingSoon title="监控工具" />} />

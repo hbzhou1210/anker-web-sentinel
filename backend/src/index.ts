@@ -13,8 +13,15 @@ import responsiveRouter from './api/routes/responsive.js';
 import patrolRouter from './api/routes/patrol.js';
 import imagesRouter from './api/routes/images.js';
 import linkCrawlerRouter from './api/routes/linkCrawler.js';
+import discountRuleRouter from './api/routes/discountRule.js';
 import { patrolSchedulerService } from './services/PatrolSchedulerService.js';
 import { imageCompareService } from './automation/ImageCompareService.js';
+import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Load environment variables
 dotenv.config();
@@ -23,6 +30,15 @@ const PORT = process.env.PORT || 3000;
 
 // Setup static file serving
 setupStaticFiles(app);
+
+// Serve discount rule tool output files
+// __dirname is backend/dist, need to go up 2 levels to project root
+const discountRuleOutputDir = path.join(__dirname, '../../tools/function-discount-checker/output');
+app.use('/discount-rule-output', express.static(discountRuleOutputDir));
+
+// Serve discount rule tool interface
+const discountRulePublicDir = path.join(__dirname, '../../tools/function-discount-checker/public');
+app.use('/discount-rule-tool', express.static(discountRulePublicDir));
 
 // Mount API routes
 app.use('/api/v1/tests', testsRouter);
@@ -34,6 +50,10 @@ app.use('/api/v1/responsive', responsiveRouter);
 app.use('/api/v1/patrol', patrolRouter);
 app.use('/api/v1/images', imagesRouter);
 app.use('/api/v1/link-crawler', linkCrawlerRouter);
+app.use('/api/v1/discount-rule', discountRuleRouter);
+
+// Compatibility route for tool interface - maps /api/check-discount to discount rule router
+app.use('/api', discountRuleRouter);
 
 // Start server
 async function startServer() {
@@ -51,10 +71,15 @@ async function startServer() {
     await imageCompareService.initialize();
     console.log('✓ Image compare service ready');
 
-    // Initialize patrol scheduler
+    // Initialize patrol scheduler (optional - won't block server startup if fails)
     console.log('Initializing patrol scheduler...');
-    await patrolSchedulerService.initialize();
-    console.log('✓ Patrol scheduler ready');
+    try {
+      await patrolSchedulerService.initialize();
+      console.log('✓ Patrol scheduler ready');
+    } catch (error) {
+      console.warn('⚠️  Patrol scheduler initialization failed (non-critical):', error instanceof Error ? error.message : error);
+      console.warn('   Server will continue without patrol scheduler functionality');
+    }
 
     // Start Express server
     const server = app.listen(PORT, () => {
