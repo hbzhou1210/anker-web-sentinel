@@ -12,6 +12,7 @@ import feishuRouter from './api/routes/feishu.js';
 import responsiveRouter from './api/routes/responsive.js';
 import patrolRouter from './api/routes/patrol.js';
 import imagesRouter from './api/routes/images.js';
+import linkCrawlerRouter from './api/routes/linkCrawler.js';
 import { patrolSchedulerService } from './services/PatrolSchedulerService.js';
 import { imageCompareService } from './automation/ImageCompareService.js';
 
@@ -32,6 +33,7 @@ app.use('/api/v1/feishu', feishuRouter);
 app.use('/api/v1/responsive', responsiveRouter);
 app.use('/api/v1/patrol', patrolRouter);
 app.use('/api/v1/images', imagesRouter);
+app.use('/api/v1/link-crawler', linkCrawlerRouter);
 
 // Start server
 async function startServer() {

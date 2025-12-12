@@ -9,6 +9,7 @@ import { ComingSoon } from './pages/ComingSoon';
 import { TestPointExtraction } from './pages/TestPointExtraction';
 import ResponsiveTesting from './pages/ResponsiveTesting';
 import PatrolManagement from './pages/PatrolManagement';
+import LinkCrawler from './pages/LinkCrawler';
 import './App.css';
 
 // Create QueryClient instance
@@ -52,6 +53,7 @@ function App() {
             <Route path="tools/test-points" element={<TestPointExtraction />} />
             <Route path="tools/responsive" element={<ResponsiveTesting />} />
             <Route path="tools/patrol" element={<PatrolManagement />} />
+            <Route path="tools/link-crawler" element={<LinkCrawler />} />
             <Route path="tools/monitor" element={<ComingSoon title="监控工具" />} />
 
             {/* 资产管理 */}

@@ -510,3 +510,35 @@ export interface PatrolExecutionRow {
   error_message: string | null;
   duration_ms: number | null;
 }
+
+// Link Crawler Entities
+export enum CrawlStatus {
+  Pending = 'pending',
+  Running = 'running',
+  Completed = 'completed',
+  Failed = 'failed'
+}
+
+export interface CrawledLink {
+  url: string;              // 链接地址
+  title?: string;           // 页面标题
+  level: number;            // 爬取层级 (1, 2, 3...)
+  parentUrl?: string;       // 父页面 URL
+  statusCode?: number;      // HTTP 状态码
+  error?: string;           // 错误信息
+  crawledAt: Date;          // 爬取时间
+}
+
+export interface LinkCrawlTask {
+  id: string;               // UUID
+  startUrl: string;         // 起始 URL
+  maxDepth: number;         // 最大爬取深度
+  status: CrawlStatus;      // 爬取状态
+  totalLinks: number;       // 总链接数
+  crawledLinks: number;     // 已爬取链接数
+  links: CrawledLink[];     // 爬取到的链接列表
+  startedAt: Date;          // 开始时间
+  completedAt?: Date;       // 完成时间
+  durationMs?: number;      // 耗时(毫秒)
+  errorMessage?: string;    // 错误信息
+}
