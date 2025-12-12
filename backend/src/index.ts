@@ -1,4 +1,7 @@
-import dotenv from 'dotenv';
+// IMPORTANT: This MUST be the first import to ensure environment variables are loaded
+// before any other modules that depend on them
+import './config/env.js';
+
 import app from './api/app.js';
 import browserPool from './automation/BrowserPool.js';
 import { setupStaticFiles } from './api/middleware/staticFiles.js';
@@ -15,9 +18,6 @@ import imagesRouter from './api/routes/images.js';
 import linkCrawlerRouter from './api/routes/linkCrawler.js';
 import { patrolSchedulerService } from './services/PatrolSchedulerService.js';
 import { imageCompareService } from './automation/ImageCompareService.js';
-
-// Load environment variables
-dotenv.config();
 
 const PORT = process.env.PORT || 3000;
 

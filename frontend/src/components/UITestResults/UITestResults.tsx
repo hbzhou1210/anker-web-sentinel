@@ -9,8 +9,6 @@ interface UITestResultsProps {
 
 export function UITestResults({ results }: UITestResultsProps) {
   const [filter, setFilter] = useState<'all' | 'pass' | 'warning' | 'fail'>('all');
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [collapsedTypes, setCollapsedTypes] = useState<Set<string>>(new Set());
 
   // Group results by test type
   const groupedResults = results.reduce((acc, result) => {
@@ -20,6 +18,11 @@ export function UITestResults({ results }: UITestResultsProps) {
     acc[result.testType].push(result);
     return acc;
   }, {} as Record<string, UITestResult[]>);
+
+  // Initialize collapsed types - default to all collapsed for better UX
+  const [collapsedTypes, setCollapsedTypes] = useState<Set<string>>(
+    () => new Set(Object.keys(groupedResults))
+  );
 
   // Calculate statistics for each type
   const getTypeStats = (type: string) => {
@@ -75,11 +78,6 @@ export function UITestResults({ results }: UITestResultsProps) {
   // Get status class
   const getStatusClass = (status: string): string => {
     return `status-${status}`;
-  };
-
-  // Toggle details expansion
-  const toggleExpanded = (id: string) => {
-    setExpandedId(expandedId === id ? null : id);
   };
 
   // Toggle test type group collapse
@@ -245,7 +243,7 @@ export function UITestResults({ results }: UITestResultsProps) {
             {!isCollapsed && <div className="test-results-list">
               {typeResults.map((result) => (
                 <div key={result.id} className={`test-result-item ${getStatusClass(result.status)}`}>
-                  <div className="result-header" onClick={() => toggleExpanded(result.id)}>
+                  <div className="result-header">
                     <span className="status-icon">{getStatusIcon(result.status)}</span>
                     <div className="element-info">
                       <span className="element-id">{result.elementId || '未知元素'}</span>
@@ -253,11 +251,9 @@ export function UITestResults({ results }: UITestResultsProps) {
                         <span className="error-preview">{result.errorMessage.substring(0, 80)}...</span>
                       )}
                     </div>
-                    <span className="expand-icon">{expandedId === result.id ? '▼' : '▶'}</span>
                   </div>
 
-                  {expandedId === result.id && (
-                    <div className="result-details">
+                  <div className="result-details">
                       {/* Element information */}
                       <div className="detail-section">
                         <h5>🎯 元素定位</h5>
@@ -307,7 +303,6 @@ export function UITestResults({ results }: UITestResultsProps) {
                         </div>
                       )}
                     </div>
-                  )}
                 </div>
               ))}
             </div>}

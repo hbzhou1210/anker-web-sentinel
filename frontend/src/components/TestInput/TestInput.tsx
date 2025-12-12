@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useCreateTest } from '../../services/queries';
+import { PerformanceTestMode } from '../../services/api';
 import './TestInput.css';
 
 interface TestInputProps {
@@ -12,6 +13,10 @@ export function TestInput({ onTestCreated }: TestInputProps) {
   const [timeout, setTimeout] = useState(30);
   const [waitTime, setWaitTime] = useState(5);
   const [showPerformanceInfo, setShowPerformanceInfo] = useState(false);
+  // 支持多选性能测试模式
+  const [performanceTestModes, setPerformanceTestModes] = useState<Set<PerformanceTestMode>>(
+    new Set(['webpagetest'])
+  );
 
   // Test options state
   const [testOptions, setTestOptions] = useState({
@@ -57,12 +62,16 @@ export function TestInput({ onTestCreated }: TestInputProps) {
       console.log('[Frontend] handleSubmit - notificationEmail:', notificationEmail);
       console.log('[Frontend] handleSubmit - emailToSend:', emailToSend);
 
+      // 使用第一个选中的模式(暂时后端只支持单模式)
+      const performanceTestMode = Array.from(performanceTestModes)[0] || 'webpagetest';
+
       const result = await createTestMutation.mutateAsync({
         url: url.trim(),
         notificationEmail: emailToSend,
         config: {
           timeout,
           waitTime,
+          performanceTestMode,
           testOptions,
         },
       });
@@ -137,7 +146,9 @@ export function TestInput({ onTestCreated }: TestInputProps) {
               {allTestsSelected ? '取消全选' : '全选'}
             </button>
           </div>
-          <div className="checkbox-grid">
+
+          {/* 第一行: 4个UI测试项目 */}
+          <div className="checkbox-grid ui-tests-row">
             <label className="checkbox-item">
               <input
                 type="checkbox"
@@ -193,7 +204,10 @@ export function TestInput({ onTestCreated }: TestInputProps) {
               </span>
               <span className="checkbox-hint">检测图片加载状态</span>
             </label>
+          </div>
 
+          {/* 第二行: 性能测试选项 */}
+          <div className="performance-tests-row">
             <label className="checkbox-item">
               <input
                 type="checkbox"
@@ -219,111 +233,168 @@ export function TestInput({ onTestCreated }: TestInputProps) {
               <span className="checkbox-hint">检测加载速度和资源大小</span>
             </label>
 
-            {showPerformanceInfo && (
-              <div className="performance-info-popup">
-                <div className="performance-info-overlay" onClick={() => setShowPerformanceInfo(false)} />
-                <div className="performance-info-content">
-                  <div className="performance-info-header">
-                    <h4>性能检测指标说明</h4>
-                    <button
-                      type="button"
-                      className="performance-info-close"
-                      onClick={() => setShowPerformanceInfo(false)}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                  <div className="performance-info-body">
-                    <div className="performance-metric performance-metric-primary">
-                      <div className="metric-badge">最关注</div>
-                      <div className="metric-title">
-                        <span className="metric-icon">🎯</span>
-                        <strong>LCP - 最大内容绘制 (Largest Contentful Paint)</strong>
+            {/* Performance Test Mode Selector - 修改为多选checkbox */}
+            {testOptions.performance && (
+              <div className="performance-mode-selector">
+                <label className="mode-selector-label">性能测试方式 (可多选):</label>
+                <div className="mode-options">
+                  <label className={`mode-option ${performanceTestModes.has('webpagetest') ? 'selected' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={performanceTestModes.has('webpagetest')}
+                      onChange={(e) => {
+                        const newModes = new Set(performanceTestModes);
+                        if (e.target.checked) {
+                          newModes.add('webpagetest');
+                        } else {
+                          newModes.delete('webpagetest');
+                        }
+                        setPerformanceTestModes(newModes);
+                      }}
+                      disabled={isLoading}
+                    />
+                    <div className="mode-content">
+                      <div className="mode-title">
+                        🎬 WebPageTest 风格 <span className="mode-badge default">默认</span>
                       </div>
-                      <p className="metric-desc">
-                        <strong>页面主要内容加载完成的时间</strong>，衡量用户感知加载速度的核心指标。
-                        通常是页面中最大的图片、视频或文本块完全渲染的时间点。
-                        <br />
-                        <span className="metric-threshold metric-threshold-primary">
-                          Google Core Web Vitals 标准: &lt;2.5秒为优秀，2.5-4秒需改进，&gt;4秒为差
-                        </span>
-                      </p>
-                    </div>
-
-                    <div className="performance-metric">
-                      <div className="metric-title">
-                        <span className="metric-icon">⚡</span>
-                        <strong>FCP - 首次内容绘制 (First Contentful Paint)</strong>
+                      <div className="mode-description">
+                        使用真实浏览器捕获页面渲染过程,展示 TTFB、FCP、LCP 等 8 个核心指标
                       </div>
-                      <p className="metric-desc">
-                        浏览器首次渲染任何内容（文本、图片等）到屏幕的时间。
-                        <br />
-                        <span className="metric-threshold">标准: &lt;1.8秒为优秀，1.8-3秒需改进，&gt;3秒为差</span>
-                      </p>
                     </div>
-
-                    <div className="performance-metric">
-                      <div className="metric-title">
-                        <span className="metric-icon">🔄</span>
-                        <strong>TTFB - 首字节时间 (Time To First Byte)</strong>
+                  </label>
+                  <label className={`mode-option ${performanceTestModes.has('pagespeed') ? 'selected' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={performanceTestModes.has('pagespeed')}
+                      onChange={(e) => {
+                        const newModes = new Set(performanceTestModes);
+                        if (e.target.checked) {
+                          newModes.add('pagespeed');
+                        } else {
+                          newModes.delete('pagespeed');
+                        }
+                        setPerformanceTestModes(newModes);
+                      }}
+                      disabled={isLoading}
+                    />
+                    <div className="mode-content">
+                      <div className="mode-title">
+                        🚀 PageSpeed Insights
                       </div>
-                      <p className="metric-desc">
-                        服务器响应首字节的时间，反映服务器性能和网络延迟。
-                        <br />
-                        <span className="metric-threshold">标准: &lt;200ms为优秀，200-600ms为良好，&gt;600ms需要优化</span>
-                      </p>
-                    </div>
-
-                    <div className="performance-metric">
-                      <div className="metric-title">
-                        <span className="metric-icon">⏱️</span>
-                        <strong>Load Time - 完整加载时间</strong>
+                      <div className="mode-description">
+                        使用 Google PageSpeed API,提供详细的优化建议和诊断信息
                       </div>
-                      <p className="metric-desc">
-                        页面完全加载所需的时间，包括HTML、CSS、JavaScript和所有资源的下载和执行。
-                        <br />
-                        <span className="metric-threshold">标准: &lt;3秒为优秀，3-5秒为良好，&gt;5秒需要优化</span>
-                      </p>
                     </div>
-
-                    <div className="performance-metric">
-                      <div className="metric-title">
-                        <span className="metric-icon">📦</span>
-                        <strong>Resource Size - 资源大小</strong>
-                      </div>
-                      <p className="metric-desc">
-                        页面所有资源（图片、脚本、样式表等）的总大小。
-                        <br />
-                        <span className="metric-threshold">标准: &lt;2MB为优秀，2-5MB为良好，&gt;5MB需要优化</span>
-                      </p>
-                    </div>
-                  </div>
+                  </label>
                 </div>
               </div>
             )}
           </div>
-        </div>
 
-        <div className="email-input-group">
-          <label htmlFor="notification-email">
-            📧 接收测试报告 (选填)
-            <span className="email-hint">测试完成后发送报告到您的邮箱</span>
-          </label>
-          <input
-            id="notification-email"
-            type="email"
-            value={notificationEmail}
-            onChange={(e) => setNotificationEmail(e.target.value)}
-            placeholder="your-email@example.com"
-            className="email-input"
-            disabled={isLoading}
-          />
-        </div>
+          {showPerformanceInfo && (
+          <div className="performance-info-popup">
+            <div className="performance-info-overlay" onClick={() => setShowPerformanceInfo(false)} />
+            <div className="performance-info-content">
+              <div className="performance-info-header">
+                <h4>性能检测指标说明</h4>
+                <button
+                  type="button"
+                  className="performance-info-close"
+                  onClick={() => setShowPerformanceInfo(false)}
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="performance-info-body">
+                <div className="performance-metric performance-metric-primary">
+                  <div className="metric-badge">最关注</div>
+                  <div className="metric-title">
+                    <span className="metric-icon">🎯</span>
+                    <strong>LCP - 最大内容绘制 (Largest Contentful Paint)</strong>
+                  </div>
+                  <p className="metric-desc">
+                    <strong>页面主要内容加载完成的时间</strong>，衡量用户感知加载速度的核心指标。
+                    通常是页面中最大的图片、视频或文本块完全渲染的时间点。
+                    <br />
+                    <span className="metric-threshold metric-threshold-primary">
+                      Google Core Web Vitals 标准: &lt;2.5秒为优秀，2.5-4秒需改进，&gt;4秒为差
+                    </span>
+                  </p>
+                </div>
 
-        <div className="info-message">
-          <span className="info-icon">ℹ️</span>
-          检测包括: 链接、表单、按钮、图片功能测试,以及加载速度、资源大小、响应时间等性能指标
-        </div>
+                <div className="performance-metric">
+                  <div className="metric-title">
+                    <span className="metric-icon">⚡</span>
+                    <strong>FCP - 首次内容绘制 (First Contentful Paint)</strong>
+                  </div>
+                  <p className="metric-desc">
+                    浏览器首次渲染任何内容（文本、图片等）到屏幕的时间。
+                    <br />
+                    <span className="metric-threshold">标准: &lt;1.8秒为优秀，1.8-3秒需改进，&gt;3秒为差</span>
+                  </p>
+                </div>
+
+                <div className="performance-metric">
+                  <div className="metric-title">
+                    <span className="metric-icon">🔄</span>
+                    <strong>TTFB - 首字节时间 (Time To First Byte)</strong>
+                  </div>
+                  <p className="metric-desc">
+                    服务器响应首字节的时间，反映服务器性能和网络延迟。
+                    <br />
+                    <span className="metric-threshold">标准: &lt;200ms为优秀，200-600ms为良好，&gt;600ms需要优化</span>
+                  </p>
+                </div>
+
+                <div className="performance-metric">
+                  <div className="metric-title">
+                    <span className="metric-icon">⏱️</span>
+                    <strong>Load Time - 完整加载时间</strong>
+                  </div>
+                  <p className="metric-desc">
+                    页面完全加载所需的时间，包括HTML、CSS、JavaScript和所有资源的下载和执行。
+                    <br />
+                    <span className="metric-threshold">标准: &lt;3秒为优秀，3-5秒为良好，&gt;5秒需要优化</span>
+                  </p>
+                </div>
+
+                <div className="performance-metric">
+                  <div className="metric-title">
+                    <span className="metric-icon">📦</span>
+                    <strong>Resource Size - 资源大小</strong>
+                  </div>
+                  <p className="metric-desc">
+                    页面所有资源（图片、脚本、样式表等）的总大小。
+                    <br />
+                    <span className="metric-threshold">标准: &lt;2MB为优秀，2-5MB为良好，&gt;5MB需要优化</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="email-input-group">
+        <label htmlFor="notification-email">
+          📧 接收测试报告 (选填)
+          <span className="email-hint">测试完成后发送报告到您的邮箱</span>
+        </label>
+        <input
+          id="notification-email"
+          type="email"
+          value={notificationEmail}
+          onChange={(e) => setNotificationEmail(e.target.value)}
+          placeholder="your-email@example.com"
+          className="email-input"
+          disabled={isLoading}
+        />
+      </div>
+
+      <div className="info-message">
+        <span className="info-icon">ℹ️</span>
+        检测包括: 链接、表单、按钮、图片功能测试,以及加载速度、资源大小、响应时间等性能指标
+      </div>
       </form>
     </div>
   );

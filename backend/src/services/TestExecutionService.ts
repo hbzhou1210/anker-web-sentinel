@@ -1,13 +1,164 @@
-import { Browser } from 'playwright';
+import { Browser, Page } from 'playwright';
 import browserPool from '../automation/BrowserPool.js';
 import uiTestingService from '../automation/UITestingService.js';
 import performanceAnalysisService from '../performance/PerformanceAnalysisService.js';
+import screenshotService from '../automation/ScreenshotService.js';
 import testRequestRepository from '../models/repositories/InMemoryTestRequestRepository.js';
 import testReportRepository from '../models/repositories/BitableTestReportRepository.js';
-import { TestRequestStatus, TestReport, TestResultStatus, UITestResult, PerformanceResult } from '../models/entities.js';
+import { TestRequestStatus, TestReport, TestResultStatus, UITestResult, PerformanceResult, RenderingSnapshot, PerformanceTestMode } from '../models/entities.js';
 import { emailService } from './EmailService.js';
+import feishuApiService from './FeishuApiService.js';
+import { pageSpeedService } from './PageSpeedService.js';
 
 export class TestExecutionService {
+  // Execute PageSpeed Insights test (no Playwright needed)
+  private async executePageSpeedTest(url: string, strategy: 'mobile' | 'desktop' = 'desktop') {
+    console.log(`[PageSpeed Mode] Running PageSpeed Insights test for ${url}`);
+    const pageSpeedData = await pageSpeedService.runPageSpeedTest(url, strategy);
+
+    // Convert PageSpeed metrics to PerformanceResult format for compatibility
+    const performanceResults: PerformanceResult[] = [
+      {
+        id: '',
+        testReportId: '',
+        metricName: 'loadTime' as any,
+        measuredValue: pageSpeedData.metrics.speedIndex,
+        unit: 'ms',
+        threshold: 3400,
+        status: pageSpeedData.metrics.speedIndex <= 3400 ? 'pass' : 'fail',
+      },
+    ];
+
+    return {
+      pageSpeedData,
+      performanceResults,
+    };
+  }
+
+  // Upload base64 screenshot to Feishu and return image_key
+  private async uploadScreenshotToFeishu(base64Data: string, filename: string): Promise<string> {
+    try {
+      // Remove data URL prefix (e.g., "data:image/webp;base64,")
+      const base64Content = base64Data.replace(/^data:image\/\w+;base64,/, '');
+      const imageBuffer = Buffer.from(base64Content, 'base64');
+
+      // Upload to Feishu
+      const imageKey = await feishuApiService.uploadImage(imageBuffer, filename);
+      console.log(`  ✓ Uploaded ${filename} to Feishu: ${imageKey}`);
+      return imageKey;
+    } catch (error) {
+      console.error(`  ✗ Failed to upload ${filename} to Feishu:`, error);
+      throw error;
+    }
+  }
+
+  // Capture rendering process screenshots
+  private async captureRenderingSnapshots(page: Page, url: string): Promise<RenderingSnapshot[]> {
+    const snapshots: RenderingSnapshot[] = [];
+    const navigationStartTime = Date.now();
+
+    try {
+      console.log('📸 Capturing rendering process screenshots...');
+
+      // 1. Initial state (right after navigation commit)
+      const initialScreenshotBase64 = await screenshotService.captureFullPageBase64(page);
+      const initialImageKey = await this.uploadScreenshotToFeishu(initialScreenshotBase64, 'rendering_initial.webp');
+      snapshots.push({
+        stage: 'initial',
+        stageName: '初始加载',
+        timestamp: Date.now() - navigationStartTime,
+        screenshotUrl: initialImageKey,
+        metrics: {
+          description: '页面开始加载时的初始状态'
+        }
+      });
+      console.log('  ✓ Captured initial state');
+
+      // 2. Wait for FCP (First Contentful Paint) and capture
+      await page.waitForLoadState('domcontentloaded', { timeout: 10000 });
+      const fcpScreenshotBase64 = await screenshotService.captureFullPageBase64(page);
+      const fcpImageKey = await this.uploadScreenshotToFeishu(fcpScreenshotBase64, 'rendering_fcp.webp');
+      snapshots.push({
+        stage: 'fcp',
+        stageName: '首次内容渲染 (FCP)',
+        timestamp: Date.now() - navigationStartTime,
+        screenshotUrl: fcpImageKey,
+        metrics: {
+          description: '首次绘制内容到屏幕的时刻'
+        }
+      });
+      console.log('  ✓ Captured FCP state');
+
+      // 3. Wait for DOM Load and capture
+      await page.waitForLoadState('load', { timeout: 15000 });
+      const domloadScreenshotBase64 = await screenshotService.captureFullPageBase64(page);
+      const domloadImageKey = await this.uploadScreenshotToFeishu(domloadScreenshotBase64, 'rendering_domload.webp');
+      snapshots.push({
+        stage: 'domload',
+        stageName: 'DOM 加载完成',
+        timestamp: Date.now() - navigationStartTime,
+        screenshotUrl: domloadImageKey,
+        metrics: {
+          description: 'DOM 树构建完成,初始脚本已执行'
+        }
+      });
+      console.log('  ✓ Captured DOM load state');
+
+      // 4. Wait for network idle (LCP approximate) and capture
+      try {
+        await page.waitForLoadState('networkidle', { timeout: 30000 });
+        const lcpScreenshotBase64 = await screenshotService.captureFullPageBase64(page);
+        const lcpImageKey = await this.uploadScreenshotToFeishu(lcpScreenshotBase64, 'rendering_lcp.webp');
+        snapshots.push({
+          stage: 'lcp',
+          stageName: '最大内容渲染 (LCP)',
+          timestamp: Date.now() - navigationStartTime,
+          screenshotUrl: lcpImageKey,
+          metrics: {
+            description: '最大的内容元素渲染完成'
+          }
+        });
+        console.log('  ✓ Captured LCP state');
+      } catch (error) {
+        console.warn('  ⚠ Network idle timeout, capturing current state as LCP');
+        const lcpScreenshotBase64 = await screenshotService.captureFullPageBase64(page);
+        const lcpImageKey = await this.uploadScreenshotToFeishu(lcpScreenshotBase64, 'rendering_lcp.webp');
+        snapshots.push({
+          stage: 'lcp',
+          stageName: '最大内容渲染 (LCP)',
+          timestamp: Date.now() - navigationStartTime,
+          screenshotUrl: lcpImageKey,
+          metrics: {
+            description: '最大的内容元素渲染完成（网络未完全空闲）'
+          }
+        });
+      }
+
+      // 5. Final state after additional wait
+      await page.waitForTimeout(2000);
+      const finalScreenshotBase64 = await screenshotService.captureFullPageBase64(page);
+      const finalImageKey = await this.uploadScreenshotToFeishu(finalScreenshotBase64, 'rendering_fullyloaded.webp');
+      snapshots.push({
+        stage: 'fullyloaded',
+        stageName: '完全加载',
+        timestamp: Date.now() - navigationStartTime,
+        screenshotUrl: finalImageKey,
+        metrics: {
+          description: '页面完全加载,包括异步内容'
+        }
+      });
+      console.log('  ✓ Captured fully loaded state');
+
+      console.log(`✓ Captured ${snapshots.length} rendering snapshots`);
+      return snapshots;
+
+    } catch (error) {
+      console.warn('⚠ Failed to capture some rendering snapshots:', error);
+      // Return whatever snapshots we managed to capture
+      return snapshots;
+    }
+  }
+
   // Execute complete test for a given test request
   async executeTest(
     testRequestId: string,
@@ -15,6 +166,7 @@ export class TestExecutionService {
     config?: {
       timeout?: number;
       waitTime?: number;
+      performanceTestMode?: PerformanceTestMode;
       testOptions?: {
         links?: boolean;
         forms?: boolean;
@@ -25,13 +177,102 @@ export class TestExecutionService {
     }
   ): Promise<TestReport> {
     const startTime = Date.now();
-    let browser: Browser | null = null;
 
     try {
       // Update status to running
       await testRequestRepository.updateStatus(testRequestId, TestRequestStatus.Running);
-      console.log(`Starting test execution for ${url}`);
+      console.log(`[TestExecution] Starting test execution for ${url}`);
+      console.log(`[TestExecution] Config received:`, JSON.stringify(config, null, 2));
 
+      const performanceTestMode = config?.performanceTestMode || PerformanceTestMode.WebPageTest;
+      const testOptions = config?.testOptions || {
+        links: true,
+        forms: true,
+        buttons: true,
+        images: true,
+        performance: true,
+      };
+
+      // Check if any UI tests are enabled
+      const hasUITests = testOptions.links || testOptions.forms || testOptions.buttons || testOptions.images;
+
+      // PageSpeed-only mode: No Playwright needed
+      if (performanceTestMode === PerformanceTestMode.PageSpeedInsights && !hasUITests) {
+        console.log('[PageSpeed-Only Mode] Skipping Playwright, running PageSpeed API only');
+        return await this.executePageSpeedOnlyTest(testRequestId, url, config, startTime);
+      }
+
+      // WebPageTest mode or UI tests enabled: Need Playwright
+      return await this.executePlaywrightBasedTest(testRequestId, url, config, startTime);
+
+    } catch (error) {
+      console.error('Test execution failed:', error);
+      await testRequestRepository.updateStatus(testRequestId, TestRequestStatus.Failed);
+      throw error;
+    }
+  }
+
+  // Execute PageSpeed-only test (no Playwright)
+  private async executePageSpeedOnlyTest(
+    testRequestId: string,
+    url: string,
+    config: any,
+    startTime: number
+  ): Promise<TestReport> {
+    let performanceResults: PerformanceResult[] = [];
+    let pageSpeedData = undefined;
+
+    // Run PageSpeed test
+    if (config?.testOptions?.performance !== false) {
+      try {
+        console.log('Running PageSpeed Insights performance analysis...');
+        const pageSpeedResult = await this.executePageSpeedTest(url, 'desktop');
+        performanceResults = pageSpeedResult.performanceResults;
+        pageSpeedData = pageSpeedResult.pageSpeedData;
+        console.log(`✓ PageSpeed Insights completed with score ${pageSpeedData.performanceScore}/100`);
+      } catch (perfError) {
+        console.warn('⚠ Performance test failed:', perfError);
+      }
+    }
+
+    // Calculate scores
+    const testDuration = Date.now() - startTime;
+    const { overallScore, totalChecks, passedChecks, failedChecks, warningChecks } =
+      this.calculateScore([], performanceResults);
+
+    // Create report
+    const report = await testReportRepository.create({
+      testRequestId,
+      url,
+      overallScore,
+      totalChecks,
+      passedChecks,
+      failedChecks,
+      warningChecks,
+      testDuration,
+      performanceTestMode: PerformanceTestMode.PageSpeedInsights,
+      uiTestResults: [],
+      performanceResults,
+      pageSpeedData,
+    });
+
+    await testRequestRepository.updateStatus(testRequestId, TestRequestStatus.Completed);
+    console.log(`✓ PageSpeed-only test completed in ${testDuration}ms with score ${overallScore}/100`);
+
+    await this.sendEmailNotification(testRequestId, url, report);
+    return report;
+  }
+
+  // Execute Playwright-based test (WebPageTest mode or with UI tests)
+  private async executePlaywrightBasedTest(
+    testRequestId: string,
+    url: string,
+    config: any,
+    startTime: number
+  ): Promise<TestReport> {
+    let browser: Browser | null = null;
+
+    try {
       // Acquire browser from pool
       browser = await browserPool.acquire();
       const context = await browser.newContext();
@@ -41,19 +282,14 @@ export class TestExecutionService {
       const timeout = (config?.timeout || 30) * 1000;
       page.setDefaultTimeout(timeout);
 
-      // Navigate to URL and wait for network idle
+      // Navigate to URL
       console.log(`Navigating to ${url}...`);
       await page.goto(url, {
-        waitUntil: 'networkidle',
+        waitUntil: 'commit',
         timeout,
       });
 
-      // Wait additional time for JavaScript execution
-      const waitTime = (config?.waitTime || 5) * 1000;
-      await page.waitForTimeout(waitTime);
-      console.log(`✓ Page loaded and waited ${waitTime}ms for JavaScript`);
-
-      // Default to running all tests if testOptions not specified
+      const performanceTestMode = config?.performanceTestMode || PerformanceTestMode.WebPageTest;
       const testOptions = config?.testOptions || {
         links: true,
         forms: true,
@@ -62,7 +298,18 @@ export class TestExecutionService {
         performance: true,
       };
 
-      // Run UI tests conditionally based on testOptions
+      // Capture rendering snapshots only for WebPageTest mode
+      let renderingSnapshots: RenderingSnapshot[] = [];
+      if (performanceTestMode === PerformanceTestMode.WebPageTest) {
+        renderingSnapshots = await this.captureRenderingSnapshots(page, url);
+      }
+
+      // Wait additional time for JavaScript execution
+      const waitTime = (config?.waitTime || 5) * 1000;
+      await page.waitForTimeout(waitTime);
+      console.log(`✓ Page loaded and waited ${waitTime}ms for JavaScript`);
+
+      // Run UI tests
       console.log('Running UI tests...');
       const uiTestPromises: Array<Promise<any[]>> = [];
 
@@ -86,27 +333,39 @@ export class TestExecutionService {
       // Close browser context
       await context.close();
 
-      // Run WebPageTest performance analysis conditionally (allow it to fail gracefully)
+      // Run performance analysis
       let performanceResults: PerformanceResult[] = [];
+      let pageSpeedData = undefined;
+      let webPageTestData = undefined;
+
       if (testOptions.performance) {
         try {
-          console.log('Running WebPageTest performance analysis...');
-          performanceResults = await performanceAnalysisService.runWebPageTest(url);
-          console.log(`✓ Completed ${performanceResults.length} performance metrics`);
+          if (performanceTestMode === PerformanceTestMode.PageSpeedInsights) {
+            console.log('Running PageSpeed Insights performance analysis...');
+            const pageSpeedResult = await this.executePageSpeedTest(url, 'desktop');
+            performanceResults = pageSpeedResult.performanceResults;
+            pageSpeedData = pageSpeedResult.pageSpeedData;
+            console.log(`✓ PageSpeed Insights completed with score ${pageSpeedData.performanceScore}/100`);
+          } else {
+            console.log('Running WebPageTest API...');
+            const wptResult = await performanceAnalysisService.runWebPageTest(url);
+            performanceResults = wptResult.metrics;
+            webPageTestData = performanceAnalysisService.transformWebPageTestData(wptResult.completeData);
+            console.log(`✓ WebPageTest completed with ${performanceResults.length} metrics`);
+          }
         } catch (perfError) {
           console.warn('⚠ Performance test failed, continuing with UI results only:', perfError);
-          // Continue execution even if performance test fails
         }
       } else {
         console.log('⊘ Performance test skipped (disabled by user)');
       }
 
-      // Calculate overall score and stats
+      // Calculate scores
       const testDuration = Date.now() - startTime;
       const { overallScore, totalChecks, passedChecks, failedChecks, warningChecks } =
         this.calculateScore(allUIResults, performanceResults);
 
-      // Create test report
+      // Create report
       const report = await testReportRepository.create({
         testRequestId,
         url,
@@ -116,56 +375,52 @@ export class TestExecutionService {
         failedChecks,
         warningChecks,
         testDuration,
+        performanceTestMode,
         uiTestResults: allUIResults,
         performanceResults,
+        renderingSnapshots: performanceTestMode === PerformanceTestMode.WebPageTest ? renderingSnapshots : undefined,
+        pageSpeedData,
+        webPageTestData,
       });
 
-      // Update test request status to completed
       await testRequestRepository.updateStatus(testRequestId, TestRequestStatus.Completed);
-
       console.log(`✓ Test execution completed in ${testDuration}ms with score ${overallScore}/100`);
 
-      // Send email notification if email was provided
-      const testRequest = await testRequestRepository.findById(testRequestId);
-      console.log(`Email check: notificationEmail=${testRequest?.notificationEmail}, emailService.isAvailable()=${emailService.isAvailable()}`);
-
-      if (testRequest?.notificationEmail && emailService.isAvailable()) {
-        try {
-          console.log(`Sending email to ${testRequest.notificationEmail}...`);
-          const appUrl = process.env.APP_URL || 'http://localhost:5173';
-          await emailService.sendTestCompletionEmail(testRequest.notificationEmail, {
-            url,
-            overallScore,
-            totalChecks,
-            passedChecks,
-            failedChecks,
-            warningChecks,
-            reportUrl: `${appUrl}/report/${report.id}`,
-            completedAt: report.completedAt.toISOString(),
-          });
-          console.log(`✓ Email notification sent to ${testRequest.notificationEmail}`);
-        } catch (emailError) {
-          console.error('Failed to send email notification:', emailError);
-          // Don't fail the test execution if email sending fails
-        }
-      } else {
-        console.log(`Email notification skipped: email=${testRequest?.notificationEmail}, service available=${emailService.isAvailable()}`);
-      }
-
-      // Return complete report
+      await this.sendEmailNotification(testRequestId, url, report);
       return report;
-    } catch (error) {
-      console.error('Test execution failed:', error);
 
-      // Update test request status to failed
-      await testRequestRepository.updateStatus(testRequestId, TestRequestStatus.Failed);
-
-      throw error;
     } finally {
-      // Always release browser back to pool
       if (browser) {
         browserPool.release(browser);
       }
+    }
+  }
+
+  // Send email notification helper
+  private async sendEmailNotification(testRequestId: string, url: string, report: TestReport) {
+    const testRequest = await testRequestRepository.findById(testRequestId);
+    console.log(`Email check: notificationEmail=${testRequest?.notificationEmail}, emailService.isAvailable()=${emailService.isAvailable()}`);
+
+    if (testRequest?.notificationEmail && emailService.isAvailable()) {
+      try {
+        console.log(`Sending email to ${testRequest.notificationEmail}...`);
+        const appUrl = process.env.APP_URL || 'http://localhost:5173';
+        await emailService.sendTestCompletionEmail(testRequest.notificationEmail, {
+          url,
+          overallScore: report.overallScore,
+          totalChecks: report.totalChecks,
+          passedChecks: report.passedChecks,
+          failedChecks: report.failedChecks,
+          warningChecks: report.warningChecks,
+          reportUrl: `${appUrl}/report/${report.id}`,
+          completedAt: report.completedAt.toISOString(),
+        });
+        console.log(`✓ Email notification sent to ${testRequest.notificationEmail}`);
+      } catch (emailError) {
+        console.error('Failed to send email notification:', emailError);
+      }
+    } else {
+      console.log(`Email notification skipped: email=${testRequest?.notificationEmail}, service available=${emailService.isAvailable()}`);
     }
   }
 

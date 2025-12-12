@@ -108,15 +108,17 @@ router.get('/:testId/report', async (req: Request, res: Response) => {
       return;
     }
 
-    // Get UI test results and performance results from Bitable report
+    // Get UI test results, performance results, and rendering snapshots from Bitable report
     const uiTestResults = report.uiTestResults || [];
     const performanceResults = report.performanceResults || [];
+    const renderingSnapshots = report.renderingSnapshots || [];
 
     // Return complete report
     res.json({
       ...report,
       uiTestResults,
       performanceResults,
+      renderingSnapshots,
     });
   } catch (error) {
     console.error('Failed to get test report:', error);

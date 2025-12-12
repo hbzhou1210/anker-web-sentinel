@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TestInput } from '../components/TestInput/TestInput';
+import { TestReport } from '../components/TestReport/TestReport';
 import { useTestStatus, useReportList } from '../services/queries';
-import api from '../services/api';
+import api, { TestReport as TestReportType } from '../services/api';
 import './Home.css';
 
 export function Home() {
@@ -12,10 +13,11 @@ export function Home() {
     return localStorage.getItem('currentTestId');
   });
   const [pollingEnabled, setPollingEnabled] = useState(() => {
-    // 如果有保存的测试ID，启用轮询
+    // 如果有保存的测试ID,启用轮询
     return !!localStorage.getItem('currentTestId');
   });
   const [testError, setTestError] = useState<string | null>(null);
+  const [completedReport, setCompletedReport] = useState<TestReportType | null>(null);
 
   // Poll current test status
   const { data: testStatus, error: testStatusError } = useTestStatus(currentTestId, {
@@ -30,6 +32,7 @@ export function Home() {
     setCurrentTestId(testId);
     setPollingEnabled(true);
     setTestError(null); // Clear any previous errors
+    setCompletedReport(null); // Clear any previous report
     // 保存到 localStorage
     localStorage.setItem('currentTestId', testId);
   };
@@ -41,26 +44,32 @@ export function Home() {
         setPollingEnabled(false);
         // 清除 localStorage 中的测试ID
         localStorage.removeItem('currentTestId');
-        // Get report and navigate to report page
-        setTimeout(async () => {
+        // Get report and display it on current page
+        (async () => {
           try {
             const report = await api.getTestReportByRequestId(testStatus.id);
-            navigate(`/report/${report.id}`);
+            setCompletedReport(report);
+            // 滚动到报告区域
+            setTimeout(() => {
+              const reportElement = document.querySelector('.completed-report-section');
+              if (reportElement) {
+                reportElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }
+            }, 100);
           } catch (error) {
             console.error('Failed to get report:', error);
-            // Navigate anyway with test request ID (fallback)
-            navigate(`/report/${testStatus.id}`);
+            setTestError('获取检测报告失败,请稍后重试。');
           }
-        }, 1000);
+        })();
       } else if (testStatus.status === 'failed') {
         setPollingEnabled(false);
         // 清除 localStorage 中的测试ID
         localStorage.removeItem('currentTestId');
-        setTestError('测试执行失败。请检查URL是否正确，或稍后重试。');
+        setTestError('测试执行失败。请检查URL是否正确,或稍后重试。');
         console.error('Test failed');
       }
     }
-  }, [testStatus, navigate]);
+  }, [testStatus]);
 
   // 检查并清理已完成或失败的测试
   useEffect(() => {
@@ -182,6 +191,33 @@ export function Home() {
                 ✕
               </button>
             </div>
+          </section>
+        )}
+
+        {/* Completed test report */}
+        {completedReport && (
+          <section className="completed-report-section">
+            <div className="section-header">
+              <h3>✅ 检测完成</h3>
+              <div className="report-actions">
+                <button
+                  className="view-detail-btn"
+                  onClick={() => navigate(`/report/${completedReport.id}`)}
+                >
+                  查看完整报告
+                </button>
+                <button
+                  className="new-test-btn"
+                  onClick={() => {
+                    setCompletedReport(null);
+                    setCurrentTestId(null);
+                  }}
+                >
+                  开始新检测
+                </button>
+              </div>
+            </div>
+            <TestReport report={completedReport} />
           </section>
         )}
 

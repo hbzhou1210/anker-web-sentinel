@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
-import api, { TestRequest, TestReport, ReportListResponse } from './api';
+import api, { TestRequest, TestReport, ReportListResponse, PerformanceTestMode } from './api';
 
 // Query Keys
 export const queryKeys = {
@@ -19,6 +19,7 @@ export function useCreateTest() {
       config?: {
         timeout?: number;
         waitTime?: number;
+        performanceTestMode?: PerformanceTestMode;
         testOptions?: {
           links?: boolean;
           forms?: boolean;

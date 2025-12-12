@@ -115,11 +115,25 @@ export class FeishuBitableService {
     const compressedUIResults = await compressJSON(sanitizedUIResults);
     const compressedPerfResults = await compressJSON(sanitizedPerfResults);
 
+    // 压缩渲染截图数据(现在包含 image_key 而非 base64,数据很小)
+    const compressedRenderingSnapshots = await compressJSON(report.renderingSnapshots || []);
+
+    // 压缩 PageSpeed 数据
+    const compressedPageSpeedData = report.pageSpeedData ? await compressJSON(report.pageSpeedData) : undefined;
+
+    // 压缩 WebPageTest 完整数据
+    const compressedWebPageTestData = report.webPageTestData ? await compressJSON(report.webPageTestData) : undefined;
+
     console.log('[FeishuBitable] Creating test report with', sanitizedUIResults.length, 'UI results and', sanitizedPerfResults.length, 'performance results');
-    console.log('[FeishuBitable] Compressed sizes: UI', compressedUIResults.length, 'chars, Perf', compressedPerfResults.length, 'chars');
+    console.log('[FeishuBitable] Rendering snapshots:', report.renderingSnapshots?.length || 0, 'snapshots (stored as image_keys)');
+    console.log('[FeishuBitable] Performance test mode:', report.performanceTestMode || 'webpagetest');
+    console.log('[FeishuBitable] Has PageSpeed data:', !!report.pageSpeedData);
+    console.log('[FeishuBitable] Has WebPageTest data:', !!report.webPageTestData);
+    console.log('[FeishuBitable] Compressed sizes: UI', compressedUIResults.length, 'chars, Perf', compressedPerfResults.length, 'chars, Rendering', compressedRenderingSnapshots.length, 'chars');
+    console.log('[FeishuBitable] Compressed WebPageTest data:', compressedWebPageTestData ? `${compressedWebPageTestData.length} chars` : 'undefined');
 
     // 将 TypeScript 对象转换为飞书字段格式
-    const fields = {
+    const fields: Record<string, any> = {
       url: report.url,
       overall_score: report.overallScore,
       total_checks: report.totalChecks,
@@ -130,10 +144,27 @@ export class FeishuBitableService {
       completed_at: report.completedAt ? new Date(report.completedAt).getTime() : Date.now(),
       status: 'completed',  // 默认状态
       request_id: report.requestId || report.testRequestId,  // 存储 UUID
+      performance_test_mode: report.performanceTestMode || 'webpagetest',
       // 将测试结果压缩后存储 (gzip + base64编码)
       ui_test_results: compressedUIResults,
       performance_results: compressedPerfResults,
+      rendering_snapshots: compressedRenderingSnapshots,
     };
+
+    // 只在有 PageSpeed 数据时添加该字段
+    if (compressedPageSpeedData) {
+      fields.pagespeed_data = compressedPageSpeedData;
+    }
+
+    // 只在有 WebPageTest 完整数据时添加该字段
+    if (compressedWebPageTestData) {
+      fields.webpagetest_data = compressedWebPageTestData;
+      console.log('[FeishuBitable] Added webpagetest_data to fields:', compressedWebPageTestData.substring(0, 100));
+    } else {
+      console.log('[FeishuBitable] No WebPageTest data to add to fields');
+    }
+
+    console.log('[FeishuBitable] Final fields keys:', Object.keys(fields));
 
     try {
       const recordId = await feishuApiService.createRecord(this.tableIds.testReports, fields);
@@ -163,6 +194,24 @@ export class FeishuBitableService {
             },
           ],
         },
+        field_names: [
+          'request_id',
+          'url',
+          'overall_score',
+          'total_checks',
+          'passed_checks',
+          'failed_checks',
+          'warning_checks',
+          'test_duration',
+          'completed_at',
+          'status',
+          'performance_test_mode',
+          'ui_test_results',
+          'performance_results',
+          'rendering_snapshots',
+          'pagespeed_data',
+          'webpagetest_data',
+        ],
         page_size: 1,
       });
 
@@ -234,6 +283,8 @@ export class FeishuBitableService {
    */
   private async mapBitableRecordToTestReport(record: any): Promise<TestReport> {
     const fields = record.fields;
+    console.log('[FeishuBitable] Record fields:', Object.keys(fields));
+    console.log('[FeishuBitable] Has rendering_snapshots field:', !!fields.rendering_snapshots);
 
     // 辅助函数: 提取文本字段值
     const extractText = (field: any): string => {
@@ -248,6 +299,9 @@ export class FeishuBitableService {
     // 解析并解压测试结果数据
     let uiTestResults: any[] = [];
     let performanceResults: any[] = [];
+    let renderingSnapshots: any[] = [];
+    let pageSpeedData: any = undefined;
+    let webPageTestData: any = undefined;
 
     try {
       if (fields.ui_test_results) {
@@ -273,6 +327,65 @@ export class FeishuBitableService {
       console.error('[FeishuBitable] Failed to decompress performance_results:', error);
     }
 
+    try {
+      if (fields.rendering_snapshots) {
+        const compressedStr = extractText(fields.rendering_snapshots);
+        if (compressedStr) {
+          renderingSnapshots = await decompressJSON(compressedStr);
+          console.log('[FeishuBitable] Decompressed', renderingSnapshots.length, 'rendering snapshots');
+        }
+      }
+    } catch (error) {
+      console.error('[FeishuBitable] Failed to decompress rendering_snapshots:', error);
+    }
+
+    try {
+      if (fields.pagespeed_data) {
+        const compressedStr = extractText(fields.pagespeed_data);
+        if (compressedStr) {
+          pageSpeedData = await decompressJSON(compressedStr);
+          console.log('[FeishuBitable] Decompressed PageSpeed data');
+        }
+      }
+    } catch (error) {
+      console.error('[FeishuBitable] Failed to decompress pagespeed_data:', error);
+    }
+
+    try {
+      console.log('[FeishuBitable] Checking webpagetest_data field:', {
+        exists: !!fields.webpagetest_data,
+        type: typeof fields.webpagetest_data,
+        value: fields.webpagetest_data ?
+          (typeof fields.webpagetest_data === 'string' ?
+            fields.webpagetest_data.substring(0, 100) :
+            JSON.stringify(fields.webpagetest_data).substring(0, 100)) :
+          'null'
+      });
+
+      if (fields.webpagetest_data) {
+        const compressedStr = extractText(fields.webpagetest_data);
+        console.log('[FeishuBitable] Extracted compressed string:', {
+          exists: !!compressedStr,
+          length: compressedStr?.length || 0,
+          preview: compressedStr?.substring(0, 100)
+        });
+
+        if (compressedStr) {
+          webPageTestData = await decompressJSON(compressedStr);
+          console.log('[FeishuBitable] Decompressed WebPageTest data:', {
+            success: !!webPageTestData,
+            hasTestId: !!webPageTestData?.testId,
+            hasVideoFrames: webPageTestData?.videoFrames?.length || 0,
+            hasMetrics: !!webPageTestData?.metrics
+          });
+        }
+      }
+    } catch (error) {
+      console.error('[FeishuBitable] Failed to decompress webpagetest_data:', error);
+    }
+
+    const performanceTestMode = extractText(fields.performance_test_mode) || 'webpagetest';
+
     return {
       id: extractText(fields.request_id),
       testRequestId: extractText(fields.request_id),
@@ -284,8 +397,12 @@ export class FeishuBitableService {
       warningChecks: fields.warning_checks || 0,
       testDuration: fields.test_duration || 0,
       completedAt: new Date(fields.completed_at),
+      performanceTestMode: performanceTestMode as any,
       uiTestResults,
       performanceResults,
+      renderingSnapshots,
+      pageSpeedData,
+      webPageTestData,
     };
   }
 

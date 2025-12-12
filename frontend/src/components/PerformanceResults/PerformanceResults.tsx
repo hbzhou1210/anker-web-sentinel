@@ -16,6 +16,15 @@ export function PerformanceResults({ results }: PerformanceResultsProps) {
       resourceSize: '资源大小',
       responseTime: '服务器响应时间',
       renderTime: '首次内容渲染',
+      LCP: 'LCP',
+      FID: 'FID',
+      CLS: 'CLS',
+      FCP: 'FCP',
+      TTI: 'TTI',
+      TBT: 'TBT',
+      TTFB: 'TTFB',
+      DOMLoad: 'DOM加载',
+      OnLoad: '页面完全加载',
     };
     return names[metric] || metric;
   };
@@ -46,16 +55,24 @@ export function PerformanceResults({ results }: PerformanceResultsProps) {
     return `status-${status}`;
   };
 
-  // Format value based on unit
-  const formatValue = (value: number, unit: string): string => {
+  // Format value based on unit and metric type
+  const formatValue = (value: number, unit: string, metricName?: string): string => {
     switch (unit) {
+      case 'ms':
       case 'milliseconds':
+        // For Core Web Vitals (LCP, FID, FCP, etc.), always show in seconds
+        if (metricName && ['LCP', 'FID', 'FCP', 'TTI', 'TBT', 'TTFB'].includes(metricName)) {
+          return `${(value / 1000).toFixed(2)}秒`;
+        }
+        // For other metrics, use ms if < 1000, otherwise seconds
         if (value < 1000) return `${Math.round(value)}ms`;
         return `${(value / 1000).toFixed(2)}s`;
       case 'bytes':
         if (value < 1024) return `${value}B`;
         if (value < 1024 * 1024) return `${(value / 1024).toFixed(2)}KB`;
         return `${(value / (1024 * 1024)).toFixed(2)}MB`;
+      case 'score':
+        return value.toFixed(3);
       case 'percentage':
         return `${value.toFixed(1)}%`;
       default:
@@ -95,7 +112,7 @@ export function PerformanceResults({ results }: PerformanceResultsProps) {
                 <div className="metric-text">
                   <div className="metric-name">{getMetricName(result.metricName)}</div>
                   <div className="metric-value">
-                    {formatValue(result.measuredValue, result.unit)}
+                    {formatValue(result.measuredValue, result.unit, result.metricName)}
                   </div>
                 </div>
               </div>
@@ -108,7 +125,7 @@ export function PerformanceResults({ results }: PerformanceResultsProps) {
             <div className="progress-container">
               <div className="progress-labels">
                 <span className="label-current">实际值</span>
-                <span className="label-threshold">阈值: {formatValue(result.threshold, result.unit)}</span>
+                <span className="label-threshold">阈值: {formatValue(result.threshold, result.unit, result.metricName)}</span>
               </div>
               <div className="progress-bar">
                 <div

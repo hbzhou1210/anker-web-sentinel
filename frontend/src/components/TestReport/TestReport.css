@@ -166,8 +166,60 @@
   gap: 8px;
 }
 
+/* Collapsible section title */
+.section-title.collapsible {
+  cursor: pointer;
+  user-select: none;
+  padding: 12px;
+  margin: -12px -12px 20px -12px;
+  border-radius: 8px;
+  transition: background-color 0.2s;
+}
+
+.section-title.collapsible:hover {
+  background-color: #f9fafb;
+}
+
+.collapse-indicator {
+  font-size: 16px;
+  color: #6b7280;
+  transition: transform 0.2s;
+  margin-right: 4px;
+}
+
+.section-hint {
+  margin-left: auto;
+  font-size: 13px;
+  color: #9ca3af;
+  font-weight: 400;
+}
+
 .section-icon {
   font-size: 24px;
+}
+
+.performance-overview-section {
+  margin-top: 20px;
+}
+
+.performance-overview-section + .performance-overview-section {
+  margin-top: 32px;
+  padding-top: 32px;
+  border-top: 2px solid #e5e7eb;
+}
+
+.performance-mode-title {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  color: #1f2937;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mode-icon {
+  font-size: 22px;
 }
 
 @media (max-width: 768px) {

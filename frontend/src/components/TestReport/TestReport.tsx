@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { TestReport as TestReportType } from '../../services/api';
 import { UITestResults } from '../UITestResults/UITestResults';
 import { PerformanceResults } from '../PerformanceResults/PerformanceResults';
+import { PerformanceOverview } from '../PerformanceOverview/PerformanceOverview';
+import { WebPageTestOverview } from '../WebPageTestOverview/WebPageTestOverview';
+import { PageSpeedOverview } from '../PageSpeedOverview/PageSpeedOverview';
 import './TestReport.css';
 
 interface TestReportProps {
@@ -9,6 +12,8 @@ interface TestReportProps {
 }
 
 export function TestReport({ report }: TestReportProps) {
+  // 性能检测部分默认收起
+  const [performanceExpanded, setPerformanceExpanded] = useState(false);
   const {
     url,
     overallScore,
@@ -20,6 +25,7 @@ export function TestReport({ report }: TestReportProps) {
     completedAt,
     uiTestResults,
     performanceResults,
+    renderingSnapshots,
   } = report;
 
   // Calculate score color and status
@@ -114,14 +120,60 @@ export function TestReport({ report }: TestReportProps) {
         <UITestResults results={uiTestResults} />
       </div>
 
-      {/* Performance Results */}
-      <div className="results-section">
-        <h3 className="section-title">
-          <span className="section-icon">⚡</span>
-          性能检测
-        </h3>
-        <PerformanceResults results={performanceResults} />
-      </div>
+      {/* Performance Results - Collapsible */}
+      {(performanceResults.length > 0 || report.pageSpeedData || (renderingSnapshots && renderingSnapshots.length > 0)) && (
+        <div className="results-section">
+          <h3
+            className="section-title collapsible"
+            onClick={() => setPerformanceExpanded(!performanceExpanded)}
+            style={{ cursor: 'pointer' }}
+          >
+            <span className="collapse-indicator">{performanceExpanded ? '▼' : '▶'}</span>
+            <span className="section-icon">⚡</span>
+            性能检测
+            <span className="section-hint">(点击{performanceExpanded ? '收起' : '展开'})</span>
+          </h3>
+
+          {performanceExpanded && (
+            <>
+              {/* Performance Metrics */}
+              {performanceResults.length > 0 && (
+                <PerformanceResults results={performanceResults} />
+              )}
+
+              {/* WebPageTest Overview - 优先使用完整的 API 数据 */}
+              {report.webPageTestData ? (
+                <div className="performance-overview-section">
+                  <h4 className="performance-mode-title">
+                    <span className="mode-icon">🎬</span>
+                    WebPageTest 性能分析
+                  </h4>
+                  <WebPageTestOverview data={report.webPageTestData} />
+                </div>
+              ) : renderingSnapshots && renderingSnapshots.length > 0 ? (
+                <div className="performance-overview-section">
+                  <h4 className="performance-mode-title">
+                    <span className="mode-icon">🎬</span>
+                    WebPageTest 性能分析 (Playwright模拟)
+                  </h4>
+                  <PerformanceOverview snapshots={renderingSnapshots} testDuration={testDuration} />
+                </div>
+              ) : null}
+
+              {/* PageSpeed Overview - if available */}
+              {report.pageSpeedData && (
+                <div className="performance-overview-section">
+                  <h4 className="performance-mode-title">
+                    <span className="mode-icon">🚀</span>
+                    PageSpeed Insights 分析
+                  </h4>
+                  <PageSpeedOverview data={report.pageSpeedData} />
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

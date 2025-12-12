@@ -15,20 +15,110 @@ interface WebPageTestResponse {
 
 interface WebPageTestResult {
   data: {
-    median: {
-      firstView: {
-        loadTime: number;
-        TTFB: number;
-        render: number;
-        SpeedIndex: number;
-        bytesIn: number;
-        requests: Array<{
-          url: string;
-          bytesIn: number;
-        }>;
+    testId: string;
+    summary: string;
+    testUrl: string;
+    runs: {
+      [key: string]: {
+        firstView: WebPageTestRun;
       };
     };
+    median: {
+      firstView: WebPageTestRun;
+    };
   };
+}
+
+interface WebPageTestRun {
+  loadTime: number;
+  TTFB: number;
+  render: number;
+  SpeedIndex: number;
+  visualComplete: number;
+  fullyLoaded: number;
+  bytesIn: number;
+  bytesOut: number;
+  requests: number;
+  requestsFull: number;
+  responses_200: number;
+  responses_404: number;
+  responses_other: number;
+  firstPaint: number;
+  firstContentfulPaint: number;
+  largestContentfulPaint: number;
+  cumulativeLayoutShift: number;
+  totalBlockingTime: number;
+  domContentLoadedEventStart: number;
+  domContentLoadedEventEnd: number;
+  loadEventStart: number;
+  loadEventEnd: number;
+  images: {
+    bytes: number;
+    requests: number;
+  };
+  js: {
+    bytes: number;
+    requests: number;
+  };
+  css: {
+    bytes: number;
+    requests: number;
+  };
+  video: {
+    frames: Array<{
+      time: number;
+      image: string;
+      visuallyComplete: number;
+    }>;
+  };
+  videoFrames: Array<{
+    time: number;
+    image: string;
+    VisuallyComplete: number;
+  }>;
+  thumbnails: {
+    checklist: string;
+    waterfall: string;
+    screenShot: string;
+  };
+  domains: Record<string, {
+    bytes: number;
+    requests: number;
+    connections: number;
+  }>;
+  breakdown: Record<string, {
+    bytes: number;
+    requests: number;
+  }>;
+  requestsDoc: Array<{
+    url: string;
+    host: string;
+    method: string;
+    status: number;
+    type: string;
+    request_id: number;
+    ip_addr: string;
+    full_url: string;
+    is_secure: number;
+    bytesIn: number;
+    bytesOut: number;
+    objectSize: number;
+    load_start: number;
+    ttfb_start: number;
+    ttfb_end: number;
+    download_start: number;
+    download_end: number;
+    all_start: number;
+    all_end: number;
+    dns_start: number;
+    dns_end: number;
+    connect_start: number;
+    connect_end: number;
+    ssl_start: number;
+    ssl_end: number;
+    initiator: string;
+    priority: string;
+  }>;
 }
 
 export class PerformanceAnalysisService {
@@ -44,8 +134,11 @@ export class PerformanceAnalysisService {
     }
   }
 
-  // Run WebPageTest on a URL
-  async runWebPageTest(url: string): Promise<PerformanceResult[]> {
+  // Run WebPageTest on a URL - returns both metrics and complete data
+  async runWebPageTest(url: string): Promise<{
+    metrics: PerformanceResult[];
+    completeData: any;
+  }> {
     try {
       console.log(`Starting WebPageTest for ${url}...`);
 
@@ -57,8 +150,14 @@ export class PerformanceAnalysisService {
       const result = await this.pollForResults(testId);
       console.log(`Test completed, extracting metrics...`);
 
-      // Extract and return metrics
-      return this.extractMetrics(result);
+      // Extract metrics for scoring
+      const metrics = this.extractMetrics(result);
+
+      // Return both metrics and complete data
+      return {
+        metrics,
+        completeData: result.data
+      };
     } catch (error) {
       console.error('WebPageTest execution failed:', error);
       throw error;
@@ -78,8 +177,9 @@ export class PerformanceAnalysisService {
             location: 'Dulles:Chrome', // Default location
             runs: 1, // Single run for faster results
             fvonly: 1, // First view only
-            video: 0, // No video
-            lighthouse: 0, // No Lighthouse
+            video: 1, // Enable video for filmstrip
+            lighthouse: 0, // No Lighthouse (we already have PageSpeed)
+            priority: 5, // Higher priority for faster results
           },
           headers: {
             'X-WPT-API-KEY': this.WPT_API_KEY,
@@ -170,7 +270,11 @@ export class PerformanceAnalysisService {
         status
       );
 
-      const largestResources = this.extractLargestResources(firstView.requests);
+      // requestsDoc 可能是对象或数组,需要安全处理
+      const requestsArray = Array.isArray(firstView.requestsDoc)
+        ? firstView.requestsDoc
+        : (firstView.requests && Array.isArray(firstView.requests) ? firstView.requests : []);
+      const largestResources = this.extractLargestResources(requestsArray);
 
       metrics.push({
         id: '',
@@ -264,6 +368,107 @@ export class PerformanceAnalysisService {
 
     // Fail if >20% over threshold
     return TestResultStatus.Fail;
+  }
+
+  // Transform WebPageTest result to structured data
+  transformWebPageTestData(wptData: any): any {
+    try {
+      const firstView = wptData.median?.firstView || wptData.runs?.[1]?.firstView;
+
+      if (!firstView) {
+        console.warn('No firstView data found in WebPageTest result');
+        return null;
+      }
+
+      // 转换为结构化数据
+      const transformedData = {
+        testId: wptData.testId || wptData.id,
+        testUrl: wptData.testUrl || wptData.url,
+        summary: wptData.summary,
+
+        // 核心性能指标
+        metrics: {
+          loadTime: firstView.loadTime || 0,
+          TTFB: firstView.TTFB || 0,
+          startRender: firstView.render || 0,
+          firstContentfulPaint: firstView.firstContentfulPaint || firstView.firstPaint || 0,
+          speedIndex: firstView.SpeedIndex || 0,
+          largestContentfulPaint: firstView.largestContentfulPaint || 0,
+          cumulativeLayoutShift: firstView.cumulativeLayoutShift || 0,
+          totalBlockingTime: firstView.totalBlockingTime || 0,
+          domContentLoaded: firstView.domContentLoadedEventEnd || 0,
+          fullyLoaded: firstView.fullyLoaded || 0,
+        },
+
+        // 资源统计
+        resources: {
+          totalBytes: firstView.bytesIn || 0,
+          totalRequests: firstView.requests || 0,
+          images: {
+            bytes: firstView.images?.bytes || 0,
+            requests: firstView.images?.requests || 0,
+          },
+          js: {
+            bytes: firstView.js?.bytes || 0,
+            requests: firstView.js?.requests || 0,
+          },
+          css: {
+            bytes: firstView.css?.bytes || 0,
+            requests: firstView.css?.requests || 0,
+          },
+        },
+
+        // 视频帧（Filmstrip）
+        videoFrames: firstView.videoFrames?.slice(0, 10).map((frame: any) => ({
+          time: frame.time,
+          image: frame.image,
+          visuallyComplete: frame.VisuallyComplete || frame.visuallyComplete || 0,
+        })) || [],
+
+        // 缩略图
+        thumbnails: {
+          waterfall: firstView.thumbnails?.waterfall,
+          checklist: firstView.thumbnails?.checklist,
+          screenShot: firstView.thumbnails?.screenShot,
+        },
+
+        // 请求瀑布图数据（前50个请求）
+        // requestsDoc 可能是对象或数组,需要安全处理
+        requests: (() => {
+          const requestsData = Array.isArray(firstView.requestsDoc)
+            ? firstView.requestsDoc
+            : (firstView.requests && Array.isArray(firstView.requests) ? firstView.requests : []);
+
+          return requestsData.slice(0, 50).map((req: any) => ({
+            url: req.url || req.full_url,
+            host: req.host,
+            method: req.method,
+            status: req.status,
+            type: req.type,
+            bytesIn: req.bytesIn || req.objectSize,
+            startTime: req.load_start || req.all_start,
+            endTime: req.download_end || req.all_end,
+            duration: (req.download_end || req.all_end) - (req.load_start || req.all_start),
+          }));
+        })(),
+
+        // 域名统计（前20个域名）
+        domains: firstView.domains ? Object.entries(firstView.domains)
+          .slice(0, 20)
+          .map(([domain, stats]: [string, any]) => ({
+            domain,
+            bytes: stats.bytes,
+            requests: stats.requests,
+            connections: stats.connections,
+          })) : [],
+      };
+
+      console.log('✓ Transformed WebPageTest data successfully');
+      return transformedData;
+    } catch (error) {
+      console.error('Failed to transform WebPageTest data:', error);
+      return null;
+    }
   }
 
   // Extract top 5 largest resources for resource size details
