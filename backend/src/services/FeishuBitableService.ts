@@ -156,10 +156,35 @@ export class FeishuBitableService {
       fields.pagespeed_data = compressedPageSpeedData;
     }
 
-    // 只在有 WebPageTest 完整数据时添加该字段
+    // 只在有 WebPageTest 完整数据时添加该字段,支持大数据分片存储
     if (compressedWebPageTestData) {
-      fields.webpagetest_data = compressedWebPageTestData;
-      console.log('[FeishuBitable] Added webpagetest_data to fields:', compressedWebPageTestData.substring(0, 100));
+      const CHUNK_SIZE = 60000; // 60KB per chunk (留出余量,飞书限制约64KB)
+      const dataLength = compressedWebPageTestData.length;
+
+      if (dataLength <= CHUNK_SIZE) {
+        // 数据较小,直接存储
+        fields.webpagetest_data = compressedWebPageTestData;
+        fields.webpagetest_data_parts = 1;
+        console.log('[FeishuBitable] WebPageTest data stored in single field:', dataLength, 'chars');
+      } else {
+        // 数据较大,分片存储
+        const parts = Math.ceil(dataLength / CHUNK_SIZE);
+        if (parts > 5) {
+          console.warn('[FeishuBitable] WebPageTest data too large!', dataLength, 'chars, needs', parts, 'parts but only 5 available');
+          // 存储前5个分片,数据会被截断
+        }
+
+        fields.webpagetest_data = compressedWebPageTestData.substring(0, CHUNK_SIZE);
+        fields.webpagetest_data_parts = Math.min(parts, 5);
+
+        for (let i = 1; i < Math.min(parts, 5); i++) {
+          const start = i * CHUNK_SIZE;
+          const end = Math.min((i + 1) * CHUNK_SIZE, dataLength);
+          fields[`webpagetest_data_part${i + 1}`] = compressedWebPageTestData.substring(start, end);
+        }
+
+        console.log('[FeishuBitable] WebPageTest data split into', Math.min(parts, 5), 'parts, total:', dataLength, 'chars');
+      }
     } else {
       console.log('[FeishuBitable] No WebPageTest data to add to fields');
     }
@@ -211,6 +236,11 @@ export class FeishuBitableService {
           'rendering_snapshots',
           'pagespeed_data',
           'webpagetest_data',
+          'webpagetest_data_parts',
+          'webpagetest_data_part2',
+          'webpagetest_data_part3',
+          'webpagetest_data_part4',
+          'webpagetest_data_part5',
         ],
         page_size: 1,
       });
@@ -260,6 +290,11 @@ export class FeishuBitableService {
           'rendering_snapshots',
           'pagespeed_data',
           'webpagetest_data',
+          'webpagetest_data_parts',
+          'webpagetest_data_part2',
+          'webpagetest_data_part3',
+          'webpagetest_data_part4',
+          'webpagetest_data_part5',
         ],
       };
 
@@ -373,6 +408,7 @@ export class FeishuBitableService {
       console.log('[FeishuBitable] Checking webpagetest_data field:', {
         exists: !!fields.webpagetest_data,
         type: typeof fields.webpagetest_data,
+        parts: fields.webpagetest_data_parts || 1,
         value: fields.webpagetest_data ?
           (typeof fields.webpagetest_data === 'string' ?
             fields.webpagetest_data.substring(0, 100) :
@@ -381,21 +417,51 @@ export class FeishuBitableService {
       });
 
       if (fields.webpagetest_data) {
-        const compressedStr = extractText(fields.webpagetest_data);
-        console.log('[FeishuBitable] Extracted compressed string:', {
-          exists: !!compressedStr,
-          length: compressedStr?.length || 0,
-          preview: compressedStr?.substring(0, 100)
-        });
+        const parts = fields.webpagetest_data_parts || 1;
 
-        if (compressedStr) {
-          webPageTestData = await decompressJSON(compressedStr);
-          console.log('[FeishuBitable] Decompressed WebPageTest data:', {
-            success: !!webPageTestData,
-            hasTestId: !!webPageTestData?.testId,
-            hasVideoFrames: webPageTestData?.videoFrames?.length || 0,
-            hasMetrics: !!webPageTestData?.metrics
+        if (parts > 1) {
+          // 数据被分片存储,需要合并
+          console.log('[FeishuBitable] WebPageTest data is chunked into', parts, 'parts, merging...');
+
+          let mergedData = extractText(fields.webpagetest_data);
+          console.log('[FeishuBitable] Part 1 length:', mergedData.length);
+
+          for (let i = 2; i <= parts; i++) {
+            const partField = `webpagetest_data_part${i}`;
+            const partData = extractText(fields[partField]);
+            console.log(`[FeishuBitable] Part ${i} length:`, partData.length);
+            mergedData += partData;
+          }
+
+          console.log('[FeishuBitable] Merged total length:', mergedData.length);
+
+          if (mergedData) {
+            webPageTestData = await decompressJSON(mergedData);
+            console.log('[FeishuBitable] Decompressed merged WebPageTest data:', {
+              success: !!webPageTestData,
+              hasTestId: !!webPageTestData?.testId,
+              hasVideoFrames: webPageTestData?.videoFrames?.length || 0,
+              hasMetrics: !!webPageTestData?.metrics
+            });
+          }
+        } else {
+          // 数据未分片,直接解压
+          const compressedStr = extractText(fields.webpagetest_data);
+          console.log('[FeishuBitable] Extracted compressed string (single part):', {
+            exists: !!compressedStr,
+            length: compressedStr?.length || 0,
+            preview: compressedStr?.substring(0, 100)
           });
+
+          if (compressedStr) {
+            webPageTestData = await decompressJSON(compressedStr);
+            console.log('[FeishuBitable] Decompressed WebPageTest data:', {
+              success: !!webPageTestData,
+              hasTestId: !!webPageTestData?.testId,
+              hasVideoFrames: webPageTestData?.videoFrames?.length || 0,
+              hasMetrics: !!webPageTestData?.metrics
+            });
+          }
         }
       }
     } catch (error) {
