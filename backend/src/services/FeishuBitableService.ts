@@ -243,6 +243,24 @@ export class FeishuBitableService {
         page_size: limit,
         // 注意: 飞书使用 page_token 而不是 offset
         // 这里需要实现分页逻辑
+        field_names: [
+          'request_id',
+          'url',
+          'overall_score',
+          'total_checks',
+          'passed_checks',
+          'failed_checks',
+          'warning_checks',
+          'test_duration',
+          'completed_at',
+          'status',
+          'performance_test_mode',
+          'ui_test_results',
+          'performance_results',
+          'rendering_snapshots',
+          'pagespeed_data',
+          'webpagetest_data',
+        ],
       };
 
       // 如果指定了 URL,添加过滤条件
