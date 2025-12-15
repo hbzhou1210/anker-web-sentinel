@@ -5,6 +5,8 @@ import { PerformanceResults } from '../PerformanceResults/PerformanceResults';
 import { PerformanceOverview } from '../PerformanceOverview/PerformanceOverview';
 import { WebPageTestOverview } from '../WebPageTestOverview/WebPageTestOverview';
 import { PageSpeedOverview } from '../PageSpeedOverview/PageSpeedOverview';
+import { WebPageTestReport } from '../WebPageTestReport/WebPageTestReport';
+import { PageSpeedReport } from '../PageSpeedReport/PageSpeedReport';
 import './TestReport.css';
 
 interface TestReportProps {
@@ -12,6 +14,14 @@ interface TestReportProps {
 }
 
 export function TestReport({ report }: TestReportProps) {
+  // 根据性能测试模式路由到专属报告组件
+  if (report.performanceTestMode === 'webpagetest' && report.webPageTestData) {
+    return <WebPageTestReport report={report} />;
+  }
+
+  if (report.performanceTestMode === 'pagespeed' && report.pageSpeedData) {
+    return <PageSpeedReport report={report} />;
+  }
   // 性能检测部分默认收起
   const [performanceExpanded, setPerformanceExpanded] = useState(false);
   const {
