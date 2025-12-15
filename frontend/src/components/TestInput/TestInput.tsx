@@ -255,10 +255,10 @@ export function TestInput({ onTestCreated }: TestInputProps) {
                     />
                     <div className="mode-content">
                       <div className="mode-title">
-                        🎬 WebPageTest 风格 <span className="mode-badge default">默认</span>
+                        🎬 WebPageTest 性能测试 <span className="mode-badge default">默认</span>
                       </div>
                       <div className="mode-description">
-                        使用真实浏览器捕获页面渲染过程,展示 TTFB、FCP、LCP 等 8 个核心指标
+                        集成 WebPageTest 官方 API,使用真实浏览器环境进行性能测试,提供视频帧、TTFB、FCP、LCP 等完整指标
                       </div>
                     </div>
                   </label>

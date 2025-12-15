@@ -31,7 +31,7 @@
   line-height: 1.5;
 }
 
-/* WebPageTest 风格的指标网格 - 4列布局 */
+/* 性能指标网格 - 4列布局 */
 .metrics-grid-webpagetest {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -39,7 +39,7 @@
   margin-bottom: 20px;
 }
 
-/* 单个指标项 - WebPageTest 风格 */
+/* 单个指标项 */
 .metric-item {
   display: flex;
   flex-direction: column;

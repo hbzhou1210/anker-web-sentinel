@@ -154,7 +154,7 @@ export function TestReport({ report }: TestReportProps) {
                 <div className="performance-overview-section">
                   <h4 className="performance-mode-title">
                     <span className="mode-icon">🎬</span>
-                    WebPageTest 性能分析 (Playwright模拟)
+                    性能快照分析 <span style={{fontSize: '0.8em', opacity: 0.7}}>(Playwright 兼容模式)</span>
                   </h4>
                   <PerformanceOverview snapshots={renderingSnapshots} testDuration={testDuration} />
                 </div>
