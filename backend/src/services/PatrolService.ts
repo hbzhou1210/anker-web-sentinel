@@ -470,14 +470,39 @@ export class PatrolService {
                        className.includes('subscribe') ||
                        className.includes('newsletter');
               });
-              const buttons = Array.from(footer.querySelectorAll('button, input[type="submit"]')).filter(function(btn) {
+
+              // 改进的按钮检测 - 支持 role="button" 的元素(如 Anker Solix)
+              const buttons = Array.from(footer.querySelectorAll('button, input[type="submit"], [role="button"]')).filter(function(btn) {
                 const text = (btn.textContent || '').toLowerCase();
                 const className = btn.className.toLowerCase();
-                return text.includes('subscribe') ||
+                const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+
+                // 检查是否在邮箱输入框附近(布局检测)
+                let isNearEmailInput = false;
+                const btnRect = btn.getBoundingClientRect();
+                for (let i = 0; i < emailInputs.length; i++) {
+                  const input = emailInputs[i];
+                  const inputRect = input.getBoundingClientRect();
+                  // 检查按钮是否在输入框右侧50px内,或者垂直距离在100px内
+                  const horizontalDistance = Math.abs(btnRect.left - inputRect.right);
+                  const verticalDistance = Math.abs(btnRect.top - inputRect.top);
+                  if (horizontalDistance < 50 || verticalDistance < 100) {
+                    isNearEmailInput = true;
+                    break;
+                  }
+                }
+
+                // 文本/类名匹配 或 在邮箱输入框附近
+                const hasSubscribeKeyword = text.includes('subscribe') ||
                        text.includes('sign up') ||
                        text.includes('submit') ||
+                       text.includes('join') ||
+                       ariaLabel.includes('subscribe') ||
+                       ariaLabel.includes('submit') ||
                        className.includes('subscribe') ||
                        className.includes('newsletter');
+
+                return hasSubscribeKeyword || isNearEmailInput;
               });
 
               const hasNewsletter = emailInputs.length > 0;
@@ -509,14 +534,38 @@ export class PatrolService {
                        className.includes('subscribe') ||
                        className.includes('newsletter');
               });
-              const allButtons = Array.from(document.querySelectorAll('button, input[type="submit"]')).filter(function(btn) {
+              // 改进的按钮检测 - 支持 role="button" 的元素
+              const allButtons = Array.from(document.querySelectorAll('button, input[type="submit"], [role="button"]')).filter(function(btn) {
                 const text = (btn.textContent || '').toLowerCase();
                 const className = btn.className.toLowerCase();
-                return text.includes('subscribe') ||
+                const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+
+                // 检查是否在邮箱输入框附近(布局检测)
+                let isNearEmailInput = false;
+                const btnRect = btn.getBoundingClientRect();
+                for (let i = 0; i < allEmailInputs.length; i++) {
+                  const input = allEmailInputs[i];
+                  const inputRect = input.getBoundingClientRect();
+                  // 检查按钮是否在输入框右侧50px内,或者垂直距离在100px内
+                  const horizontalDistance = Math.abs(btnRect.left - inputRect.right);
+                  const verticalDistance = Math.abs(btnRect.top - inputRect.top);
+                  if (horizontalDistance < 50 || verticalDistance < 100) {
+                    isNearEmailInput = true;
+                    break;
+                  }
+                }
+
+                // 文本/类名匹配 或 在邮箱输入框附近
+                const hasSubscribeKeyword = text.includes('subscribe') ||
                        text.includes('sign up') ||
                        text.includes('submit') ||
+                       text.includes('join') ||
+                       ariaLabel.includes('subscribe') ||
+                       ariaLabel.includes('submit') ||
                        className.includes('subscribe') ||
                        className.includes('newsletter');
+
+                return hasSubscribeKeyword || isNearEmailInput;
               });
 
               // 只统计可见的元素

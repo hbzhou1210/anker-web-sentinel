@@ -297,34 +297,57 @@
 }
 
 .domains-table {
-  border-radius: 8px;
+  border-radius: 12px;
   overflow: hidden;
-  border: 1px solid #e5e7eb;
+  border: 2px solid #e5e7eb;
+  background: white;
 }
 
 .table-header,
 .table-row {
   display: grid;
   grid-template-columns: 2fr 1fr 1fr 1fr;
-  gap: 16px;
-  padding: 12px 16px;
+  gap: 20px;
+  padding: 16px 20px;
   align-items: center;
 }
 
 .table-header {
-  background: #f9fafb;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   font-size: 12px;
-  font-weight: 600;
-  color: #6b7280;
+  font-weight: 700;
+  color: #475569;
   text-transform: uppercase;
-  border-bottom: 2px solid #e5e7eb;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #cbd5e1;
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 .table-row {
   font-size: 14px;
-  color: #374151;
-  border-bottom: 1px solid #f3f4f6;
-  transition: background-color 0.2s;
+  color: #1e293b;
+  border-bottom: 1px solid #f1f5f9;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.table-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  transform: scaleY(0);
+  transition: transform 0.3s ease;
+  border-radius: 0 4px 4px 0;
+}
+
+.table-row:hover::before {
+  transform: scaleY(1);
 }
 
 .table-row:last-child {
@@ -332,7 +355,9 @@
 }
 
 .table-row:hover {
-  background-color: #f9fafb;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  transform: translateX(4px);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
 }
 
 .col-domain {
@@ -341,6 +366,14 @@
   white-space: nowrap;
   font-family: 'SF Mono', Monaco, monospace;
   font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  padding-left: 8px;
+  transition: color 0.3s ease;
+}
+
+.table-row:hover .col-domain {
+  color: #3b82f6;
 }
 
 .col-size,
@@ -348,6 +381,67 @@
 .col-connections {
   text-align: center;
   font-family: 'SF Mono', Monaco, monospace;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.col-size {
+  color: #0891b2;
+  background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);
+  padding: 6px 8px;
+  border-radius: 6px;
+  justify-self: center;
+}
+
+.col-requests {
+  color: #7c3aed;
+  background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+  padding: 6px 8px;
+  border-radius: 6px;
+  justify-self: center;
+}
+
+.col-connections {
+  color: #ea580c;
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  padding: 6px 8px;
+  border-radius: 6px;
+  justify-self: center;
+}
+
+/* Guide Section */
+.guide-section {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border-radius: 12px;
+  padding: 32px;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+}
+
+.guide-content {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.guide-icon {
+  font-size: 48px;
+  flex-shrink: 0;
+}
+
+.guide-text h4 {
+  margin: 0 0 8px 0;
+  font-size: 20px;
+  color: #1e40af;
+  font-weight: 600;
+}
+
+.guide-text p {
+  margin: 0;
+  font-size: 14px;
+  color: #1e3a8a;
+  line-height: 1.6;
 }
 
 /* WebPageTest Link */
@@ -361,20 +455,20 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 24px;
+  padding: 14px 32px;
   background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
   color: white;
   text-decoration: none;
-  border-radius: 8px;
+  border-radius: 10px;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 16px;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
 }
 
 .wpt-link-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.5);
 }
 
 /* Responsive Design */
@@ -440,6 +534,25 @@
     gap: 8px;
   }
 
+  .guide-content {
+    flex-direction: column;
+    text-align: center;
+    gap: 16px;
+  }
+
+  .guide-icon {
+    font-size: 40px;
+  }
+
+  .guide-text h4 {
+    font-size: 18px;
+  }
+
+  .wpt-link-button {
+    font-size: 14px;
+    padding: 12px 24px;
+  }
+
   .table-header,
   .table-row {
     grid-template-columns: 1.5fr 1fr;
@@ -450,6 +563,30 @@
   .col-connections {
     display: none;
   }
+}
+
+/* Frame Placeholder (当图片数据被优化时) */
+.frame-placeholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.frame-placeholder .placeholder-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+  opacity: 0.5;
+}
+
+.frame-placeholder .placeholder-text {
+  font-size: 11px;
+  color: #999;
+  text-align: center;
 }
 
 /* Loading Animation */

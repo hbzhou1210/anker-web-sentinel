@@ -53,7 +53,10 @@ export interface TestRequest {
   config?: {
     timeout?: number;  // seconds
     waitTime?: number; // seconds
-    performanceTestMode?: PerformanceTestMode;  // 性能测试方式,默认 webpagetest
+    performanceTestMode?: PerformanceTestMode;  // 主性能测试方式(用于确定主报告),默认 webpagetest
+    enableWebPageTest?: boolean;  // 是否启用 WebPageTest API 测试
+    enablePageSpeed?: boolean;     // 是否启用 PageSpeed Insights API 测试
+    deviceStrategy?: 'mobile' | 'desktop';  // 设备策略,默认 desktop
     testOptions?: {
       links?: boolean;
       forms?: boolean;

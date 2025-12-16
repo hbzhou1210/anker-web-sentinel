@@ -816,3 +816,132 @@
   border-color: #e2e8f0;
   box-shadow: none;
 }
+
+/* Device Strategy Selector - 设备选择器 */
+.device-strategy-selector {
+  width: 100%;
+  padding: 16px;
+  background: linear-gradient(135deg, #fef3f2 0%, #fee2e2 100%);
+  border-radius: 12px;
+  border: 2px solid #fecaca;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.08);
+  margin-top: 16px;
+}
+
+.device-selector-label {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.device-selector-label::before {
+  content: '📱';
+  font-size: 18px;
+}
+
+.device-options {
+  display: flex;
+  gap: 16px;
+  flex-direction: row;
+}
+
+.device-option {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px;
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.device-option::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #f97316, #ea580c);
+  transform: scaleX(0);
+  transition: transform 0.3s ease;
+}
+
+.device-option:hover {
+  border-color: #f97316;
+  box-shadow: 0 4px 16px rgba(249, 115, 22, 0.15);
+  transform: translateY(-2px);
+}
+
+.device-option:hover::before {
+  transform: scaleX(1);
+}
+
+.device-option.selected {
+  border-color: #f97316;
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  box-shadow: 0 4px 16px rgba(249, 115, 22, 0.2);
+}
+
+.device-option.selected::before {
+  transform: scaleX(1);
+  background: linear-gradient(90deg, #f97316, #ea580c);
+}
+
+.device-option input[type="radio"] {
+  margin-top: 3px;
+  cursor: pointer;
+  width: 20px;
+  height: 20px;
+  accent-color: #f97316;
+  flex-shrink: 0;
+}
+
+.device-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.device-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.device-description {
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.6;
+}
+
+.device-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.device-option:disabled:hover {
+  border-color: #e2e8f0;
+  box-shadow: none;
+}
+
+/* 小屏幕下设备选择器堆叠显示 */
+@media (max-width: 640px) {
+  .device-options {
+    flex-direction: column;
+  }
+}

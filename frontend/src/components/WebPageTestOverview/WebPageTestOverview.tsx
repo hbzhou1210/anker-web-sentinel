@@ -45,7 +45,21 @@ export function WebPageTestOverview({ data }: WebPageTestOverviewProps) {
     return 'metric-poor';
   };
 
-  const { metrics, resources } = data;
+  // 安全地解构数据,提供默认值
+  const metrics = data.metrics || {} as any;
+  const resources = data.resources || { totalBytes: 0, totalRequests: 0, images: { bytes: 0, requests: 0 }, js: { bytes: 0, requests: 0 }, css: { bytes: 0, requests: 0 } };
+
+  // 如果没有metrics数据,显示错误提示
+  if (!data.metrics) {
+    return (
+      <div className="webpagetest-overview">
+        <div className="no-data-message">
+          <span className="warning-icon">⚠️</span>
+          <p>WebPageTest 指标数据不可用</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="webpagetest-overview">
@@ -63,13 +77,20 @@ export function WebPageTestOverview({ data }: WebPageTestOverviewProps) {
               <div key={index} className="filmstrip-frame">
                 <div className="frame-time">{formatTime(frame.time)}</div>
                 <div className="frame-image-wrapper">
-                  <img
-                    src={frame.image}
-                    alt={`Frame at ${formatTime(frame.time)}`}
-                    className="frame-image"
-                    loading="lazy"
-                    onClick={() => window.open(frame.image, '_blank')}
-                  />
+                  {frame.image ? (
+                    <img
+                      src={frame.image}
+                      alt={`Frame at ${formatTime(frame.time)}`}
+                      className="frame-image"
+                      loading="lazy"
+                      onClick={() => window.open(frame.image, '_blank')}
+                    />
+                  ) : (
+                    <div className="frame-placeholder">
+                      <div className="placeholder-icon">🎬</div>
+                      <div className="placeholder-text">帧数据已优化</div>
+                    </div>
+                  )}
                 </div>
                 <div className="frame-progress">
                   {frame.visuallyComplete}% 可见
@@ -80,192 +101,16 @@ export function WebPageTestOverview({ data }: WebPageTestOverviewProps) {
         </div>
       )}
 
-      {/* 核心性能指标 */}
-      <div className="metrics-section">
-        <div className="section-header">
-          <h4>⚡ 核心性能指标</h4>
-          <p className="section-subtitle">
-            基于真实 WebPageTest API 测试的 8 个关键性能指标
-          </p>
-        </div>
-
-        <div className="metrics-grid">
-          {/* Time to First Byte */}
-          <div className="metric-card">
-            <div className="metric-name">Time to First Byte</div>
-            <div className={`metric-value ${getMetricClass('TTFB', metrics.TTFB)}`}>
-              {formatTime(metrics.TTFB)}
-            </div>
-            <div className="metric-hint">服务器响应时间</div>
-          </div>
-
-          {/* Start Render */}
-          <div className="metric-card">
-            <div className="metric-name">Start Render</div>
-            <div className={`metric-value ${getMetricClass('startRender', metrics.startRender)}`}>
-              {formatTime(metrics.startRender)}
-            </div>
-            <div className="metric-hint">首次渲染时间</div>
-          </div>
-
-          {/* First Contentful Paint */}
-          <div className="metric-card">
-            <div className="metric-name">First Contentful Paint</div>
-            <div className={`metric-value ${getMetricClass('firstContentfulPaint', metrics.firstContentfulPaint)}`}>
-              {formatTime(metrics.firstContentfulPaint)}
-            </div>
-            <div className="metric-hint">首次内容绘制</div>
-          </div>
-
-          {/* Speed Index */}
-          <div className="metric-card">
-            <div className="metric-name">Speed Index</div>
-            <div className={`metric-value ${getMetricClass('speedIndex', metrics.speedIndex)}`}>
-              {formatTime(metrics.speedIndex)}
-            </div>
-            <div className="metric-hint">速度指数</div>
-          </div>
-
-          {/* Largest Contentful Paint */}
-          <div className="metric-card">
-            <div className="metric-name">Largest Contentful Paint</div>
-            <div className={`metric-value ${getMetricClass('largestContentfulPaint', metrics.largestContentfulPaint)}`}>
-              {formatTime(metrics.largestContentfulPaint)}
-            </div>
-            <div className="metric-hint">最大内容绘制</div>
-          </div>
-
-          {/* Cumulative Layout Shift */}
-          <div className="metric-card">
-            <div className="metric-name">Cumulative Layout Shift</div>
-            <div className={`metric-value ${getMetricClass('cumulativeLayoutShift', metrics.cumulativeLayoutShift)}`}>
-              {formatCLS(metrics.cumulativeLayoutShift)}
-            </div>
-            <div className="metric-hint">累积布局偏移</div>
-          </div>
-
-          {/* Total Blocking Time */}
-          <div className="metric-card">
-            <div className="metric-name">Total Blocking Time</div>
-            <div className={`metric-value ${getMetricClass('totalBlockingTime', metrics.totalBlockingTime)}`}>
-              {formatTime(metrics.totalBlockingTime)}
-            </div>
-            <div className="metric-hint">总阻塞时间</div>
-          </div>
-
-          {/* Fully Loaded */}
-          <div className="metric-card">
-            <div className="metric-name">Fully Loaded</div>
-            <div className={`metric-value ${getMetricClass('fullyLoaded', metrics.fullyLoaded)}`}>
-              {formatTime(metrics.fullyLoaded)}
-            </div>
-            <div className="metric-hint">完全加载时间</div>
-          </div>
-        </div>
-
-        {/* 性能评分图例 */}
-        <div className="performance-legend">
-          <div className="legend-note">
-            💡 颜色编码基于 Google Web Vitals 标准
-          </div>
-          <div className="legend-items">
-            <div className="legend-item">
-              <span className="legend-dot good"></span>
-              <span>Good (良好)</span>
-            </div>
-            <div className="legend-item">
-              <span className="legend-dot needs-improvement"></span>
-              <span>Needs Improvement (需要改进)</span>
-            </div>
-            <div className="legend-item">
-              <span className="legend-dot poor"></span>
-              <span>Poor (较差)</span>
-            </div>
+      {/* 提示信息 - 引导用户查看完整报告 */}
+      <div className="guide-section">
+        <div className="guide-content">
+          <div className="guide-icon">📊</div>
+          <div className="guide-text">
+            <h4>查看完整性能报告</h4>
+            <p>点击下方按钮前往 WebPageTest 查看详细的性能指标、资源统计和优化建议</p>
           </div>
         </div>
       </div>
-
-      {/* 资源统计 */}
-      <div className="resources-section">
-        <div className="section-header">
-          <h4>📊 资源统计</h4>
-          <p className="section-subtitle">
-            按类型和域名分析页面资源使用情况
-          </p>
-        </div>
-
-        <div className="resources-grid">
-          {/* 总计 */}
-          <div className="resource-card total">
-            <div className="resource-icon">📦</div>
-            <div className="resource-details">
-              <div className="resource-name">总计</div>
-              <div className="resource-value">{formatBytes(resources.totalBytes)}</div>
-              <div className="resource-count">{resources.totalRequests} 个请求</div>
-            </div>
-          </div>
-
-          {/* 图片 */}
-          <div className="resource-card">
-            <div className="resource-icon">🖼️</div>
-            <div className="resource-details">
-              <div className="resource-name">图片</div>
-              <div className="resource-value">{formatBytes(resources.images.bytes)}</div>
-              <div className="resource-count">{resources.images.requests} 个请求</div>
-            </div>
-          </div>
-
-          {/* JavaScript */}
-          <div className="resource-card">
-            <div className="resource-icon">📜</div>
-            <div className="resource-details">
-              <div className="resource-name">JavaScript</div>
-              <div className="resource-value">{formatBytes(resources.js.bytes)}</div>
-              <div className="resource-count">{resources.js.requests} 个请求</div>
-            </div>
-          </div>
-
-          {/* CSS */}
-          <div className="resource-card">
-            <div className="resource-icon">🎨</div>
-            <div className="resource-details">
-              <div className="resource-name">CSS</div>
-              <div className="resource-value">{formatBytes(resources.css.bytes)}</div>
-              <div className="resource-count">{resources.css.requests} 个请求</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 域名统计 */}
-      {data.domains && data.domains.length > 0 && (
-        <div className="domains-section">
-          <div className="section-header">
-            <h4>🌐 域名统计 (前10个)</h4>
-            <p className="section-subtitle">
-              按域名分析资源分布,帮助识别第三方依赖
-            </p>
-          </div>
-          <div className="domains-table">
-            <div className="table-header">
-              <div className="col-domain">域名</div>
-              <div className="col-size">大小</div>
-              <div className="col-requests">请求数</div>
-              <div className="col-connections">连接数</div>
-            </div>
-            {data.domains.slice(0, 10).map((domain, index) => (
-              <div key={index} className="table-row">
-                <div className="col-domain" title={domain.domain}>
-                  {domain.domain}
-                </div>
-                <div className="col-size">{formatBytes(domain.bytes)}</div>
-                <div className="col-requests">{domain.requests}</div>
-                <div className="col-connections">{domain.connections}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* WebPageTest 链接 */}
       {data.testId && (

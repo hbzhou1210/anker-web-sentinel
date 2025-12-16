@@ -167,6 +167,9 @@ export class TestExecutionService {
       timeout?: number;
       waitTime?: number;
       performanceTestMode?: PerformanceTestMode;
+      enableWebPageTest?: boolean;  // 是否启用 WebPageTest API
+      enablePageSpeed?: boolean;     // 是否启用 PageSpeed API
+      deviceStrategy?: 'mobile' | 'desktop';  // 设备策略
       testOptions?: {
         links?: boolean;
         forms?: boolean;
@@ -193,11 +196,15 @@ export class TestExecutionService {
         performance: true,
       };
 
+      // 检查是否启用了性能测试
+      const enableWebPageTest = config?.enableWebPageTest ?? (performanceTestMode === PerformanceTestMode.WebPageTest);
+      const enablePageSpeed = config?.enablePageSpeed ?? (performanceTestMode === PerformanceTestMode.PageSpeedInsights);
+
       // Check if any UI tests are enabled
       const hasUITests = testOptions.links || testOptions.forms || testOptions.buttons || testOptions.images;
 
-      // PageSpeed-only mode: No Playwright needed
-      if (performanceTestMode === PerformanceTestMode.PageSpeedInsights && !hasUITests) {
+      // 纯性能测试模式（无 UI 测试且不需要 WebPageTest 的渲染快照）
+      if (!hasUITests && !enableWebPageTest && enablePageSpeed && testOptions.performance) {
         console.log('[PageSpeed-Only Mode] Skipping Playwright, running PageSpeed API only');
         return await this.executePageSpeedOnlyTest(testRequestId, url, config, startTime);
       }
@@ -225,8 +232,9 @@ export class TestExecutionService {
     // Run PageSpeed test
     if (config?.testOptions?.performance !== false) {
       try {
-        console.log('Running PageSpeed Insights performance analysis...');
-        const pageSpeedResult = await this.executePageSpeedTest(url, 'desktop');
+        const strategy = config?.deviceStrategy || 'desktop';
+        console.log(`Running PageSpeed Insights performance analysis with ${strategy} strategy...`);
+        const pageSpeedResult = await this.executePageSpeedTest(url, strategy);
         performanceResults = pageSpeedResult.performanceResults;
         pageSpeedData = pageSpeedResult.pageSpeedData;
         console.log(`✓ PageSpeed Insights completed with score ${pageSpeedData.performanceScore}/100`);
@@ -333,28 +341,60 @@ export class TestExecutionService {
       // Close browser context
       await context.close();
 
-      // Run performance analysis
+      // Run performance analysis (支持同时运行两种测试)
       let performanceResults: PerformanceResult[] = [];
       let pageSpeedData = undefined;
       let webPageTestData = undefined;
 
       if (testOptions.performance) {
-        try {
-          if (performanceTestMode === PerformanceTestMode.PageSpeedInsights) {
-            console.log('Running PageSpeed Insights performance analysis...');
-            const pageSpeedResult = await this.executePageSpeedTest(url, 'desktop');
-            performanceResults = pageSpeedResult.performanceResults;
-            pageSpeedData = pageSpeedResult.pageSpeedData;
-            console.log(`✓ PageSpeed Insights completed with score ${pageSpeedData.performanceScore}/100`);
-          } else {
-            console.log('Running WebPageTest API...');
-            const wptResult = await performanceAnalysisService.runWebPageTest(url);
-            performanceResults = wptResult.metrics;
-            webPageTestData = performanceAnalysisService.transformWebPageTestData(wptResult.completeData);
-            console.log(`✓ WebPageTest completed with ${performanceResults.length} metrics`);
-          }
-        } catch (perfError) {
-          console.warn('⚠ Performance test failed, continuing with UI results only:', perfError);
+        const enableWebPageTest = config?.enableWebPageTest ?? (performanceTestMode === PerformanceTestMode.WebPageTest);
+        const enablePageSpeed = config?.enablePageSpeed ?? (performanceTestMode === PerformanceTestMode.PageSpeedInsights);
+
+        console.log(`[Performance Tests] WebPageTest: ${enableWebPageTest}, PageSpeed: ${enablePageSpeed}`);
+
+        // 并行运行两种性能测试
+        const performancePromises: Promise<void>[] = [];
+
+        if (enableWebPageTest) {
+          performancePromises.push(
+            (async () => {
+              try {
+                // 使用 config 中的 deviceStrategy 参数,默认为 desktop
+                const strategy = config?.deviceStrategy || 'desktop';
+                console.log(`Running WebPageTest API with ${strategy} strategy...`);
+                const wptResult = await performanceAnalysisService.runWebPageTest(url, strategy);
+                performanceResults = wptResult.metrics;
+                webPageTestData = performanceAnalysisService.transformWebPageTestData(wptResult.completeData);
+                console.log(`✓ WebPageTest completed with ${performanceResults.length} metrics`);
+              } catch (error) {
+                console.warn('⚠ WebPageTest API failed:', error);
+              }
+            })()
+          );
+        }
+
+        if (enablePageSpeed) {
+          performancePromises.push(
+            (async () => {
+              try {
+                // 使用 config 中的 deviceStrategy 参数,默认为 desktop
+                const strategy = config?.deviceStrategy || 'desktop';
+                console.log(`Running PageSpeed Insights with ${strategy} strategy...`);
+                const pageSpeedResult = await this.executePageSpeedTest(url, strategy);
+                pageSpeedData = pageSpeedResult.pageSpeedData;
+                console.log(`✓ PageSpeed Insights completed with score ${pageSpeedData.performanceScore}/100`);
+              } catch (error) {
+                console.warn('⚠ PageSpeed Insights API failed:', error);
+              }
+            })()
+          );
+        }
+
+        // 等待所有性能测试完成（忽略失败）
+        if (performancePromises.length > 0) {
+          await Promise.allSettled(performancePromises);
+        } else {
+          console.log('⊘ No performance tests enabled');
         }
       } else {
         console.log('⊘ Performance test skipped (disabled by user)');

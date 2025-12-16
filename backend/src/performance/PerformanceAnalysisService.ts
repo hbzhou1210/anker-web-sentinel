@@ -135,7 +135,7 @@ export class PerformanceAnalysisService {
   }
 
   // Run WebPageTest on a URL - returns both metrics and complete data
-  async runWebPageTest(url: string): Promise<{
+  async runWebPageTest(url: string, strategy: 'mobile' | 'desktop' = 'desktop'): Promise<{
     metrics: PerformanceResult[];
     completeData: any;
   }> {
@@ -143,7 +143,7 @@ export class PerformanceAnalysisService {
       console.log(`Starting WebPageTest for ${url}...`);
 
       // Submit test request
-      const testId = await this.submitTest(url);
+      const testId = await this.submitTest(url, strategy);
       console.log(`Test submitted with ID: ${testId}`);
 
       // Poll for results
@@ -165,8 +165,13 @@ export class PerformanceAnalysisService {
   }
 
   // Submit a test to WebPageTest
-  private async submitTest(url: string): Promise<string> {
+  private async submitTest(url: string, strategy: 'mobile' | 'desktop' = 'desktop'): Promise<string> {
     try {
+      // Mobile configuration: use mobile device emulation
+      const location = strategy === 'mobile'
+        ? 'Dulles:Moto G4' // Mobile device with 3G network
+        : 'Dulles:Chrome';  // Desktop Chrome
+
       const response = await axios.post<WebPageTestResponse>(
         `${this.WPT_API_URL}/runtest.php`,
         null,
@@ -174,12 +179,16 @@ export class PerformanceAnalysisService {
           params: {
             url,
             f: 'json',
-            location: 'Dulles:Chrome', // Default location
+            location,
             runs: 1, // Single run for faster results
             fvonly: 1, // First view only
             video: 1, // Enable video for filmstrip
             lighthouse: 0, // No Lighthouse (we already have PageSpeed)
             priority: 5, // Higher priority for faster results
+            ...(strategy === 'mobile' && {
+              mobile: 1, // Enable mobile mode
+              mobileDevice: 'Moto G4', // Specific mobile device
+            }),
           },
           headers: {
             'X-WPT-API-KEY': this.WPT_API_KEY,
@@ -403,18 +412,28 @@ export class PerformanceAnalysisService {
         // 资源统计
         resources: {
           totalBytes: firstView.bytesIn || 0,
-          totalRequests: firstView.requests || 0,
+          totalRequests: (() => {
+            // firstView.requests 是数组,需要获取长度或使用 requestsDoc
+            if (Array.isArray(firstView.requests)) {
+              return firstView.requests.length;
+            }
+            if (Array.isArray(firstView.requestsDoc)) {
+              return firstView.requestsDoc.length;
+            }
+            // 如果有 requestsFull 或其他字段,也可以尝试
+            return typeof firstView.requests === 'number' ? firstView.requests : 0;
+          })(),
           images: {
-            bytes: firstView.images?.bytes || 0,
-            requests: firstView.images?.requests || 0,
+            bytes: firstView.image_bytes || firstView.images?.bytes || 0,
+            requests: firstView.image_requests || firstView.images?.requests || 0,
           },
           js: {
-            bytes: firstView.js?.bytes || 0,
-            requests: firstView.js?.requests || 0,
+            bytes: firstView.js_bytes || firstView.js?.bytes || 0,
+            requests: firstView.js_requests || firstView.js?.requests || 0,
           },
           css: {
-            bytes: firstView.css?.bytes || 0,
-            requests: firstView.css?.requests || 0,
+            bytes: firstView.css_bytes || firstView.css?.bytes || 0,
+            requests: firstView.css_requests || firstView.css?.requests || 0,
           },
         },
 

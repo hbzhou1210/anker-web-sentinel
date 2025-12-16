@@ -16,11 +16,7 @@ const router = Router();
 // POST /api/v1/tests - Create a new test request
 router.post('/', validateUrl, rateLimit, async (req: Request, res: Response) => {
   try {
-    console.log('[API] Content-Type:', req.headers['content-type']);
-    console.log('[API] Full request body:', JSON.stringify(req.body, null, 2));
-    console.log('[API] Body keys:', Object.keys(req.body));
     const { url, config, notificationEmail } = req.body;
-    console.log(`[API] Received request - url: ${url}, notificationEmail: ${notificationEmail}, type: ${typeof notificationEmail}`);
 
     // Validate email format if provided
     if (notificationEmail) {
@@ -35,9 +31,7 @@ router.post('/', validateUrl, rateLimit, async (req: Request, res: Response) => 
     }
 
     // Create test request with pending status
-    console.log(`[API] Creating test request with email: ${notificationEmail}`);
     const testRequest = await testRequestRepository.create(url, config, notificationEmail);
-    console.log(`[API] Test request created with notificationEmail: ${testRequest.notificationEmail}`);
 
     // Start test execution asynchronously (don't await)
     testExecutionService.executeTest(testRequest.id, url, config).catch((error) => {

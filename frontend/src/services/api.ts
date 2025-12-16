@@ -73,6 +73,16 @@ export interface TestRequest {
     timeout?: number;
     waitTime?: number;
     performanceTestMode?: PerformanceTestMode;
+    enableWebPageTest?: boolean;
+    enablePageSpeed?: boolean;
+    deviceStrategy?: 'mobile' | 'desktop';
+    testOptions?: {
+      links?: boolean;
+      forms?: boolean;
+      buttons?: boolean;
+      images?: boolean;
+      performance?: boolean;
+    };
   };
 }
 
@@ -253,6 +263,9 @@ export const api = {
       timeout?: number;
       waitTime?: number;
       performanceTestMode?: PerformanceTestMode;
+      enableWebPageTest?: boolean;
+      enablePageSpeed?: boolean;
+      deviceStrategy?: 'mobile' | 'desktop';
       testOptions?: {
         links?: boolean;
         forms?: boolean;

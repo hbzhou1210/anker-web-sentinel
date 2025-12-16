@@ -46,6 +46,9 @@ const urlSchema = z.object({
       timeout: z.number().int().min(5).max(120).optional(),
       waitTime: z.number().int().min(0).max(30).optional(),
       performanceTestMode: z.enum(['webpagetest', 'pagespeed']).optional(),
+      enableWebPageTest: z.boolean().optional(),
+      enablePageSpeed: z.boolean().optional(),
+      deviceStrategy: z.enum(['mobile', 'desktop']).optional(),
       testOptions: z
         .object({
           links: z.boolean().optional(),

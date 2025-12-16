@@ -17,6 +17,8 @@ export function TestInput({ onTestCreated }: TestInputProps) {
   const [performanceTestModes, setPerformanceTestModes] = useState<Set<PerformanceTestMode>>(
     new Set(['webpagetest'])
   );
+  // 设备类型选择
+  const [deviceStrategy, setDeviceStrategy] = useState<'mobile' | 'desktop'>('desktop');
 
   // Test options state
   const [testOptions, setTestOptions] = useState({
@@ -62,19 +64,29 @@ export function TestInput({ onTestCreated }: TestInputProps) {
       console.log('[Frontend] handleSubmit - notificationEmail:', notificationEmail);
       console.log('[Frontend] handleSubmit - emailToSend:', emailToSend);
 
-      // 使用第一个选中的模式(暂时后端只支持单模式)
-      const performanceTestMode = Array.from(performanceTestModes)[0] || 'webpagetest';
+      // 支持多选性能测试模式
+      const modesArray = Array.from(performanceTestModes);
+      const performanceTestMode = modesArray[0] || 'webpagetest'; // 主要模式
+      const enableWebPageTest = modesArray.includes('webpagetest');
+      const enablePageSpeed = modesArray.includes('pagespeed');
 
-      const result = await createTestMutation.mutateAsync({
+      const requestPayload = {
         url: url.trim(),
         notificationEmail: emailToSend,
         config: {
           timeout,
           waitTime,
           performanceTestMode,
+          enableWebPageTest,
+          enablePageSpeed,
+          deviceStrategy,
           testOptions,
         },
-      });
+      };
+
+      console.log('[Frontend] Submitting test with payload:', JSON.stringify(requestPayload, null, 2));
+
+      const result = await createTestMutation.mutateAsync(requestPayload);
 
       // Clear form
       setUrl('');
@@ -283,6 +295,51 @@ export function TestInput({ onTestCreated }: TestInputProps) {
                       </div>
                       <div className="mode-description">
                         使用 Google PageSpeed API,提供详细的优化建议和诊断信息
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* Device Strategy Selector - 设备选择器 */}
+            {testOptions.performance && performanceTestModes.size > 0 && (
+              <div className="device-strategy-selector">
+                <label className="device-selector-label">测试设备:</label>
+                <div className="device-options">
+                  <label className={`device-option ${deviceStrategy === 'desktop' ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="deviceStrategy"
+                      value="desktop"
+                      checked={deviceStrategy === 'desktop'}
+                      onChange={() => setDeviceStrategy('desktop')}
+                      disabled={isLoading}
+                    />
+                    <div className="device-content">
+                      <div className="device-title">
+                        🖥️ 桌面端 (Chrome)
+                      </div>
+                      <div className="device-description">
+                        使用桌面浏览器进行测试,适合PC端网站性能评估
+                      </div>
+                    </div>
+                  </label>
+                  <label className={`device-option ${deviceStrategy === 'mobile' ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="deviceStrategy"
+                      value="mobile"
+                      checked={deviceStrategy === 'mobile'}
+                      onChange={() => setDeviceStrategy('mobile')}
+                      disabled={isLoading}
+                    />
+                    <div className="device-content">
+                      <div className="device-title">
+                        📱 移动端 (Moto G4, 3G)
+                      </div>
+                      <div className="device-description">
+                        使用移动设备模拟进行测试,适合移动端网站性能评估
                       </div>
                     </div>
                   </label>
