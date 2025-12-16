@@ -22,6 +22,7 @@ import { imageCompareService } from './automation/ImageCompareService.js';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,6 +35,14 @@ setupStaticFiles(app);
 // Serve discount rule tool output files
 // __dirname is backend/dist, need to go up 2 levels to project root
 const discountRuleOutputDir = path.join(__dirname, '../../tools/function-discount-checker/output');
+
+// Ensure output directory exists (auto-create if missing)
+if (!fs.existsSync(discountRuleOutputDir)) {
+  console.log('⚠️  Output directory not found, creating:', discountRuleOutputDir);
+  fs.mkdirSync(discountRuleOutputDir, { recursive: true });
+  console.log('✓ Output directory created successfully');
+}
+
 app.use('/discount-rule-output', express.static(discountRuleOutputDir));
 
 // Mount API routes

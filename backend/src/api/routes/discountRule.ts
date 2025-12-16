@@ -28,6 +28,22 @@ router.get('/reports', async (req, res) => {
   try {
     const outputDir = getOutputDir();
 
+    // 检查目录是否存在,如不存在则自动创建
+    try {
+      await fs.access(outputDir);
+    } catch (error) {
+      console.log('⚠️  Output directory not found, creating:', outputDir);
+      await fs.mkdir(outputDir, { recursive: true });
+      console.log('✓ Output directory created successfully');
+
+      // 目录刚创建,返回空列表
+      return res.json({
+        success: true,
+        reports: [],
+        total: 0
+      });
+    }
+
     // 读取 output 目录
     const files = await fs.readdir(outputDir);
 
@@ -100,6 +116,15 @@ async function executeDiscountCheck(ruleIds: number[], shopDomain: string): Prom
   } = await importToolModules();
 
   const outputDir = getOutputDir();
+
+  // 确保输出目录存在
+  try {
+    await fs.access(outputDir);
+  } catch (error) {
+    console.log('⚠️  Output directory not found, creating:', outputDir);
+    await fs.mkdir(outputDir, { recursive: true });
+    console.log('✓ Output directory created successfully');
+  }
 
   if (ruleIds.length === 1) {
     // 单个规则查询
