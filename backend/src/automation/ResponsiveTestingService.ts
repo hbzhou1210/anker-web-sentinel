@@ -21,6 +21,11 @@ export class ResponsiveTestingService {
     const issues: ResponsiveTestIssue[] = [];
 
     try {
+      // 检查页面是否有效
+      if (page.isClosed()) {
+        throw new Error('Page is already closed before test');
+      }
+
       // 设置视口
       await page.setViewportSize({
         width: device.viewportWidth,
@@ -40,6 +45,11 @@ export class ResponsiveTestingService {
 
       // 等待页面稳定 - 减少等待时间
       await page.waitForTimeout(1000);  // 从 2000ms 减少到 1000ms
+
+      // 再次检查页面状态
+      if (page.isClosed()) {
+        throw new Error('Page closed during initial load');
+      }
 
       // 1. 检查是否有横向滚动条
       const hasHorizontalScroll = await this.checkHorizontalScroll(page, issues);

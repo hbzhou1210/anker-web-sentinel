@@ -175,10 +175,25 @@ export class ScreenshotService {
   // Capture full page screenshot without highlighting
   async captureFullPage(page: Page): Promise<string> {
     try {
+      // 检查页面是否仍然有效
+      if (page.isClosed()) {
+        console.warn('Page is closed, cannot capture screenshot');
+        return '';
+      }
+
+      // 等待页面稳定,防止在渲染过程中截图崩溃
+      try {
+        await page.waitForLoadState('networkidle', { timeout: 5000 });
+      } catch {
+        // 如果等待超时,继续截图(可能页面有持续的网络请求)
+        console.log('Page did not reach networkidle state, proceeding anyway');
+      }
+
       // 尝试完整页面截图
       const screenshot = await page.screenshot({
         fullPage: true,
         type: 'png',
+        timeout: 30000, // 30秒超时
       });
 
       // Compress to WebP format at 80% quality

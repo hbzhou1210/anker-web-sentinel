@@ -24,16 +24,40 @@ export class BrowserPool {
         const browser = await chromium.launch({
           headless: true,
           args: [
+            // 基础安全参数
             '--no-sandbox',
             '--disable-setuid-sandbox',
+
+            // 内存和稳定性
             '--disable-dev-shm-usage',
+            '--disable-features=VizDisplayCompositor',
+            '--disable-features=IsolateOrigins,site-per-process',
+
+            // GPU 和渲染
             '--disable-gpu',
             '--disable-gpu-compositing',
             '--disable-software-rasterizer',
             '--disable-accelerated-2d-canvas',
             '--disable-gl-drawing-for-tests',
-            '--disable-features=IsolateOrigins,site-per-process',
-            // 注意: 不使用 --single-process,因为它可能导致浏览器不稳定
+
+            // 防止崩溃的关键参数
+            '--disable-crash-reporter',
+            '--disable-in-process-stack-traces',
+            '--disable-logging',
+            '--disable-breakpad',
+            '--log-level=3',
+
+            // 字体和渲染稳定性
+            '--font-render-hinting=none',
+            '--disable-font-subpixel-positioning',
+
+            // 禁用可能导致崩溃的功能
+            '--disable-web-security',
+            '--disable-features=site-per-process',
+            '--disable-blink-features=AutomationControlled',
+
+            // 内存限制
+            '--js-flags=--max-old-space-size=512',
           ],
         });
 
