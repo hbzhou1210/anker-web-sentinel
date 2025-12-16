@@ -69,8 +69,6 @@ router.get('/devices/:type', async (req: Request, res: Response): Promise<void> 
  * 执行响应式测试
  */
 router.post('/test', async (req: Request, res: Response): Promise<void> => {
-  let browser = null;
-
   try {
     const { url, deviceIds } = req.body;
 
@@ -109,10 +107,8 @@ router.post('/test', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // 在所有验证通过后才获取browser
-    browser = await browserPool.acquire();
-
     // 并行执行测试 - 限制并发数量避免资源耗尽
+    // 注意: 每个设备使用独立的browser实例,避免browser崩溃影响其他测试
     const CONCURRENT_LIMIT = 3; // 同时最多测试3个设备
     console.log(`Starting tests on ${devicesToTest.length} devices (max ${CONCURRENT_LIMIT} concurrent)...`);
     const startTime = Date.now();
@@ -125,16 +121,22 @@ router.post('/test', async (req: Request, res: Response): Promise<void> => {
 
       const batchResults = await Promise.all(
         batch.map(async (device) => {
-          const page = await browser.newPage();
+          // 为每个设备获取独立的browser实例
+          const deviceBrowser = await browserPool.acquire();
           try {
-            console.log(`Testing on ${device.name}...`);
-            const result = await responsiveTestingService.testOnDevice(page, url, device);
-            return result;
+            const page = await deviceBrowser.newPage();
+            try {
+              console.log(`Testing on ${device.name}...`);
+              const result = await responsiveTestingService.testOnDevice(page, url, device);
+              return result;
+            } finally {
+              await page.close();
+            }
           } catch (error) {
             console.error(`Failed to test on ${device.name}:`, error);
             throw error;
           } finally {
-            await page.close();
+            await browserPool.release(deviceBrowser);
           }
         })
       );
@@ -168,10 +170,6 @@ router.post('/test', async (req: Request, res: Response): Promise<void> => {
       error: 'Internal server error',
       message: error instanceof Error ? error.message : '响应式测试失败',
     });
-  } finally {
-    if (browser) {
-      await browserPool.release(browser);
-    }
   }
 });
 
