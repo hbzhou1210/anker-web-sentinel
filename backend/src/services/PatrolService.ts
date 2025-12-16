@@ -185,7 +185,62 @@ export class PatrolService {
 
     try {
       // 1. 导航栏检查 - 简化为只检查导航栏是否存在和展示正常
-      const navigationResult = await page.evaluate(() => {
+      const navigationResult = await page.evaluate(function() {
+        // 优先检查是否存在 aria-label='go home' 元素
+        const goHomeElement = document.querySelector('[aria-label="go home"]');
+        if (goHomeElement) {
+          const rect = goHomeElement.getBoundingClientRect();
+          const style = window.getComputedStyle(goHomeElement);
+          const isVisible = style.display !== 'none' &&
+                          style.visibility !== 'hidden' &&
+                          style.opacity !== '0';
+
+          if (isVisible && rect.width > 0 && rect.height > 0) {
+            // 找到 go home 元素,查找其所在的导航栏容器
+            let navContainer = goHomeElement.closest('nav, header, [class*="nav"], [class*="header"]');
+
+            if (navContainer) {
+              const navRect = navContainer.getBoundingClientRect();
+              const navStyle = window.getComputedStyle(navContainer);
+              const isNavVisible = navStyle.display !== 'none' &&
+                                  navStyle.visibility !== 'hidden' &&
+                                  navStyle.opacity !== '0';
+
+              if (isNavVisible) {
+                // 检查导航栏的功能特征
+                const hasSearch = navContainer.querySelector('input[type="search"], [class*="search"]') !== null;
+                const hasCart = navContainer.querySelector('[class*="cart"], [class*="Cart"]') !== null;
+                const hasDropdown = navContainer.querySelector('[class*="dropdown"], [class*="menu"]') !== null;
+                const allLinks = navContainer.querySelectorAll('a');
+
+                return {
+                  found: true,
+                  confidence: 'high',
+                  totalLinkCount: allLinks.length,
+                  hasSearch,
+                  hasCart,
+                  hasDropdown,
+                  hasGoHome: true,
+                  position: `${Math.round(navRect.top)}px from top`
+                };
+              }
+            }
+
+            // go home 元素存在但没找到导航栏容器,仍然判断为找到导航栏
+            return {
+              found: true,
+              confidence: 'medium',
+              totalLinkCount: 0,
+              hasSearch: false,
+              hasCart: false,
+              hasDropdown: false,
+              hasGoHome: true,
+              position: `${Math.round(rect.top)}px from top`
+            };
+          }
+        }
+
+        // 如果没有 go home 元素,使用原有的导航栏检测逻辑
         const selectors = [
           'nav[class*="nav"]',
           'header nav',
@@ -232,6 +287,7 @@ export class PatrolService {
                 hasSearch,
                 hasCart,
                 hasDropdown,
+                hasGoHome: false,
                 position: `${Math.round(rect.top)}px from top`
               };
             }
@@ -243,11 +299,13 @@ export class PatrolService {
           totalLinkCount: 0,
           hasSearch: false,
           hasCart: false,
-          hasDropdown: false
+          hasDropdown: false,
+          hasGoHome: false
         };
       });
 
       const navFeatures = [];
+      if (navigationResult.hasGoHome) navFeatures.push('Go Home按钮');
       if (navigationResult.hasSearch) navFeatures.push('搜索');
       if (navigationResult.hasCart) navFeatures.push('购物车');
       if (navigationResult.hasDropdown) navFeatures.push('下拉菜单');
@@ -266,7 +324,7 @@ export class PatrolService {
       });
 
       // 2. 主Banner/首屏内容检查 - 简化为只检查是否存在和展示正常
-      const bannerResult = await page.evaluate(() => {
+      const bannerResult = await page.evaluate(function() {
         const selectors = [
           '.banner',
           '.hero',
@@ -351,7 +409,7 @@ export class PatrolService {
       await page.waitForTimeout(3000);
 
       // 尝试滚动页面触发懒加载
-      await page.evaluate(() => {
+      await page.evaluate(function() {
         window.scrollTo(0, document.body.scrollHeight / 2);
       });
       await page.waitForTimeout(2000);
@@ -382,7 +440,7 @@ export class PatrolService {
       });
 
       // 4. 页脚检查 - 简化为只检查元素展示和订阅功能
-      const footerResult = await page.evaluate(() => {
+      const footerResult = await page.evaluate(function() {
         const selectors = ['footer', '.footer', '[class*="footer"]'];
 
         // 遍历所有可能的页脚元素
@@ -462,8 +520,12 @@ export class PatrolService {
               });
 
               // 只统计可见的元素
-              const visibleEmailInputs = allEmailInputs.filter(function(input) { return input.offsetParent !== null; });
-              const visibleButtons = allButtons.filter(function(btn) { return btn.offsetParent !== null; });
+              const visibleEmailInputs = allEmailInputs.filter(function(input) {
+                return (input as HTMLElement).offsetParent !== null;
+              });
+              const visibleButtons = allButtons.filter(function(btn) {
+                return (btn as HTMLElement).offsetParent !== null;
+              });
 
               return {
                 found: true,
@@ -558,7 +620,9 @@ export class PatrolService {
       // 2. 产品图片检查
       const productImage = await page.$eval(
         'img[class*="product"], .product-image img, [class*="productImage"] img, main img',
-        function(img) { return img.complete && img.naturalHeight > 0; }
+        function(img: any) {
+          return !!(img.complete && img.naturalHeight > 0);
+        }
       ).catch(function() { return false; });
 
       checks.push({
@@ -571,83 +635,130 @@ export class PatrolService {
       let priceInfo = null;
       let priceConfidence: 'high' | 'medium' | 'low' = 'high';
 
-      // 首先尝试从JSON-LD schema中提取价格(最准确)
-      try {
-        const schemaPrice = await page.evaluate(() => {
-          const scripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
-          for (const script of scripts) {
-            try {
-              const data = JSON.parse(script.textContent || '');
-              if (data['@type'] === 'Product' && data.offers) {
-                const offers = Array.isArray(data.offers) ? data.offers[0] : data.offers;
-                const price = offers?.price;
-                const currency = offers?.priceCurrency || 'USD';
+      // 策略0: 如果找到了产品标题,优先在标题附近查找价格(最准确)
+      if (productTitle) {
+        try {
+          const titleNearbyPrice = await page.evaluate(() => {
+            // 找到产品标题元素
+            const titleSelectors = ['h1', '.product-title', '[class*="product-title"]', '[class*="productTitle"]'];
+            let titleElement = null;
 
-                if (price) {
-                  const numPrice = typeof price === 'number' ? price : parseFloat(price);
-                  if (!isNaN(numPrice) && numPrice > 0) {
-                    const symbol = currency === 'USD' ? '$' : currency;
-                    return {
-                      price: `${symbol}${numPrice.toFixed(2)}`,
-                      confidence: 'high'
-                    };
-                  }
-                }
-              }
-            } catch (e) {
-              // 继续尝试下一个script
+            for (const selector of titleSelectors) {
+              titleElement = document.querySelector(selector);
+              if (titleElement) break;
             }
-          }
-          return null;
-        });
-        if (schemaPrice) {
-          priceInfo = schemaPrice.price;
-          priceConfidence = 'high';
-        }
-      } catch {}
 
-      // 如果JSON-LD失败,尝试更精确的DOM选择器策略
-      if (!priceInfo) {
-        const priceResult = await page.evaluate(() => {
-          // 辅助函数: 提取价格数值 - 使用 function 声明避免 __name 问题
-          function extractPrice(text) {
-            // 优先匹配 $数字.数字 格式
-            let match = text.match(/\$\s*(\d+(?:,\d{3})*(?:\.\d{2})?)/);
+            if (!titleElement) return null;
+
+            // 查找标题元素的父容器
+            let container = titleElement.parentElement;
+            let searchDepth = 0;
+
+            // 向上找最多3层,找到产品信息容器
+            while (container && searchDepth < 3) {
+              const className = container.className?.toLowerCase() || '';
+              if (className.includes('product') || className.includes('item') ||
+                  container.tagName === 'MAIN' || container.getAttribute('role') === 'main') {
+                break;
+              }
+              container = container.parentElement;
+              searchDepth++;
+            }
+
+            if (!container) container = titleElement.parentElement;
+
+            // 直接从容器文本中提取价格,不使用元素查找
+            const containerText = container.textContent || '';
+
+            // 策略1: $XX.XX (带小数点的价格,更精确)
+            let match = containerText.match(/\$\s*(\d{1,3}(?:,\d{3})*\.\d{2})/);
             if (match) {
               const priceStr = match[1].replace(/,/g, '');
               const priceNum = parseFloat(priceStr);
               if (!isNaN(priceNum) && priceNum > 0 && priceNum < 100000) {
-                return priceNum;
+                return {
+                  price: `$${priceNum.toFixed(2)}`,
+                  confidence: 'high',
+                  source: 'title-nearby-regex'
+                };
               }
             }
 
-            // 匹配纯数字价格 (如 129.99)
-            match = text.match(/\b(\d+(?:,\d{3})*\.\d{2})\b/);
+            // 策略2: $XX (整数价格)
+            match = containerText.match(/\$\s*(\d{1,3}(?:,\d{3})*)\b/);
             if (match) {
               const priceStr = match[1].replace(/,/g, '');
               const priceNum = parseFloat(priceStr);
               if (!isNaN(priceNum) && priceNum > 0 && priceNum < 100000) {
-                return priceNum;
+                return {
+                  price: `$${priceNum.toFixed(2)}`,
+                  confidence: 'high',
+                  source: 'title-nearby-regex'
+                };
               }
             }
 
             return null;
-          }
+          });
 
+          if (titleNearbyPrice) {
+            priceInfo = titleNearbyPrice.price;
+            priceConfidence = 'high';
+          }
+        } catch (error) {
+          console.log('  标题附近价格提取失败:', error);
+        }
+      }
+
+      // 策略1: 尝试从JSON-LD schema中提取价格
+      if (!priceInfo) {
+        try {
+          const schemaPrice = await page.evaluate(function() {
+            const scripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
+            for (const script of scripts) {
+              try {
+                const data = JSON.parse(script.textContent || '');
+                if (data['@type'] === 'Product' && data.offers) {
+                  const offers = Array.isArray(data.offers) ? data.offers[0] : data.offers;
+                  const price = offers?.price;
+                  const currency = offers?.priceCurrency || 'USD';
+
+                  if (price) {
+                    const numPrice = typeof price === 'number' ? price : parseFloat(price);
+                    if (!isNaN(numPrice) && numPrice > 0) {
+                      const symbol = currency === 'USD' ? '$' : currency;
+                      return {
+                        price: `${symbol}${numPrice.toFixed(2)}`,
+                        confidence: 'high'
+                      };
+                    }
+                  }
+                }
+              } catch (e) {
+                // 继续尝试下一个script
+              }
+            }
+            return null;
+          });
+          if (schemaPrice) {
+            priceInfo = schemaPrice.price;
+            priceConfidence = 'high';
+          }
+        } catch {}
+      }
+
+      // 如果JSON-LD失败,尝试更精确的DOM选择器策略
+      if (!priceInfo) {
+        const priceResult = await page.evaluate(() => {
           // 策略1: 查找明确标记为"当前价格"的元素(仅在页面顶部2000px内)
           const priceSelectors = [
-            // 优先级最高: 明确标记的价格
             '[data-price-type="current"]',
             '[class*="currentPrice"]',
             '[class*="current-price"]',
             '[class*="sale-price"]',
             '[class*="salePrice"]',
-
-            // 次优先: 包含price但排除old/original/was等
             'span[class*="price"]:not([class*="old"]):not([class*="original"]):not([class*="was"])',
             'div[class*="price"]:not([class*="old"]):not([class*="original"]):not([class*="was"])',
-
-            // 最后: 通用price类
             '[itemprop="price"]',
             '.price:not(.old-price):not(.was-price)',
             '[class*="Price"]:not([class*="Old"]):not([class*="Was"])'
@@ -657,73 +768,128 @@ export class PatrolService {
             const elements = document.querySelectorAll(selector);
             for (const el of elements) {
               const rect = el.getBoundingClientRect();
-
-              // 只检查页面顶部2000px内的元素(主产品信息区域)
               if (rect.top >= 2000) continue;
 
               const text = el.textContent?.trim() || '';
               const classList = el.className.toLowerCase();
 
-              // 跳过明确标记为旧价格的元素
               if (classList.includes('old') || classList.includes('was') ||
                   classList.includes('original') || classList.includes('compare')) {
                 continue;
               }
 
-              const priceNum = extractPrice(text);
-              if (priceNum) {
-                return {
-                  price: `$${priceNum.toFixed(2)}`,
-                  confidence: selector.includes('current') || selector.includes('sale') ? 'high' : 'medium'
-                };
+              // 内联价格提取逻辑 - 策略1
+              let match = text.match(/\$\s*(\d{1,3}(?:,\d{3})*\.\d{2})/);
+              if (match) {
+                const priceStr = match[1].replace(/,/g, '');
+                const priceNum = parseFloat(priceStr);
+                if (!isNaN(priceNum) && priceNum > 0 && priceNum < 100000) {
+                  return {
+                    price: `$${priceNum.toFixed(2)}`,
+                    confidence: selector.includes('current') || selector.includes('sale') ? 'high' : 'medium'
+                  };
+                }
+              }
+
+              // 内联价格提取逻辑 - 策略2
+              match = text.match(/\$\s*(\d{1,3}(?:,\d{3})*)\b/);
+              if (match) {
+                const priceStr = match[1].replace(/,/g, '');
+                const priceNum = parseFloat(priceStr);
+                if (!isNaN(priceNum) && priceNum > 0 && priceNum < 100000) {
+                  return {
+                    price: `$${priceNum.toFixed(2)}`,
+                    confidence: selector.includes('current') || selector.includes('sale') ? 'high' : 'medium'
+                  };
+                }
+              }
+
+              // 内联价格提取逻辑 - 策略3
+              match = text.match(/\b(\d{1,3}(?:,\d{3})*\.\d{2})\b/);
+              if (match) {
+                const priceStr = match[1].replace(/,/g, '');
+                const priceNum = parseFloat(priceStr);
+                if (!isNaN(priceNum) && priceNum > 0 && priceNum < 100000) {
+                  return {
+                    price: `$${priceNum.toFixed(2)}`,
+                    confidence: 'medium'
+                  };
+                }
               }
             }
           }
 
-          // 策略2(降级): 如果选择器策略失败,在主内容区域搜索价格模式
-          // 适用于Tailwind CSS等不使用语义化class名的网站
-          const mainContainers = [
+          // 策略2: 在主内容区域搜索价格模式
+          const mainContainersRaw = [
             document.querySelector('main'),
             document.querySelector('[class*="product-info"]'),
             document.querySelector('[class*="productInfo"]'),
             document.querySelector('[class*="product-detail"]'),
             document.querySelector('[role="main"]'),
-          ].filter(function(el) { return el; });
+          ];
+          const mainContainers = [];
+          for (var i = 0; i < mainContainersRaw.length; i++) {
+            if (mainContainersRaw[i]) {
+              mainContainers.push(mainContainersRaw[i]);
+            }
+          }
 
-          // 收集所有候选价格,按字体大小排序
           const candidates = [];
-
           for (const container of mainContainers) {
-            // 查找所有包含价格模式的span和div元素
             const allElements = container.querySelectorAll('span, div');
 
             for (const el of allElements) {
               const rect = el.getBoundingClientRect();
-
-              // 只检查页面顶部2000px内的元素
               if (rect.top >= 2000) continue;
 
               const text = el.textContent?.trim() || '';
-
-              // 文本长度合理(避免匹配到大容器)
               if (text.length > 50) continue;
 
-              // 排除明确的折扣/促销文案
               const lowerText = text.toLowerCase();
               if (lowerText.includes('save') || lowerText.includes('off') ||
                   lowerText.includes('discount') || lowerText.includes('deal')) {
                 continue;
               }
 
-              const priceNum = extractPrice(text);
+              // 内联价格提取并收集候选
+              let priceNum = null;
+              let match = text.match(/\$\s*(\d{1,3}(?:,\d{3})*\.\d{2})/);
+              if (match) {
+                const priceStr = match[1].replace(/,/g, '');
+                priceNum = parseFloat(priceStr);
+                if (isNaN(priceNum) || priceNum <= 0 || priceNum >= 100000) {
+                  priceNum = null;
+                }
+              }
+
+              if (!priceNum) {
+                match = text.match(/\$\s*(\d{1,3}(?:,\d{3})*)\b/);
+                if (match) {
+                  const priceStr = match[1].replace(/,/g, '');
+                  priceNum = parseFloat(priceStr);
+                  if (isNaN(priceNum) || priceNum <= 0 || priceNum >= 100000) {
+                    priceNum = null;
+                  }
+                }
+              }
+
+              if (!priceNum) {
+                match = text.match(/\b(\d{1,3}(?:,\d{3})*\.\d{2})\b/);
+                if (match) {
+                  const priceStr = match[1].replace(/,/g, '');
+                  priceNum = parseFloat(priceStr);
+                  if (isNaN(priceNum) || priceNum <= 0 || priceNum >= 100000) {
+                    priceNum = null;
+                  }
+                }
+              }
+
               if (priceNum) {
-                // 检查字体大小(主产品价格通常字体较大)
                 const style = window.getComputedStyle(el);
                 const fontSize = parseFloat(style.fontSize);
-
                 candidates.push({
                   price: priceNum,
-                  fontSize,
+                  fontSize: fontSize,
                   top: rect.top,
                   confidence: fontSize >= 20 ? 'medium' : 'low'
                 });
@@ -731,9 +897,9 @@ export class PatrolService {
             }
           }
 
-          // 按字体大小降序排序,选择字体最大的价格
           if (candidates.length > 0) {
-            candidates.sort(function(a, b) { return b.fontSize - a.fontSize; });
+            // 按字体大小排序(降序)
+            candidates.sort((a, b) => b.fontSize - a.fontSize);
             const best = candidates[0];
             return {
               price: `$${best.price.toFixed(2)}`,
@@ -1072,7 +1238,7 @@ export class PatrolService {
       await this.dismissCommonPopups(page);
 
       // 基本可用性检查
-      const bodyExists = await page.evaluate(() => {
+      const bodyExists = await page.evaluate(function() {
         return document.body !== null && document.body.children.length > 0;
       });
 

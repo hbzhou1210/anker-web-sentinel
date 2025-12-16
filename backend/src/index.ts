@@ -1,4 +1,3 @@
-import dotenv from 'dotenv';
 import app from './api/app.js';
 import browserPool from './automation/BrowserPool.js';
 import { setupStaticFiles } from './api/middleware/staticFiles.js';
@@ -22,9 +21,6 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// Load environment variables
-dotenv.config();
 
 const PORT = process.env.PORT || 3000;
 

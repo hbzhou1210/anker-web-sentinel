@@ -366,6 +366,9 @@ export interface PatrolConfig {
     retryOnInfraError?: boolean; // 是否对基础设施错误重试,默认true
   };
 
+  // 页脚newsletter配置(向后兼容的顶级配置)
+  requireFooterNewsletter?: boolean; // 是否要求邮件订阅,默认false
+
   // 页面检查配置
   pageChecks?: {
     // 首页/落地页检查项

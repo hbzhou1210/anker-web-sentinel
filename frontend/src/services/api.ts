@@ -16,8 +16,8 @@ const getApiBaseUrl = (): string => {
   }
 
   // 本地开发环境使用完整 URL
-  console.log('[API] Development mode detected -> using http://localhost:3000/api/v1');
-  return 'http://localhost:3000/api/v1';
+  console.log('[API] Development mode detected -> using http://localhost:80/api/v1');
+  return 'http://localhost:80/api/v1';
 };
 
 /**
@@ -39,9 +39,9 @@ export const getFullApiUrl = (path: string): string => {
     return result;
   }
 
-  // 开发环境:使用 localhost:3000
+  // 开发环境:使用 localhost:80
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
-  const result = `http://localhost:3000${cleanPath}`;
+  const result = `http://localhost:80${cleanPath}`;
   console.log('[API] getFullApiUrl (development):', path, '->', result);
   return result;
 };
@@ -241,6 +241,145 @@ export const api = {
   }): Promise<ReportListResponse> {
     try {
       const response = await apiClient.get<ReportListResponse>('/reports', { params });
+      return response.data;
+    } catch (error) {
+      return handleAPIError(error);
+    }
+  },
+
+  // ==================== Patrol APIs ====================
+
+  // Create patrol task
+  async createPatrolTask(params: {
+    name: string;
+    description?: string;
+    urls: Array<{ url: string; name: string }>;
+    notificationEmails: string[];
+    config?: Record<string, any>;
+    enabled?: boolean;
+  }): Promise<any> {
+    try {
+      const response = await apiClient.post('/patrol/tasks', params);
+      return response.data;
+    } catch (error) {
+      return handleAPIError(error);
+    }
+  },
+
+  // Get patrol tasks
+  async getPatrolTasks(enabledOnly = false): Promise<any[]> {
+    try {
+      const response = await apiClient.get('/patrol/tasks', {
+        params: { enabledOnly },
+      });
+      return response.data;
+    } catch (error) {
+      return handleAPIError(error);
+    }
+  },
+
+  // Get patrol task by ID
+  async getPatrolTask(taskId: string): Promise<any> {
+    try {
+      const response = await apiClient.get(`/patrol/tasks/${taskId}`);
+      return response.data;
+    } catch (error) {
+      return handleAPIError(error);
+    }
+  },
+
+  // Update patrol task
+  async updatePatrolTask(taskId: string, updates: Partial<any>): Promise<any> {
+    try {
+      const response = await apiClient.put(`/patrol/tasks/${taskId}`, updates);
+      return response.data;
+    } catch (error) {
+      return handleAPIError(error);
+    }
+  },
+
+  // Delete patrol task
+  async deletePatrolTask(taskId: string): Promise<void> {
+    try {
+      await apiClient.delete(`/patrol/tasks/${taskId}`);
+    } catch (error) {
+      return handleAPIError(error);
+    }
+  },
+
+  // Execute patrol task manually
+  async executePatrolTask(taskId: string): Promise<{ executionId: string }> {
+    try {
+      const response = await apiClient.post(`/patrol/tasks/${taskId}/execute`);
+      return response.data;
+    } catch (error) {
+      return handleAPIError(error);
+    }
+  },
+
+  // Create patrol schedule
+  async createPatrolSchedule(params: {
+    patrolTaskId: string;
+    cronExpression: string;
+    scheduleType: string;
+    timeZone?: string;
+    enabled?: boolean;
+  }): Promise<any> {
+    try {
+      const response = await apiClient.post('/patrol/schedules', params);
+      return response.data;
+    } catch (error) {
+      return handleAPIError(error);
+    }
+  },
+
+  // Get patrol schedules
+  async getPatrolSchedules(taskId?: string): Promise<any[]> {
+    try {
+      const response = await apiClient.get('/patrol/schedules', {
+        params: taskId ? { taskId } : undefined,
+      });
+      return response.data;
+    } catch (error) {
+      return handleAPIError(error);
+    }
+  },
+
+  // Update patrol schedule
+  async updatePatrolSchedule(scheduleId: string, updates: Partial<any>): Promise<any> {
+    try {
+      const response = await apiClient.put(`/patrol/schedules/${scheduleId}`, updates);
+      return response.data;
+    } catch (error) {
+      return handleAPIError(error);
+    }
+  },
+
+  // Delete patrol schedule
+  async deletePatrolSchedule(scheduleId: string): Promise<void> {
+    try {
+      await apiClient.delete(`/patrol/schedules/${scheduleId}`);
+    } catch (error) {
+      return handleAPIError(error);
+    }
+  },
+
+  // Get patrol executions
+  async getPatrolExecutions(taskId?: string, limit = 10): Promise<any[]> {
+    try {
+      const response = await apiClient.get('/patrol/executions', {
+        params: { taskId, limit },
+      });
+      return response.data;
+    } catch (error) {
+      return handleAPIError(error);
+    }
+  },
+
+  // Get patrol execution detail
+  async getPatrolExecution(executionId: string): Promise<any> {
+    try {
+      const response = await apiClient.get(`/patrol/executions/${executionId}`);
       return response.data;
     } catch (error) {
       return handleAPIError(error);
