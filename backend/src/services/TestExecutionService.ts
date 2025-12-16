@@ -444,7 +444,8 @@ export class TestExecutionService {
     if (testRequest?.notificationEmail && emailService.isAvailable()) {
       try {
         console.log(`Sending email to ${testRequest.notificationEmail}...`);
-        const appUrl = process.env.APP_URL || 'http://localhost:5173';
+        // 生产环境必须配置 APP_URL,否则报告链接将不可用
+        const appUrl = process.env.APP_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
         await emailService.sendTestCompletionEmail(testRequest.notificationEmail, {
           url,
           overallScore: report.overallScore,
