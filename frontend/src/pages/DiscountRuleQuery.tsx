@@ -55,6 +55,48 @@ export const DiscountRuleQuery: React.FC = () => {
     }
   };
 
+  // 处理全店铺查询
+  const handleCheckAll = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setResult(null);
+
+    // 验证输入
+    if (!shopDomain.trim()) {
+      setError('请输入店铺域名');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch('/api/v1/discount-rule/check-all', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          shopDomain: shopDomain.trim(),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || '查询失败');
+      }
+
+      if (data.success) {
+        setResult(data);
+        loadReports(); // 刷新报告列表
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '未知错误');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // 处理表单提交
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -221,7 +263,23 @@ export const DiscountRuleQuery: React.FC = () => {
                     查询中...
                   </>
                 ) : (
-                  '开始查询'
+                  '🔍 查询指定规则'
+                )}
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handleCheckAll}
+                disabled={loading || !shopDomain.trim()}
+                style={{ background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' }}
+              >
+                {loading ? (
+                  <>
+                    <span className="spinner"></span>
+                    查询中...
+                  </>
+                ) : (
+                  '🔎 查询全部规则'
                 )}
               </button>
               <button

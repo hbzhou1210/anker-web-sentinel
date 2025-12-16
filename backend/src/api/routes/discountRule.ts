@@ -220,4 +220,109 @@ const checkHandler = async (req: express.Request, res: express.Response) => {
 router.post('/check', checkHandler);
 router.post('/check-discount', checkHandler);
 
+/**
+ * POST /api/v1/discount-rule/check-all
+ * 查询店铺下所有买赠规则状态
+ */
+router.post('/check-all', async (req: express.Request, res: express.Response) => {
+  try {
+    const { shopDomain } = req.body;
+
+    // 验证参数
+    if (!shopDomain || !shopDomain.includes('.myshopify.com')) {
+      return res.status(400).json({
+        success: false,
+        error: 'shop_domain 必须是有效的 Shopify 域名'
+      });
+    }
+
+    console.log(`\n收到全量查询请求: shop_domain=${shopDomain}`);
+
+    // 调用 check-all-rules.js 脚本
+    const toolDir = getToolDir();
+    const scriptPath = path.join(toolDir, 'check-all-rules.js');
+
+    const result = await new Promise<{
+      reportFilename: string;
+      summary: {
+        totalRules: number;
+        totalVariants: number;
+        normalVariants: number;
+        abnormalVariants: number;
+      };
+    }>((resolve, reject) => {
+      let stdout = '';
+      let stderr = '';
+
+      const child = spawn('node', [scriptPath, shopDomain], {
+        cwd: toolDir
+      });
+
+      child.stdout.on('data', (data) => {
+        stdout += data.toString();
+        // 实时输出日志到控制台
+        process.stdout.write(data);
+      });
+
+      child.stderr.on('data', (data) => {
+        stderr += data.toString();
+        process.stderr.write(data);
+      });
+
+      child.on('close', (code) => {
+        if (code !== 0) {
+          reject(new Error(`Script exited with code ${code}\n${stderr}`));
+          return;
+        }
+
+        // 从输出中提取报告文件名
+        const reportMatch = stdout.match(/batch-check-\d+\.html/);
+        if (!reportMatch) {
+          reject(new Error('未能生成报告'));
+          return;
+        }
+
+        // 从输出中提取统计信息
+        const statsMatch = stdout.match(/检查规则: (\d+) 条[\s\S]*?总 Variant: (\d+) 个[\s\S]*?状态正常: (\d+) 个[\s\S]*?状态异常: (\d+) 个/);
+
+        if (!statsMatch) {
+          reject(new Error('未能解析统计信息'));
+          return;
+        }
+
+        resolve({
+          reportFilename: reportMatch[0],
+          summary: {
+            totalRules: parseInt(statsMatch[1]),
+            totalVariants: parseInt(statsMatch[2]),
+            normalVariants: parseInt(statsMatch[3]),
+            abnormalVariants: parseInt(statsMatch[4])
+          }
+        });
+      });
+
+      child.on('error', (error) => {
+        reject(error);
+      });
+    });
+
+    const reportUrl = `/discount-rule-output/${result.reportFilename}`;
+
+    res.json({
+      success: true,
+      reportUrl,
+      summary: result.summary
+    });
+
+    console.log(`✓ 全量查询完成，报告已生成: ${result.reportFilename}`);
+
+  } catch (error) {
+    console.error('全量查询失败:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router;
