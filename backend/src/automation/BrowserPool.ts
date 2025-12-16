@@ -28,6 +28,12 @@ export class BrowserPool {
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
             '--disable-gpu',
+            '--disable-gpu-compositing',
+            '--disable-software-rasterizer',
+            '--disable-accelerated-2d-canvas',
+            '--disable-gl-drawing-for-tests',
+            '--disable-features=IsolateOrigins,site-per-process',
+            '--single-process', // 单进程模式,避免共享内存问题
           ],
         });
 

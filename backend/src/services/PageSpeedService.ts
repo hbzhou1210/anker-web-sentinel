@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { PageSpeedInsightsData } from '../models/entities';
+import { PageSpeedInsightsData } from '../models/entities.js';
 
 /**
  * PageSpeed Insights API Service
@@ -8,39 +8,71 @@ import { PageSpeedInsightsData } from '../models/entities';
 class PageSpeedService {
   private readonly apiKey: string;
   private readonly apiUrl = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
+  private readonly MAX_RETRIES = 3;
+  private readonly RETRY_DELAY = 5000; // 5秒
 
   constructor() {
     // 从环境变量读取 API Key
     this.apiKey = process.env.PAGESPEED_API_KEY || '';
     if (!this.apiKey) {
-      console.warn('[PageSpeed] Warning: PAGESPEED_API_KEY not set. PageSpeed tests will be limited.');
+      console.warn('[PageSpeed] Warning: PAGESPEED_API_KEY not set. PageSpeed tests will be limited to 25 requests/day/IP.');
+      console.warn('[PageSpeed] Get your API key from: https://developers.google.com/speed/docs/insights/v5/get-started');
     }
   }
 
   /**
-   * 运行 PageSpeed Insights 测试
+   * 运行 PageSpeed Insights 测试(带重试机制)
    * @param url 要测试的 URL
    * @param strategy 测试策略: 'mobile' | 'desktop'
    */
   async runPageSpeedTest(url: string, strategy: 'mobile' | 'desktop' = 'desktop'): Promise<PageSpeedInsightsData> {
     console.log(`[PageSpeed] Running PageSpeed Insights test for: ${url} (${strategy})`);
 
-    try {
-      const params: Record<string, string> = {
-        url,
-        strategy,
-        category: 'performance',
-      };
+    let lastError: Error | null = null;
 
-      // 只有在有 API Key 时才添加(没有 API Key 可以使用,但有请求限制)
-      if (this.apiKey) {
-        params.key = this.apiKey;
+    for (let attempt = 1; attempt <= this.MAX_RETRIES; attempt++) {
+      try {
+        return await this.executePageSpeedTest(url, strategy);
+      } catch (error: any) {
+        lastError = error;
+
+        // 如果是 API 限制错误或认证错误,不重试
+        if (error.response?.status === 429 || error.response?.status === 403) {
+          console.error(`[PageSpeed] API error (${error.response.status}), not retrying`);
+          break;
+        }
+
+        // 如果还有重试次数,等待后重试
+        if (attempt < this.MAX_RETRIES) {
+          console.warn(`[PageSpeed] Attempt ${attempt} failed: ${error.message}, retrying in ${this.RETRY_DELAY / 1000}s...`);
+          await new Promise(resolve => setTimeout(resolve, this.RETRY_DELAY));
+        }
       }
+    }
 
-      const response = await axios.get(this.apiUrl, {
-        params,
-        timeout: 120000, // 120秒超时 (复杂网站需要更长时间)
-      });
+    // 所有重试都失败,抛出最后一个错误
+    throw this.formatError(lastError);
+  }
+
+  /**
+   * 执行单次 PageSpeed 测试
+   */
+  private async executePageSpeedTest(url: string, strategy: 'mobile' | 'desktop'): Promise<PageSpeedInsightsData> {
+    const params: Record<string, string> = {
+      url,
+      strategy,
+      category: 'performance',
+    };
+
+    // 只有在有 API Key 时才添加(没有 API Key 可以使用,但有请求限制)
+    if (this.apiKey) {
+      params.key = this.apiKey;
+    }
+
+    const response = await axios.get(this.apiUrl, {
+      params,
+      timeout: 120000, // 120秒超时 (复杂网站需要更长时间)
+    });
 
       const data = response.data;
       const lighthouseResult = data.lighthouseResult;
@@ -128,22 +160,54 @@ class PageSpeedService {
       console.log(`[PageSpeed] FCP: ${metrics.firstContentfulPaint}ms, LCP: ${metrics.largestContentfulPaint}ms`);
       console.log(`[PageSpeed] Found ${opportunities.length} opportunities, ${diagnostics.length} diagnostics`);
 
-      return {
-        performanceScore,
-        metrics,
-        opportunities: opportunities.slice(0, 10), // 最多返回 10 条优化建议
-        diagnostics: diagnostics.slice(0, 10), // 最多返回 10 条诊断信息
-      };
-    } catch (error: any) {
-      console.error('[PageSpeed] Failed to run PageSpeed test:', error.message);
+    return {
+      performanceScore,
+      metrics,
+      opportunities: opportunities.slice(0, 10), // 最多返回 10 条优化建议
+      diagnostics: diagnostics.slice(0, 10), // 最多返回 10 条诊断信息
+    };
+  }
 
-      // 如果是 API 限制错误,提供更友好的错误信息
-      if (error.response?.status === 429) {
-        throw new Error('PageSpeed API rate limit exceeded. Please add PAGESPEED_API_KEY to .env file.');
-      }
-
-      throw new Error(`PageSpeed test failed: ${error.message}`);
+  /**
+   * 格式化错误信息
+   */
+  private formatError(error: any): Error {
+    if (!error) {
+      return new Error('PageSpeed test failed with unknown error');
     }
+
+    // API 限制错误
+    if (error.response?.status === 429) {
+      return new Error(
+        'PageSpeed API rate limit exceeded (25 requests/day/IP without API key). ' +
+        'Please add PAGESPEED_API_KEY to your .env file to increase the limit. ' +
+        'Get your API key from: https://developers.google.com/speed/docs/insights/v5/get-started'
+      );
+    }
+
+    // 认证错误
+    if (error.response?.status === 403) {
+      return new Error(
+        'PageSpeed API authentication failed. Please check your PAGESPEED_API_KEY in .env file.'
+      );
+    }
+
+    // 超时错误
+    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      return new Error(
+        'PageSpeed API request timed out after 120 seconds. The target website may be too slow to analyze.'
+      );
+    }
+
+    // 网络错误
+    if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+      return new Error(
+        'Failed to connect to PageSpeed API. Please check your network connection.'
+      );
+    }
+
+    // 通用错误
+    return new Error(`PageSpeed test failed: ${error.message || 'Unknown error'}`);
   }
 
   /**
