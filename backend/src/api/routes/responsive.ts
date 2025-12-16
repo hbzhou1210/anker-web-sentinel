@@ -69,7 +69,7 @@ router.get('/devices/:type', async (req: Request, res: Response): Promise<void> 
  * 执行响应式测试
  */
 router.post('/test', async (req: Request, res: Response): Promise<void> => {
-  const browser = await browserPool.acquire();
+  let browser = null;
 
   try {
     const { url, deviceIds } = req.body;
@@ -108,6 +108,9 @@ router.post('/test', async (req: Request, res: Response): Promise<void> => {
       });
       return;
     }
+
+    // 在所有验证通过后才获取browser
+    browser = await browserPool.acquire();
 
     // 并行执行测试 - 限制并发数量避免资源耗尽
     const CONCURRENT_LIMIT = 3; // 同时最多测试3个设备
@@ -166,7 +169,9 @@ router.post('/test', async (req: Request, res: Response): Promise<void> => {
       message: error instanceof Error ? error.message : '响应式测试失败',
     });
   } finally {
-    await browserPool.release(browser);
+    if (browser) {
+      await browserPool.release(browser);
+    }
   }
 });
 
