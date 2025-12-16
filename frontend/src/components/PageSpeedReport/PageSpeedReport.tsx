@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { TestReport as TestReportType } from '../../services/api';
 import { PageSpeedOverview } from '../PageSpeedOverview/PageSpeedOverview';
+import { UITestResults } from '../UITestResults/UITestResults';
 import './PageSpeedReport.css';
 
 interface PageSpeedReportProps {
@@ -13,7 +14,16 @@ export function PageSpeedReport({ report }: PageSpeedReportProps) {
     completedAt,
     testDuration,
     pageSpeedData,
+    uiTestResults,
+    overallScore,
+    totalChecks,
+    passedChecks,
+    failedChecks,
+    warningChecks,
   } = report;
+
+  // UI测试结果展开状态
+  const [uiTestsExpanded, setUiTestsExpanded] = useState(true);
 
   // Format duration
   const formatDuration = (ms: number): string => {
@@ -86,6 +96,32 @@ export function PageSpeedReport({ report }: PageSpeedReportProps) {
       <div className="pagespeed-content">
         <PageSpeedOverview data={pageSpeedData} />
       </div>
+
+      {/* UI Test Results Section */}
+      {uiTestResults && uiTestResults.length > 0 && (
+        <div className="ui-tests-section">
+          <div className="section-header" onClick={() => setUiTestsExpanded(!uiTestsExpanded)}>
+            <h3>
+              <span className="section-icon">🔍</span>
+              功能测试结果
+            </h3>
+            <div className="section-stats">
+              <span className="stat-badge stat-total">总计 {totalChecks}</span>
+              <span className="stat-badge stat-passed">通过 {passedChecks}</span>
+              {failedChecks > 0 && <span className="stat-badge stat-failed">失败 {failedChecks}</span>}
+              {warningChecks > 0 && <span className="stat-badge stat-warning">警告 {warningChecks}</span>}
+            </div>
+            <button className="expand-toggle">
+              {uiTestsExpanded ? '收起 ▲' : '展开 ▼'}
+            </button>
+          </div>
+          {uiTestsExpanded && (
+            <div className="ui-tests-content">
+              <UITestResults results={uiTestResults} />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Footer */}
       <div className="report-footer">
