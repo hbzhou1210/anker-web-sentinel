@@ -1,6 +1,16 @@
 # Backend Dockerfile
 FROM node:20-slim
 
+# 构建参数 - 用于追踪镜像版本
+ARG GIT_COMMIT=unknown
+ARG BUILD_DATE=unknown
+ARG VERSION=1.0.0
+
+# 将构建信息写入环境变量
+ENV GIT_COMMIT=$GIT_COMMIT \
+    BUILD_DATE=$BUILD_DATE \
+    VERSION=$VERSION
+
 # 安装 Playwright 依赖
 RUN apt-get update && apt-get install -y \
     libnss3 \
@@ -55,6 +65,9 @@ RUN mkdir -p /app/screenshots && \
 # 设置环境变量禁用不必要的服务
 ENV DBUS_SESSION_BUS_ADDRESS=/dev/null
 ENV FONTCONFIG_PATH=/etc/fonts
+
+# 创建版本信息文件供运行时查询
+RUN echo "{\n  \"git_commit\": \"$GIT_COMMIT\",\n  \"build_date\": \"$BUILD_DATE\",\n  \"version\": \"$VERSION\"\n}" > /app/version.json
 
 # 暴露端口
 EXPOSE 3000

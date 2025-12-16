@@ -60,6 +60,32 @@ app.use('/api/v1/discount-rule', discountRuleRouter);
 // Compatibility route for tool interface - maps /api/check-discount to discount rule router
 app.use('/api', discountRuleRouter);
 
+// Version info endpoint
+app.get('/api/version', (req, res) => {
+  try {
+    const versionInfo = {
+      git_commit: process.env.GIT_COMMIT || 'unknown',
+      build_date: process.env.BUILD_DATE || 'unknown',
+      version: process.env.VERSION || '1.0.0',
+      node_version: process.version,
+      uptime: process.uptime(),
+    };
+
+    // Try to read version.json if it exists
+    try {
+      const versionFile = fs.readFileSync(path.join(__dirname, '../version.json'), 'utf-8');
+      const fileVersion = JSON.parse(versionFile);
+      Object.assign(versionInfo, fileVersion);
+    } catch {
+      // version.json not found, use env vars only
+    }
+
+    res.json(versionInfo);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to get version info' });
+  }
+});
+
 // Start server
 async function startServer() {
   try {
