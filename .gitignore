@@ -91,6 +91,10 @@ REQUIREMENTS.txt
 STARTUP_GUIDE.md
 PATROL_*.md
 LAUNCH_*.md
+# 允许 Launch 平台部署指南
+!LAUNCH_DEPLOY_GUIDE.md
+# 允许 Docker 构建指南
+!DOCKER_BUILD_GUIDE.md
 test-*.sh
 test-*.json
 test-*.js
