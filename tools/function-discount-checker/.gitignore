@@ -5,6 +5,7 @@ package-lock.json
 # Output files
 output/
 *.html
+!public/*.html
 
 # Environment
 .env
