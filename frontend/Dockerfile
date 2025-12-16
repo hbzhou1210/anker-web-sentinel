@@ -1,10 +1,8 @@
 # Frontend Dockerfile - Multi-stage build
 FROM node:20-slim AS builder
 
-# 构建参数 - 用于追踪镜像版本
-ARG GIT_COMMIT=unknown
-ARG BUILD_DATE=unknown
-ARG VERSION=1.0.0
+# 安装 git 用于获取版本信息
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
 # 设置工作目录
 WORKDIR /app
@@ -15,14 +13,18 @@ COPY package*.json ./
 # 安装依赖
 RUN npm ci
 
-# 复制源代码
+# 复制源代码(包括 .git 目录)
 COPY . .
+
+# 生成版本信息文件到 public 目录(会被复制到 dist)
+RUN mkdir -p /app/public && \
+    GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown") && \
+    BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ) && \
+    echo "{\"git_commit\":\"$GIT_COMMIT\",\"build_date\":\"$BUILD_DATE\",\"version\":\"1.0.0\"}" > /app/public/version.json && \
+    cat /app/public/version.json
 
 # 构建应用
 RUN npm run build
-
-# 创建版本信息文件
-RUN echo "{\"git_commit\":\"$GIT_COMMIT\",\"build_date\":\"$BUILD_DATE\",\"version\":\"$VERSION\"}" > /app/dist/version.json
 
 # 生产环境镜像 - 使用 nginx 提供静态文件
 FROM nginx:alpine

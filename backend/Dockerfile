@@ -1,18 +1,9 @@
 # Backend Dockerfile
 FROM node:20-slim
 
-# 构建参数 - 用于追踪镜像版本
-ARG GIT_COMMIT=unknown
-ARG BUILD_DATE=unknown
-ARG VERSION=1.0.0
-
-# 将构建信息写入环境变量
-ENV GIT_COMMIT=$GIT_COMMIT \
-    BUILD_DATE=$BUILD_DATE \
-    VERSION=$VERSION
-
-# 安装 Playwright 依赖
+# 安装系统依赖(包括 git 用于获取版本信息)
 RUN apt-get update && apt-get install -y \
+    git \
     libnss3 \
     libnspr4 \
     libatk1.0-0 \
@@ -47,8 +38,15 @@ RUN npm ci --only=production
 # 安装 Playwright 浏览器
 RUN npx playwright install chromium
 
-# 复制源代码
+# 复制源代码(包括 .git 目录以获取版本信息)
 COPY . .
+
+# 生成版本信息文件
+# 尝试从 Git 获取 commit hash,如果失败则使用 unknown
+RUN GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown") && \
+    BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ) && \
+    echo "{\"git_commit\":\"$GIT_COMMIT\",\"build_date\":\"$BUILD_DATE\",\"version\":\"1.0.0\"}" > /app/version.json && \
+    cat /app/version.json
 
 # 构建 TypeScript
 RUN npm run build
@@ -65,9 +63,6 @@ RUN mkdir -p /app/screenshots && \
 # 设置环境变量禁用不必要的服务
 ENV DBUS_SESSION_BUS_ADDRESS=/dev/null
 ENV FONTCONFIG_PATH=/etc/fonts
-
-# 创建版本信息文件供运行时查询
-RUN echo "{\n  \"git_commit\": \"$GIT_COMMIT\",\n  \"build_date\": \"$BUILD_DATE\",\n  \"version\": \"$VERSION\"\n}" > /app/version.json
 
 # 暴露端口
 EXPOSE 3000
