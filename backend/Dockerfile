@@ -43,9 +43,18 @@ COPY . .
 # 构建 TypeScript
 RUN npm run build
 
+# 安装 tools 目录下的依赖
+RUN cd /app/tools/function-discount-checker && \
+    npm install --production && \
+    cd /app
+
 # 创建必要的运行时目录
 RUN mkdir -p /app/screenshots && \
     mkdir -p /app/tools/function-discount-checker/output
+
+# 设置环境变量禁用不必要的服务
+ENV DBUS_SESSION_BUS_ADDRESS=/dev/null
+ENV FONTCONFIG_PATH=/etc/fonts
 
 # 暴露端口
 EXPOSE 3000

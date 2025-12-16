@@ -75,7 +75,7 @@ export const TestPointExtraction: React.FC = () => {
 
         const checkResult = await checkResponse.json();
 
-        if (checkResult.needsFetch) {
+        if (checkResult.needsFetch && checkResult.data) {
           // 尝试通过后端API自动获取文档内容
           const documentId = checkResult.data.documentId;
 
@@ -92,8 +92,10 @@ export const TestPointExtraction: React.FC = () => {
 
             if (fetchResponse.ok) {
               const fetchResult = await fetchResponse.json();
-              content = fetchResult.data.content;
-              title = ''; // 可以从文档内容中提取标题
+              if (fetchResult.data) {
+                content = fetchResult.data.content;
+                title = ''; // 可以从文档内容中提取标题
+              }
             } else {
               const errorData = await fetchResponse.json();
 
@@ -142,10 +144,12 @@ export const TestPointExtraction: React.FC = () => {
       }
 
       const result: ExtractResponse = await response.json();
-      setExtractedPoints(result.data.testPoints || []);
-      setFeishuDocUrl(result.data.feishuDocUrl || null);
-      setMarkdown(result.data.markdown || '');
-      setTestDocTitle(result.data.testDocTitle || '');
+      if (result.data) {
+        setExtractedPoints(result.data.testPoints || []);
+        setFeishuDocUrl(result.data.feishuDocUrl || null);
+        setMarkdown(result.data.markdown || '');
+        setTestDocTitle(result.data.testDocTitle || '');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '提取测试点时发生错误');
     } finally {

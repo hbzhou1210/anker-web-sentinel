@@ -78,13 +78,15 @@ export default function ResponsiveTesting() {
       const response = await fetch(getFullApiUrl('/api/v1/responsive/devices'));
       const data = await response.json();
 
-      if (data.success) {
+      if (data.success && data.data) {
         setDevices(data.data);
         // 默认选中所有移动设备
         const mobileDeviceIds = data.data
           .filter((d: Device) => d.deviceType === 'mobile')
           .map((d: Device) => d.id);
         setSelectedDevices(mobileDeviceIds);
+      } else {
+        console.error('Failed to load devices:', data.error || data.message || 'Unknown error');
       }
     } catch (err) {
       console.error('Failed to load devices:', err);
@@ -174,11 +176,11 @@ export default function ResponsiveTesting() {
 
       const data = await response.json();
 
-      if (data.success) {
+      if (data.success && data.data) {
         setResults(data.data.results);
         setStats(data.data.stats);
       } else {
-        setError(data.message || '测试失败');
+        setError(data.message || data.error || '测试失败');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '网络错误');
