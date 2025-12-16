@@ -184,69 +184,16 @@ export class PatrolService {
     const requireFooterCopyright = footerConfig.requireCopyright !== false; // 默认true
 
     try {
-      // 1. 导航栏检查 - 简化为只检查导航栏是否存在和展示正常
+      // 1. 导航栏检查 - 优先检查导航栏容器，如果没找到再检查 go home 元素
       const navigationResult = await page.evaluate(function() {
-        // 优先检查是否存在 aria-label='go home' 元素
-        const goHomeElement = document.querySelector('[aria-label="go home"]');
-        if (goHomeElement) {
-          const rect = goHomeElement.getBoundingClientRect();
-          const style = window.getComputedStyle(goHomeElement);
-          const isVisible = style.display !== 'none' &&
-                          style.visibility !== 'hidden' &&
-                          style.opacity !== '0';
-
-          if (isVisible && rect.width > 0 && rect.height > 0) {
-            // 找到 go home 元素,查找其所在的导航栏容器
-            let navContainer = goHomeElement.closest('nav, header, [class*="nav"], [class*="header"]');
-
-            if (navContainer) {
-              const navRect = navContainer.getBoundingClientRect();
-              const navStyle = window.getComputedStyle(navContainer);
-              const isNavVisible = navStyle.display !== 'none' &&
-                                  navStyle.visibility !== 'hidden' &&
-                                  navStyle.opacity !== '0';
-
-              if (isNavVisible) {
-                // 检查导航栏的功能特征
-                const hasSearch = navContainer.querySelector('input[type="search"], [class*="search"]') !== null;
-                const hasCart = navContainer.querySelector('[class*="cart"], [class*="Cart"]') !== null;
-                const hasDropdown = navContainer.querySelector('[class*="dropdown"], [class*="menu"]') !== null;
-                const allLinks = navContainer.querySelectorAll('a');
-
-                return {
-                  found: true,
-                  confidence: 'high',
-                  totalLinkCount: allLinks.length,
-                  hasSearch,
-                  hasCart,
-                  hasDropdown,
-                  hasGoHome: true,
-                  position: `${Math.round(navRect.top)}px from top`
-                };
-              }
-            }
-
-            // go home 元素存在但没找到导航栏容器,仍然判断为找到导航栏
-            return {
-              found: true,
-              confidence: 'medium',
-              totalLinkCount: 0,
-              hasSearch: false,
-              hasCart: false,
-              hasDropdown: false,
-              hasGoHome: true,
-              position: `${Math.round(rect.top)}px from top`
-            };
-          }
-        }
-
-        // 如果没有 go home 元素,使用原有的导航栏检测逻辑
+        // 第一步: 优先使用标准导航栏选择器检测
         const selectors = [
           'nav[class*="nav"]',
           'header nav',
           '[class*="navigation"]',
           '[class*="header"] nav',
-          'nav'
+          'nav',
+          '[id*="header"]'
         ];
 
         // 排除侧边栏购物车等非主导航元素
@@ -293,6 +240,62 @@ export class PatrolService {
             }
           }
         }
+
+        // 第二步: 如果没找到导航栏容器，检查是否存在 aria-label='go home' 元素
+        const goHomeElement = document.querySelector('[aria-label="go home"]');
+        if (goHomeElement) {
+          const rect = goHomeElement.getBoundingClientRect();
+          const style = window.getComputedStyle(goHomeElement);
+          const isVisible = style.display !== 'none' &&
+                          style.visibility !== 'hidden' &&
+                          style.opacity !== '0';
+
+          if (isVisible && rect.width > 0 && rect.height > 0) {
+            // 找到 go home 元素，尝试查找其所在的导航栏容器
+            let navContainer = goHomeElement.closest('nav, header, [class*="nav"], [class*="header"],[id*="header"]');
+
+            if (navContainer) {
+              const navRect = navContainer.getBoundingClientRect();
+              const navStyle = window.getComputedStyle(navContainer);
+              const isNavVisible = navStyle.display !== 'none' &&
+                                  navStyle.visibility !== 'hidden' &&
+                                  navStyle.opacity !== '0';
+
+              if (isNavVisible) {
+                // 检查导航栏的功能特征
+                const hasSearch = navContainer.querySelector('input[type="search"], [class*="search"]') !== null;
+                const hasCart = navContainer.querySelector('[class*="cart"], [class*="Cart"]') !== null;
+                const hasDropdown = navContainer.querySelector('[class*="dropdown"], [class*="menu"]') !== null;
+                const allLinks = navContainer.querySelectorAll('a');
+
+                return {
+                  found: true,
+                  confidence: 'high',
+                  totalLinkCount: allLinks.length,
+                  hasSearch,
+                  hasCart,
+                  hasDropdown,
+                  hasGoHome: true,
+                  position: `${Math.round(navRect.top)}px from top`
+                };
+              }
+            }
+
+            // go home 元素存在但没找到导航栏容器，仍然判断为找到导航栏
+            return {
+              found: true,
+              confidence: 'medium',
+              totalLinkCount: 0,
+              hasSearch: false,
+              hasCart: false,
+              hasDropdown: false,
+              hasGoHome: true,
+              position: `${Math.round(rect.top)}px from top`
+            };
+          }
+        }
+
+        // 第三步: 都没找到，返回失败
         return {
           found: false,
           confidence: 'low',
