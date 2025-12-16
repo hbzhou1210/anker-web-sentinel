@@ -33,7 +33,7 @@ export class BrowserPool {
             '--disable-accelerated-2d-canvas',
             '--disable-gl-drawing-for-tests',
             '--disable-features=IsolateOrigins,site-per-process',
-            '--single-process', // 单进程模式,避免共享内存问题
+            // 注意: 不使用 --single-process,因为它可能导致浏览器不稳定
           ],
         });
 
