@@ -49,6 +49,10 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-5}
       ANTHROPIC_BEDROCK_BASE_URL: ${ANTHROPIC_BEDROCK_BASE_URL:-}
+
+      # Performance Testing APIs
+      WEBPAGETEST_API_KEY: ${WEBPAGETEST_API_KEY:-}
+      PAGESPEED_API_KEY: ${PAGESPEED_API_KEY:-}
     volumes:
       - screenshot_data:/app/screenshots
     ports:
