@@ -149,18 +149,14 @@ export function TestReport({ report }: TestReportProps) {
   const hasPageSpeedData = report.pageSpeedData &&
     report.pageSpeedData.performanceScore !== undefined;
 
-  // 如果两种数据都有,显示切换式双报告
-  if (hasWebPageTestData && hasPageSpeedData) {
-    return <DualPerformanceReport report={report} />;
+  // 隐藏WebPageTest - 始终优先显示PageSpeed报告
+  if (hasPageSpeedData) {
+    return <PageSpeedReport report={report} />;
   }
 
-  // 如果只有一种数据,直接显示对应的专属报告
+  // 如果没有PageSpeed但有WebPageTest数据(历史数据),仍显示但不推荐
   if (hasWebPageTestData && !hasPageSpeedData) {
     return <WebPageTestReport report={report} />;
-  }
-
-  if (hasPageSpeedData && !hasWebPageTestData) {
-    return <PageSpeedReport report={report} />;
   }
 
   // 如果数据被损坏,显示友好的错误提示
@@ -331,20 +327,12 @@ export function TestReport({ report }: TestReportProps) {
                 <PerformanceResults results={performanceResults} />
               )}
 
-              {/* WebPageTest Overview - 优先使用完整的 API 数据 */}
-              {report.webPageTestData ? (
+              {/* 隐藏WebPageTest - 仅显示基础性能快照 */}
+              {renderingSnapshots && renderingSnapshots.length > 0 && !report.pageSpeedData ? (
                 <div className="performance-overview-section">
                   <h4 className="performance-mode-title">
-                    <span className="mode-icon">🎬</span>
-                    WebPageTest 性能分析
-                  </h4>
-                  <WebPageTestOverview data={report.webPageTestData} />
-                </div>
-              ) : renderingSnapshots && renderingSnapshots.length > 0 ? (
-                <div className="performance-overview-section">
-                  <h4 className="performance-mode-title">
-                    <span className="mode-icon">🎬</span>
-                    性能快照分析 <span style={{fontSize: '0.8em', opacity: 0.7}}>(Playwright 兼容模式)</span>
+                    <span className="mode-icon">⚡</span>
+                    性能快照分析
                   </h4>
                   <PerformanceOverview snapshots={renderingSnapshots} testDuration={testDuration} />
                 </div>

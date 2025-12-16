@@ -13,9 +13,9 @@ export function TestInput({ onTestCreated }: TestInputProps) {
   const [timeout, setTimeout] = useState(30);
   const [waitTime, setWaitTime] = useState(5);
   const [showPerformanceInfo, setShowPerformanceInfo] = useState(false);
-  // 支持多选性能测试模式
+  // 支持多选性能测试模式 - 默认使用PageSpeed
   const [performanceTestModes, setPerformanceTestModes] = useState<Set<PerformanceTestMode>>(
-    new Set(['webpagetest'])
+    new Set(['pagespeed'])
   );
   // 设备类型选择
   const [deviceStrategy, setDeviceStrategy] = useState<'mobile' | 'desktop'>('desktop');
@@ -66,8 +66,8 @@ export function TestInput({ onTestCreated }: TestInputProps) {
 
       // 支持多选性能测试模式
       const modesArray = Array.from(performanceTestModes);
-      const performanceTestMode = modesArray[0] || 'webpagetest'; // 主要模式
-      const enableWebPageTest = modesArray.includes('webpagetest');
+      const performanceTestMode = modesArray[0] || 'pagespeed'; // 主要模式 - 默认PageSpeed
+      const enableWebPageTest = false; // 隐藏WebPageTest
       const enablePageSpeed = modesArray.includes('pagespeed');
 
       const requestPayload = {
@@ -245,35 +245,11 @@ export function TestInput({ onTestCreated }: TestInputProps) {
               <span className="checkbox-hint">检测加载速度和资源大小</span>
             </label>
 
-            {/* Performance Test Mode Selector - 修改为多选checkbox */}
+            {/* Performance Test Mode Selector - 仅显示PageSpeed Insights */}
             {testOptions.performance && (
               <div className="performance-mode-selector">
-                <label className="mode-selector-label">性能测试方式 (可多选):</label>
+                <label className="mode-selector-label">性能测试方式:</label>
                 <div className="mode-options">
-                  <label className={`mode-option ${performanceTestModes.has('webpagetest') ? 'selected' : ''}`}>
-                    <input
-                      type="checkbox"
-                      checked={performanceTestModes.has('webpagetest')}
-                      onChange={(e) => {
-                        const newModes = new Set(performanceTestModes);
-                        if (e.target.checked) {
-                          newModes.add('webpagetest');
-                        } else {
-                          newModes.delete('webpagetest');
-                        }
-                        setPerformanceTestModes(newModes);
-                      }}
-                      disabled={isLoading}
-                    />
-                    <div className="mode-content">
-                      <div className="mode-title">
-                        🎬 WebPageTest 性能测试 <span className="mode-badge default">默认</span>
-                      </div>
-                      <div className="mode-description">
-                        集成 WebPageTest 官方 API,使用真实浏览器环境进行性能测试,提供视频帧、TTFB、FCP、LCP 等完整指标
-                      </div>
-                    </div>
-                  </label>
                   <label className={`mode-option ${performanceTestModes.has('pagespeed') ? 'selected' : ''}`}>
                     <input
                       type="checkbox"

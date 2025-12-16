@@ -16,8 +16,8 @@ const getApiBaseUrl = (): string => {
   }
 
   // 本地开发环境使用完整 URL
-  console.log('[API] Development mode detected -> using http://localhost:80/api/v1');
-  return 'http://localhost:80/api/v1';
+  console.log('[API] Development mode detected -> using http://localhost:3000/api/v1');
+  return 'http://localhost:3000/api/v1';
 };
 
 /**
@@ -39,9 +39,9 @@ export const getFullApiUrl = (path: string): string => {
     return result;
   }
 
-  // 开发环境:使用 localhost:80
+  // 开发环境:使用 localhost:3000
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
-  const result = `http://localhost:80${cleanPath}`;
+  const result = `http://localhost:3000${cleanPath}`;
   console.log('[API] getFullApiUrl (development):', path, '->', result);
   return result;
 };
