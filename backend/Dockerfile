@@ -43,8 +43,9 @@ COPY . .
 # 构建 TypeScript
 RUN npm run build
 
-# 创建截图目录
-RUN mkdir -p /app/screenshots
+# 创建必要的运行时目录
+RUN mkdir -p /app/screenshots && \
+    mkdir -p /app/tools/function-discount-checker/output
 
 # 暴露端口
 EXPOSE 3000
