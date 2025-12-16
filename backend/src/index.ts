@@ -36,10 +36,6 @@ setupStaticFiles(app);
 const discountRuleOutputDir = path.join(__dirname, '../../tools/function-discount-checker/output');
 app.use('/discount-rule-output', express.static(discountRuleOutputDir));
 
-// Serve discount rule tool interface
-const discountRulePublicDir = path.join(__dirname, '../../tools/function-discount-checker/public');
-app.use('/discount-rule-tool', express.static(discountRulePublicDir));
-
 // Mount API routes
 app.use('/api/v1/tests', testsRouter);
 app.use('/api/v1/reports', reportsRouter);
