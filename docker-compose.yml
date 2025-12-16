@@ -53,6 +53,10 @@ services:
       # Performance Testing APIs
       WEBPAGETEST_API_KEY: ${WEBPAGETEST_API_KEY:-}
       PAGESPEED_API_KEY: ${PAGESPEED_API_KEY:-}
+
+      # MCP Server (买赠规则查询工具)
+      MCP_SERVER_URL: ${MCP_SERVER_URL:-}
+      MCP_SERVER_TOKEN: ${MCP_SERVER_TOKEN:-}
     volumes:
       - screenshot_data:/app/screenshots
     ports:

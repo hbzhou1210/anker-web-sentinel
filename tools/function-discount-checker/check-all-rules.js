@@ -12,14 +12,23 @@ const __dirname = path.dirname(__filename);
  * 全量检查店铺的买赠规则状态
  */
 
+// 从环境变量读取MCP配置
 const MCP_CONFIG = {
-  url: 'http://beta-dtc-mcp.anker-in.com/mcp/tc_y7odih2ds',
+  url: process.env.MCP_SERVER_URL || 'http://beta-dtc-mcp.anker-in.com/mcp/tc_y7odih2ds',
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json, text/event-stream',
-    'Authorization': 'Bearer mcpt_dc0f56690e00e98e7342e3ebf9c20f4a887a50c61eba20f0a888253495c47ec0'
+    'Authorization': `Bearer ${process.env.MCP_SERVER_TOKEN || 'mcpt_dc0f56690e00e98e7342e3ebf9c20f4a887a50c61eba20f0a888253495c47ec0'}`
   }
 };
+
+// 验证MCP配置
+if (!process.env.MCP_SERVER_URL) {
+  console.warn('⚠️  MCP_SERVER_URL 未配置，使用默认值');
+}
+if (!process.env.MCP_SERVER_TOKEN) {
+  console.warn('⚠️  MCP_SERVER_TOKEN 未配置，使用默认值');
+}
 
 let requestId = 1;
 
