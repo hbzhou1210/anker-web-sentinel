@@ -38,6 +38,11 @@ export enum Trend {
   Degrading = 'degrading'
 }
 
+export enum PerformanceTestMode {
+  WebPageTest = 'webpagetest',  // 使用 Playwright 模拟 WebPageTest (默认)
+  PageSpeedInsights = 'pagespeed'  // 使用 Google PageSpeed Insights API
+}
+
 // Entities
 export interface TestRequest {
   id: string;  // UUID
@@ -48,6 +53,10 @@ export interface TestRequest {
   config?: {
     timeout?: number;  // seconds
     waitTime?: number; // seconds
+    performanceTestMode?: PerformanceTestMode;  // 主性能测试方式(用于确定主报告),默认 webpagetest
+    enableWebPageTest?: boolean;  // 是否启用 WebPageTest API 测试
+    enablePageSpeed?: boolean;     // 是否启用 PageSpeed Insights API 测试
+    deviceStrategy?: 'mobile' | 'desktop';  // 设备策略,默认 desktop
     testOptions?: {
       links?: boolean;
       forms?: boolean;
@@ -56,6 +65,15 @@ export interface TestRequest {
       performance?: boolean;
     };
   };
+}
+
+// Rendering stage screenshot
+export interface RenderingSnapshot {
+  stage: 'initial' | 'fcp' | 'lcp' | 'domload' | 'fullyloaded';  // Rendering stage
+  stageName: string;  // Display name
+  timestamp: number;  // Time since navigation started (ms)
+  screenshotUrl?: string;  // Screenshot URL
+  metrics?: Record<string, any>;  // Additional metrics at this stage
 }
 
 export interface TestReport {
@@ -69,8 +87,101 @@ export interface TestReport {
   warningChecks: number;
   testDuration: number;  // milliseconds
   completedAt: Date;
+  performanceTestMode?: PerformanceTestMode;  // 性能测试方式
   uiTestResults: UITestResult[];
   performanceResults: PerformanceResult[];
+  renderingSnapshots?: RenderingSnapshot[];  // Rendering process screenshots (WebPageTest mode only)
+  pageSpeedData?: PageSpeedInsightsData;  // PageSpeed Insights data (PageSpeed mode only)
+  webPageTestData?: WebPageTestData;  // Complete WebPageTest data (WebPageTest mode only)
+}
+
+// WebPageTest 完整数据结构
+export interface WebPageTestData {
+  testId: string;
+  testUrl: string;
+  summary?: string;
+
+  // 核心性能指标
+  metrics: {
+    loadTime: number;
+    TTFB: number;
+    startRender: number;
+    firstContentfulPaint: number;
+    speedIndex: number;
+    largestContentfulPaint: number;
+    cumulativeLayoutShift: number;
+    totalBlockingTime: number;
+    domContentLoaded: number;
+    fullyLoaded: number;
+  };
+
+  // 资源统计
+  resources: {
+    totalBytes: number;
+    totalRequests: number;
+    images: { bytes: number; requests: number };
+    js: { bytes: number; requests: number };
+    css: { bytes: number; requests: number };
+  };
+
+  // 视频帧（Filmstrip）
+  videoFrames?: Array<{
+    time: number;
+    image: string;
+    visuallyComplete: number;
+  }>;
+
+  // 缩略图
+  thumbnails?: {
+    waterfall?: string;
+    checklist?: string;
+    screenShot?: string;
+  };
+
+  // 请求瀑布图数据（前50个请求）
+  requests?: Array<{
+    url: string;
+    host: string;
+    method: string;
+    status: number;
+    type: string;
+    bytesIn: number;
+    startTime: number;
+    endTime: number;
+    duration: number;
+  }>;
+
+  // 域名统计
+  domains?: Array<{
+    domain: string;
+    bytes: number;
+    requests: number;
+    connections: number;
+  }>;
+}
+
+// PageSpeed Insights 数据结构
+export interface PageSpeedInsightsData {
+  performanceScore: number;  // 0-100
+  metrics: {
+    firstContentfulPaint: number;  // ms
+    largestContentfulPaint: number;  // ms
+    totalBlockingTime: number;  // ms
+    cumulativeLayoutShift: number;  // score
+    speedIndex: number;  // ms
+    timeToInteractive: number;  // ms
+  };
+  opportunities?: Array<{
+    title: string;
+    description: string;
+    score: number;
+    savings: number;  // ms
+  }>;
+  diagnostics?: Array<{
+    title: string;
+    description: string;
+    score: number;
+  }>;
 }
 
 export interface UITestResult {

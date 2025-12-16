@@ -206,9 +206,18 @@
   cursor: not-allowed;
 }
 
-.checkbox-grid {
+/* UI测试项目 - 第一行固定4列 */
+.ui-tests-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+/* 性能测试 - 第二行单独一行 */
+.performance-tests-row {
+  display: flex;
+  flex-direction: column;
   gap: 12px;
 }
 
@@ -616,8 +625,16 @@
     width: 100%;
   }
 
-  .checkbox-grid {
+  /* UI测试在小屏幕上变成1列 */
+  .ui-tests-row {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  /* 平板尺寸UI测试显示2列 */
+  .ui-tests-row {
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .performance-info-content {
@@ -647,5 +664,284 @@
 
   .metric-desc {
     font-size: 13px;
+  }
+}
+
+/* Performance Mode Selector */
+/* 性能测试方式选择器 - 在第二行中 */
+.performance-mode-selector {
+  width: 100%;
+  padding: 16px;
+  background: linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%);
+  border-radius: 12px;
+  border: 2px solid #e0e7ff;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.08);
+}
+
+.mode-selector-label {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mode-selector-label::before {
+  content: '⚙️';
+  font-size: 18px;
+}
+
+.mode-options {
+  display: flex;
+  gap: 16px;
+  flex-direction: column;
+}
+
+.mode-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px;
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.mode-option::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+  transform: scaleX(0);
+  transition: transform 0.3s ease;
+}
+
+.mode-option:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.15);
+  transform: translateY(-2px);
+}
+
+.mode-option:hover::before {
+  transform: scaleX(1);
+}
+
+.mode-option.selected {
+  border-color: #3b82f6;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.2);
+}
+
+.mode-option.selected::before {
+  transform: scaleX(1);
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+}
+
+.mode-option input[type="checkbox"],
+.mode-option input[type="radio"] {
+  margin-top: 3px;
+  cursor: pointer;
+  width: 20px;
+  height: 20px;
+  accent-color: #3b82f6;
+  flex-shrink: 0;
+}
+
+.mode-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.mode-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mode-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.mode-badge.default {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  animation: badge-pulse 2s ease-in-out infinite;
+}
+
+@keyframes badge-pulse {
+  0%, 100% {
+    box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+  }
+  50% {
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.5);
+  }
+}
+
+.mode-description {
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.6;
+}
+
+.mode-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.mode-option:disabled:hover {
+  border-color: #e2e8f0;
+  box-shadow: none;
+}
+
+/* Device Strategy Selector - 设备选择器 */
+.device-strategy-selector {
+  width: 100%;
+  padding: 16px;
+  background: linear-gradient(135deg, #fef3f2 0%, #fee2e2 100%);
+  border-radius: 12px;
+  border: 2px solid #fecaca;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.08);
+  margin-top: 16px;
+}
+
+.device-selector-label {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.device-selector-label::before {
+  content: '📱';
+  font-size: 18px;
+}
+
+.device-options {
+  display: flex;
+  gap: 16px;
+  flex-direction: row;
+}
+
+.device-option {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px;
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.device-option::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #f97316, #ea580c);
+  transform: scaleX(0);
+  transition: transform 0.3s ease;
+}
+
+.device-option:hover {
+  border-color: #f97316;
+  box-shadow: 0 4px 16px rgba(249, 115, 22, 0.15);
+  transform: translateY(-2px);
+}
+
+.device-option:hover::before {
+  transform: scaleX(1);
+}
+
+.device-option.selected {
+  border-color: #f97316;
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  box-shadow: 0 4px 16px rgba(249, 115, 22, 0.2);
+}
+
+.device-option.selected::before {
+  transform: scaleX(1);
+  background: linear-gradient(90deg, #f97316, #ea580c);
+}
+
+.device-option input[type="radio"] {
+  margin-top: 3px;
+  cursor: pointer;
+  width: 20px;
+  height: 20px;
+  accent-color: #f97316;
+  flex-shrink: 0;
+}
+
+.device-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.device-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.device-description {
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.6;
+}
+
+.device-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.device-option:disabled:hover {
+  border-color: #e2e8f0;
+  box-shadow: none;
+}
+
+/* 小屏幕下设备选择器堆叠显示 */
+@media (max-width: 640px) {
+  .device-options {
+    flex-direction: column;
   }
 }

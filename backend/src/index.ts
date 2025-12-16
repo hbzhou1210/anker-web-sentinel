@@ -1,3 +1,7 @@
+// IMPORTANT: This MUST be the first import to ensure environment variables are loaded
+// before any other modules that depend on them
+import './config/env.js';
+
 import app from './api/app.js';
 import browserPool from './automation/BrowserPool.js';
 import { setupStaticFiles } from './api/middleware/staticFiles.js';

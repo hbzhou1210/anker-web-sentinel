@@ -17,7 +17,7 @@ export class InMemoryTestRequestRepository {
    */
   async create(
     url: string,
-    config?: { timeout?: number; waitTime?: number; testOptions?: any },
+    config?: any, // 使用 any 以支持所有配置参数
     notificationEmail?: string
   ): Promise<TestRequest> {
     const testRequest: TestRequest = {

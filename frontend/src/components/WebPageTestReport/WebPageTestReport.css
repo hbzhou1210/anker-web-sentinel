@@ -1,0 +1,115 @@
+.webpagetest-report {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+  background: #fff;
+}
+
+.webpagetest-report .report-header {
+  border-bottom: 3px solid #1a73e8;
+  padding-bottom: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.webpagetest-report .report-title {
+  margin-bottom: 1rem;
+}
+
+.webpagetest-report .report-title h2 {
+  font-size: 2rem;
+  color: #1a73e8;
+  margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.webpagetest-report .report-icon {
+  font-size: 2rem;
+}
+
+.webpagetest-report .tested-url {
+  font-size: 1.1rem;
+  color: #5f6368;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.webpagetest-report .tested-url:hover {
+  color: #1a73e8;
+  text-decoration: underline;
+}
+
+.webpagetest-report .report-meta {
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+  font-size: 0.95rem;
+  color: #5f6368;
+}
+
+.webpagetest-report .meta-item {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.webpagetest-report .meta-label {
+  font-weight: 600;
+  color: #202124;
+}
+
+.webpagetest-report .test-link {
+  color: #1a73e8;
+  text-decoration: none;
+}
+
+.webpagetest-report .test-link:hover {
+  text-decoration: underline;
+}
+
+.webpagetest-report .webpagetest-content {
+  margin-bottom: 2rem;
+}
+
+.webpagetest-report .no-data-message {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 2px dashed #dadce0;
+}
+
+.webpagetest-report .warning-icon {
+  font-size: 3rem;
+  display: block;
+  margin-bottom: 1rem;
+}
+
+.webpagetest-report .no-data-message p {
+  margin: 0.5rem 0;
+  color: #5f6368;
+}
+
+.webpagetest-report .no-data-message .hint {
+  font-size: 0.9rem;
+  color: #80868b;
+}
+
+.webpagetest-report .report-footer {
+  border-top: 1px solid #dadce0;
+  padding-top: 1.5rem;
+  margin-top: 2rem;
+}
+
+.webpagetest-report .footer-note {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #5f6368;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.webpagetest-report .info-icon {
+  font-size: 1.2rem;
+}

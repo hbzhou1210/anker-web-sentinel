@@ -1,0 +1,145 @@
+.pagespeed-report {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+  background: #fff;
+}
+
+.pagespeed-report .report-header {
+  border-bottom: 3px solid #0cce6b;
+  padding-bottom: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.pagespeed-report .report-title {
+  margin-bottom: 1rem;
+}
+
+.pagespeed-report .report-title h2 {
+  font-size: 2rem;
+  color: #0cce6b;
+  margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pagespeed-report .report-icon {
+  font-size: 2rem;
+}
+
+.pagespeed-report .tested-url {
+  font-size: 1.1rem;
+  color: #5f6368;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.pagespeed-report .tested-url:hover {
+  color: #0cce6b;
+  text-decoration: underline;
+}
+
+.pagespeed-report .report-meta {
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+  font-size: 0.95rem;
+  color: #5f6368;
+  align-items: center;
+}
+
+.pagespeed-report .meta-item {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.pagespeed-report .meta-label {
+  font-weight: 600;
+  color: #202124;
+}
+
+.pagespeed-report .score-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.pagespeed-report .score-badge.score-good {
+  background: #0cce6b;
+  color: #fff;
+}
+
+.pagespeed-report .score-badge.score-average {
+  background: #ffa400;
+  color: #fff;
+}
+
+.pagespeed-report .score-badge.score-poor {
+  background: #ff4e42;
+  color: #fff;
+}
+
+.pagespeed-report .pagespeed-content {
+  margin-bottom: 2rem;
+}
+
+.pagespeed-report .no-data-message {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 2px dashed #dadce0;
+}
+
+.pagespeed-report .warning-icon {
+  font-size: 3rem;
+  display: block;
+  margin-bottom: 1rem;
+}
+
+.pagespeed-report .no-data-message p {
+  margin: 0.5rem 0;
+  color: #5f6368;
+}
+
+.pagespeed-report .no-data-message .hint {
+  font-size: 0.9rem;
+  color: #80868b;
+}
+
+.pagespeed-report .report-footer {
+  border-top: 1px solid #dadce0;
+  padding-top: 1.5rem;
+  margin-top: 2rem;
+}
+
+.pagespeed-report .footer-note {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #5f6368;
+  font-size: 0.9rem;
+  margin: 0 0 1rem 0;
+}
+
+.pagespeed-report .info-icon {
+  font-size: 1.2rem;
+}
+
+.pagespeed-report .view-online {
+  color: #0cce6b;
+  text-decoration: none;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition: all 0.2s;
+}
+
+.pagespeed-report .view-online:hover {
+  text-decoration: underline;
+  gap: 0.5rem;
+}

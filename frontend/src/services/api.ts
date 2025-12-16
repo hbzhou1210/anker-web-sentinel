@@ -62,6 +62,8 @@ apiClient.interceptors.request.use((config) => {
 });
 
 // Types
+export type PerformanceTestMode = 'webpagetest' | 'pagespeed';
+
 export interface TestRequest {
   id: string;
   url: string;
@@ -70,6 +72,17 @@ export interface TestRequest {
   config?: {
     timeout?: number;
     waitTime?: number;
+    performanceTestMode?: PerformanceTestMode;
+    enableWebPageTest?: boolean;
+    enablePageSpeed?: boolean;
+    deviceStrategy?: 'mobile' | 'desktop';
+    testOptions?: {
+      links?: boolean;
+      forms?: boolean;
+      buttons?: boolean;
+      images?: boolean;
+      performance?: boolean;
+    };
   };
 }
 
@@ -96,6 +109,89 @@ export interface PerformanceResult {
   details?: Record<string, any>;
 }
 
+export interface RenderingSnapshot {
+  stage: 'initial' | 'fcp' | 'lcp' | 'domload' | 'fullyloaded';
+  stageName: string;
+  timestamp: number;
+  screenshotUrl?: string;
+  metrics?: Record<string, any>;
+}
+
+export interface PageSpeedInsightsData {
+  performanceScore: number;
+  metrics: {
+    firstContentfulPaint: number;
+    largestContentfulPaint: number;
+    totalBlockingTime: number;
+    cumulativeLayoutShift: number;
+    speedIndex: number;
+    timeToInteractive: number;
+  };
+  opportunities?: Array<{
+    title: string;
+    description: string;
+    score: number;
+    savings: number;
+  }>;
+  diagnostics?: Array<{
+    title: string;
+    description: string;
+    score: number;
+  }>;
+}
+
+export interface WebPageTestData {
+  testId: string;
+  testUrl: string;
+  summary?: string;
+  metrics: {
+    loadTime: number;
+    TTFB: number;
+    startRender: number;
+    firstContentfulPaint: number;
+    speedIndex: number;
+    largestContentfulPaint: number;
+    cumulativeLayoutShift: number;
+    totalBlockingTime: number;
+    domContentLoaded: number;
+    fullyLoaded: number;
+  };
+  resources: {
+    totalBytes: number;
+    totalRequests: number;
+    images: { bytes: number; requests: number };
+    js: { bytes: number; requests: number };
+    css: { bytes: number; requests: number };
+  };
+  videoFrames?: Array<{
+    time: number;
+    image: string;
+    visuallyComplete: number;
+  }>;
+  thumbnails?: {
+    waterfall?: string;
+    checklist?: string;
+    screenShot?: string;
+  };
+  requests?: Array<{
+    url: string;
+    host: string;
+    method: string;
+    status: number;
+    type: string;
+    bytesIn: number;
+    startTime: number;
+    endTime: number;
+    duration: number;
+  }>;
+  domains?: Array<{
+    domain: string;
+    bytes: number;
+    requests: number;
+    connections: number;
+  }>;
+}
+
 export interface TestReport {
   id: string;
   testRequestId: string;
@@ -107,8 +203,12 @@ export interface TestReport {
   warningChecks: number;
   testDuration: number;
   completedAt: string;
+  performanceTestMode?: PerformanceTestMode;
   uiTestResults: UITestResult[];
   performanceResults: PerformanceResult[];
+  renderingSnapshots?: RenderingSnapshot[];
+  pageSpeedData?: PageSpeedInsightsData;
+  webPageTestData?: WebPageTestData;
 }
 
 export interface TestReportSummary {
@@ -162,6 +262,10 @@ export const api = {
     config?: {
       timeout?: number;
       waitTime?: number;
+      performanceTestMode?: PerformanceTestMode;
+      enableWebPageTest?: boolean;
+      enablePageSpeed?: boolean;
+      deviceStrategy?: 'mobile' | 'desktop';
       testOptions?: {
         links?: boolean;
         forms?: boolean;
