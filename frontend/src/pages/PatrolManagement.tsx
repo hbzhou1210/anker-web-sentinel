@@ -1202,21 +1202,52 @@ const PatrolManagement: React.FC = () => {
 
                               {/* 检查详情 - 始终显示 */}
                               {result.checkDetails && (
-                                <div className={`mt-3 p-3 bg-white rounded-lg border ${
-                                  result.status === 'pass' ? 'border-green-200' : 'border-red-200'
-                                }`}>
-                                  <div className="flex items-start gap-2">
-                                    {result.status === 'pass' ? (
-                                      <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
-                                    ) : (
-                                      <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
-                                    )}
-                                    <div className="flex-1">
-                                      <div className={`text-xs font-semibold mb-1 ${
-                                        result.status === 'pass' ? 'text-green-600' : 'text-red-600'
-                                      }`}>检查详情</div>
-                                      <div className="text-sm text-gray-700 whitespace-pre-line">{result.checkDetails}</div>
-                                    </div>
+                                <div className="mt-3 p-3 bg-white rounded-lg border border-gray-200">
+                                  <div className="text-xs font-semibold text-gray-700 mb-2">检查详情</div>
+                                  <div className="space-y-2">
+                                    {result.checkDetails.split('\n').filter(line => line.trim()).map((line, idx) => {
+                                      // 解析每行: ✓/✗ 检查项名称: 消息 [置信度: 高/中/低]
+                                      const passed = line.trim().startsWith('✓');
+                                      const failed = line.trim().startsWith('✗');
+
+                                      if (!passed && !failed) return null;
+
+                                      // 移除前面的符号
+                                      const content = line.trim().substring(1).trim();
+                                      const parts = content.split(':');
+                                      const checkName = parts[0]?.trim() || '';
+                                      const messageWithConfidence = parts.slice(1).join(':').trim();
+
+                                      // 提取置信度
+                                      const confidenceMatch = messageWithConfidence.match(/\[置信度:\s*([^\]]+)\]/);
+                                      const confidence = confidenceMatch ? confidenceMatch[1] : null;
+                                      const message = messageWithConfidence.replace(/\s*\[置信度:[^\]]+\]/, '').trim();
+
+                                      return (
+                                        <div key={idx} className={`flex items-start gap-2 p-2 rounded ${
+                                          passed ? 'bg-green-50' : 'bg-red-50'
+                                        }`}>
+                                          {passed ? (
+                                            <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                                          ) : (
+                                            <XCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                                          )}
+                                          <div className="flex-1 min-w-0">
+                                            <div className={`text-sm font-medium ${
+                                              passed ? 'text-green-700' : 'text-red-700'
+                                            }`}>{checkName}</div>
+                                            {message && (
+                                              <div className="text-xs text-gray-600 mt-0.5">{message}</div>
+                                            )}
+                                            {confidence && (
+                                              <div className="text-xs text-gray-500 mt-0.5">
+                                                置信度: {confidence}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 </div>
                               )}

@@ -5,10 +5,10 @@
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch src/loader.ts",
     "build": "tsc",
-    "start": "tsx src/index.ts",
-    "start:compiled": "node dist/index.js",
+    "start": "tsx src/loader.ts",
+    "start:compiled": "node dist/loader.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "migrate": "tsx src/database/migrate.ts",
