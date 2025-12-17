@@ -113,6 +113,63 @@ router.post('/test', async (req: Request, res: Response): Promise<void> => {
     console.log(`Starting tests on ${devicesToTest.length} devices (max ${CONCURRENT_LIMIT} concurrent)...`);
     const startTime = Date.now();
 
+    // 辅助函数:带重试的设备测试
+    const testDeviceWithRetry = async (device: any, maxRetries = 2): Promise<ResponsiveTestResult> => {
+      let lastError: Error | null = null;
+
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        let deviceBrowser = null;
+        try {
+          // 获取浏览器实例
+          deviceBrowser = await browserPool.acquire();
+
+          // 验证浏览器连接状态
+          if (!deviceBrowser.isConnected()) {
+            throw new Error('Browser is not connected');
+          }
+
+          // 创建页面
+          const page = await deviceBrowser.newPage();
+          try {
+            console.log(`Testing on ${device.name}... (attempt ${attempt + 1}/${maxRetries + 1})`);
+            const result = await responsiveTestingService.testOnDevice(page, url, device);
+            return result;
+          } finally {
+            await page.close().catch(err => {
+              console.warn(`Failed to close page for ${device.name}:`, err.message);
+            });
+          }
+        } catch (error: any) {
+          lastError = error;
+          console.error(`Failed to test on ${device.name} (attempt ${attempt + 1}/${maxRetries + 1}):`, error.message);
+
+          // 检查是否是浏览器崩溃相关错误
+          const isBrowserCrash =
+            error.message?.includes('Target page, context or browser has been closed') ||
+            error.message?.includes('Browser is not connected') ||
+            error.message?.includes('Protocol error');
+
+          // 如果是最后一次尝试或不是浏览器崩溃错误,抛出异常
+          if (attempt === maxRetries || !isBrowserCrash) {
+            throw error;
+          }
+
+          // 等待一小段时间后重试
+          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+        } finally {
+          // 释放浏览器
+          if (deviceBrowser) {
+            await browserPool.release(deviceBrowser).catch(err => {
+              console.warn(`Failed to release browser for ${device.name}:`, err.message);
+            });
+          }
+        }
+      }
+
+      // 如果所有重试都失败,抛出最后的错误
+      throw lastError || new Error('All retries failed');
+    };
+
     // 分批并行执行测试
     const results: ResponsiveTestResult[] = [];
     for (let i = 0; i < devicesToTest.length; i += CONCURRENT_LIMIT) {
@@ -120,25 +177,7 @@ router.post('/test', async (req: Request, res: Response): Promise<void> => {
       console.log(`Testing batch ${Math.floor(i / CONCURRENT_LIMIT) + 1}/${Math.ceil(devicesToTest.length / CONCURRENT_LIMIT)}: ${batch.map(d => d.name).join(', ')}`);
 
       const batchResults = await Promise.all(
-        batch.map(async (device) => {
-          // 为每个设备获取独立的browser实例
-          const deviceBrowser = await browserPool.acquire();
-          try {
-            const page = await deviceBrowser.newPage();
-            try {
-              console.log(`Testing on ${device.name}...`);
-              const result = await responsiveTestingService.testOnDevice(page, url, device);
-              return result;
-            } finally {
-              await page.close();
-            }
-          } catch (error) {
-            console.error(`Failed to test on ${device.name}:`, error);
-            throw error;
-          } finally {
-            await browserPool.release(deviceBrowser);
-          }
-        })
+        batch.map(device => testDeviceWithRetry(device))
       );
 
       results.push(...batchResults);
