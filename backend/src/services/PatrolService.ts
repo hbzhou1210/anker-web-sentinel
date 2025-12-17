@@ -1144,6 +1144,15 @@ export class PatrolService {
       return true;
     }
 
+    // 浏览器崩溃相关错误
+    if (errorMessage.includes('browser has been closed') ||
+        errorMessage.includes('context or browser has been closed') ||
+        errorMessage.includes('target page') ||
+        errorMessage.includes('page crashed') ||
+        errorMessage.includes('page closed')) {
+      return true;
+    }
+
     return false;
   }
 
