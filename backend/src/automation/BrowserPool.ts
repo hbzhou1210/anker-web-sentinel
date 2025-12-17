@@ -10,6 +10,8 @@ export class BrowserPool {
   private readonly poolSize = 5;
   private initPromise: Promise<void> | null = null;
   private waitQueue: Array<(browser: Browser) => void> = [];
+  private maxContextsPerBrowser = 3; // 限制每个浏览器的最大上下文数
+  private contextCounts = new Map<Browser, number>(); // 跟踪每个浏览器的上下文数
 
   // Initialize browser pool with 5 warm instances
   async initialize(): Promise<void> {
@@ -28,17 +30,20 @@ export class BrowserPool {
             '--no-sandbox',
             '--disable-setuid-sandbox',
 
-            // 内存和稳定性
-            '--disable-dev-shm-usage',
+            // 内存和稳定性 - 关键修复
+            '--disable-dev-shm-usage', // 使用 /tmp 而不是 /dev/shm
             '--disable-features=VizDisplayCompositor',
             '--disable-features=IsolateOrigins,site-per-process',
+            '--single-process', // 使用单进程模式减少内存占用和崩溃
+            '--no-zygote', // 禁用 zygote 进程
 
-            // GPU 和渲染
+            // GPU 和渲染 - 完全禁用 GPU
             '--disable-gpu',
             '--disable-gpu-compositing',
             '--disable-software-rasterizer',
             '--disable-accelerated-2d-canvas',
             '--disable-gl-drawing-for-tests',
+            '--disable-3d-apis',
 
             // 防止崩溃的关键参数
             '--disable-crash-reporter',
@@ -56,10 +61,33 @@ export class BrowserPool {
             '--disable-features=site-per-process',
             '--disable-blink-features=AutomationControlled',
 
-            // 内存限制
+            // 内存限制 - 更保守的设置
             '--js-flags=--max-old-space-size=512',
+            '--max_old_space_size=512',
+
+            // 额外的稳定性参数
+            '--disable-extensions',
+            '--disable-background-networking',
+            '--disable-sync',
+            '--metrics-recording-only',
+            '--disable-default-apps',
+            '--mute-audio',
+            '--no-first-run',
+            '--disable-background-timer-throttling',
+            '--disable-renderer-backgrounding',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-ipc-flooding-protection',
           ],
+          timeout: 60000, // 增加启动超时时间
         });
+
+        // 监听浏览器崩溃事件
+        browser.on('disconnected', () => {
+          console.warn('⚠️  Browser disconnected, will be removed from pool');
+          this.removeBrowser(browser);
+        });
+
+        this.contextCounts.set(browser, 0);
 
         return {
           browser,
@@ -96,12 +124,25 @@ export class BrowserPool {
   }
 
   // Release a browser back to the pool
-  release(browser: Browser): void {
+  async release(browser: Browser): Promise<void> {
     const pooledBrowser = this.pool.find((item) => item.browser === browser);
 
     if (!pooledBrowser) {
       console.warn('⚠️  Attempted to release browser not in pool');
       return;
+    }
+
+    // 清理浏览器上下文以释放内存
+    try {
+      const contexts = browser.contexts();
+      for (const context of contexts) {
+        await context.close().catch(err => {
+          console.warn('Failed to close context:', err.message);
+        });
+      }
+      this.contextCounts.set(browser, 0);
+    } catch (error) {
+      console.warn('Error cleaning up browser contexts:', error);
     }
 
     pooledBrowser.inUse = false;
@@ -116,6 +157,83 @@ export class BrowserPool {
       }
     } else {
       console.log('✓ Browser released back to pool');
+    }
+  }
+
+  // Remove a crashed browser from the pool and create a new one
+  private async removeBrowser(browser: Browser): Promise<void> {
+    const index = this.pool.findIndex((item) => item.browser === browser);
+
+    if (index === -1) {
+      return;
+    }
+
+    // Remove from pool
+    this.pool.splice(index, 1);
+    this.contextCounts.delete(browser);
+
+    console.log(`Browser removed from pool. Pool size: ${this.pool.length}/${this.poolSize}`);
+
+    // Create a new browser to replace it
+    try {
+      const newBrowser = await chromium.launch({
+        headless: true,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-features=VizDisplayCompositor',
+          '--disable-features=IsolateOrigins,site-per-process',
+          '--single-process',
+          '--no-zygote',
+          '--disable-gpu',
+          '--disable-gpu-compositing',
+          '--disable-software-rasterizer',
+          '--disable-accelerated-2d-canvas',
+          '--disable-gl-drawing-for-tests',
+          '--disable-3d-apis',
+          '--disable-crash-reporter',
+          '--disable-in-process-stack-traces',
+          '--disable-logging',
+          '--disable-breakpad',
+          '--log-level=3',
+          '--font-render-hinting=none',
+          '--disable-font-subpixel-positioning',
+          '--disable-web-security',
+          '--disable-features=site-per-process',
+          '--disable-blink-features=AutomationControlled',
+          '--js-flags=--max-old-space-size=512',
+          '--max_old_space_size=512',
+          '--disable-extensions',
+          '--disable-background-networking',
+          '--disable-sync',
+          '--metrics-recording-only',
+          '--disable-default-apps',
+          '--mute-audio',
+          '--no-first-run',
+          '--disable-background-timer-throttling',
+          '--disable-renderer-backgrounding',
+          '--disable-backgrounding-occluded-windows',
+          '--disable-ipc-flooding-protection',
+        ],
+        timeout: 60000,
+      });
+
+      newBrowser.on('disconnected', () => {
+        console.warn('⚠️  Replacement browser disconnected');
+        this.removeBrowser(newBrowser);
+      });
+
+      this.contextCounts.set(newBrowser, 0);
+
+      this.pool.push({
+        browser: newBrowser,
+        inUse: false,
+      });
+
+      console.log(`✓ Replacement browser created. Pool size: ${this.pool.length}/${this.poolSize}`);
+    } catch (error) {
+      console.error('Failed to create replacement browser:', error);
     }
   }
 

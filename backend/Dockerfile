@@ -64,8 +64,15 @@ RUN mkdir -p /app/screenshots && \
 ENV DBUS_SESSION_BUS_ADDRESS=/dev/null
 ENV FONTCONFIG_PATH=/etc/fonts
 
+# Chromium 稳定性环境变量
+ENV PLAYWRIGHT_CHROMIUM_USE_HEADLESS_NEW=1
+ENV CHROMIUM_FLAGS="--disable-dev-shm-usage --no-sandbox"
+
 # 暴露端口
 EXPOSE 3000
 
 # 启动应用
+# 注意: 如果遇到浏览器崩溃问题,请在 docker run 或 docker-compose.yml 中添加:
+# --shm-size=512m (增加共享内存大小)
+# 或者使用卷挂载: -v /dev/shm:/dev/shm
 CMD ["npm", "start"]

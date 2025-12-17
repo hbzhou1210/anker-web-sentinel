@@ -1226,6 +1226,11 @@ export class PatrolService {
     const startTime = Date.now();
 
     try {
+      // 检查页面是否已崩溃
+      if (page.isClosed()) {
+        throw new Error('Page is already closed before navigation');
+      }
+
       // 设置设备视口(如果配置了)
       if (deviceConfig) {
         await page.setViewportSize(deviceConfig.viewport);
@@ -1238,7 +1243,15 @@ export class PatrolService {
       const pageType = this.detectPageType(url, name);
       console.log(`  Page type detected: ${pageType}`);
 
-      // 访问页面 - 使用渐进式加载策略
+      // 设置页面崩溃监听
+      let pageCrashed = false;
+      const crashHandler = () => {
+        pageCrashed = true;
+        console.error(`  ✗ Page crashed while loading: ${url}`);
+      };
+      page.on('crash', crashHandler);
+
+      // 访问页面 - 使用渐进式加载策略,添加崩溃检测
       let response: any;
       try {
         // 优先尝试 networkidle (网络空闲)
@@ -1246,7 +1259,20 @@ export class PatrolService {
           waitUntil: 'networkidle',
           timeout: 30000,
         });
+
+        // 检查页面是否在加载过程中崩溃
+        if (pageCrashed || page.isClosed()) {
+          throw new Error('Page crashed during navigation');
+        }
       } catch (error) {
+        const errorMsg = (error as Error).message.toLowerCase();
+
+        // 检测是否是页面崩溃错误
+        if (errorMsg.includes('crash') || errorMsg.includes('closed') || pageCrashed) {
+          page.off('crash', crashHandler);
+          throw new Error('Page crashed during navigation - browser may be under memory pressure');
+        }
+
         // 如果 networkidle 超时,降级到 domcontentloaded
         console.warn(`  NetworkIdle timeout, falling back to domcontentloaded...`);
         try {
@@ -1254,17 +1280,37 @@ export class PatrolService {
             waitUntil: 'domcontentloaded',
             timeout: 20000,
           });
+
+          if (pageCrashed || page.isClosed()) {
+            throw new Error('Page crashed during navigation');
+          }
+
           // 额外等待一段时间让页面继续加载
           await page.waitForTimeout(3000);
         } catch (fallbackError) {
+          const fallbackMsg = (fallbackError as Error).message.toLowerCase();
+
+          if (fallbackMsg.includes('crash') || fallbackMsg.includes('closed') || pageCrashed) {
+            page.off('crash', crashHandler);
+            throw new Error('Page crashed during navigation - browser may be under memory pressure');
+          }
+
           // 最后降级到 load 事件
           console.warn(`  DOMContentLoaded timeout, falling back to load...`);
           response = await page.goto(url, {
             waitUntil: 'load',
             timeout: 20000,
           });
+
+          if (pageCrashed || page.isClosed()) {
+            throw new Error('Page crashed during navigation');
+          }
+
           await page.waitForTimeout(2000);
         }
+      } finally {
+        // 清理事件监听
+        page.off('crash', crashHandler);
       }
 
       const statusCode = response?.status() || 0;
