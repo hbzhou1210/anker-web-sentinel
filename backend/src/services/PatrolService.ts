@@ -1508,7 +1508,24 @@ export class PatrolService {
           });
 
           for (const urlConfig of task.urls) {
-            const page = await context.newPage();
+            let page = null;
+
+            try {
+              page = await context.newPage();
+            } catch (error) {
+              // Context 可能已关闭(浏览器崩溃),释放旧浏览器并获取新的
+              console.warn('Failed to create page, acquiring new browser...');
+              if (browser) {
+                await browserPool.release(browser);
+              }
+              browser = await browserPool.acquire();
+              // 重新创建 context
+              const newContext = await browser.newContext({
+                viewport: device.viewport,
+                userAgent: device.userAgent,
+              });
+              page = await newContext.newPage();
+            }
 
             try {
               const result = await this.testUrlWithRetry(
@@ -1525,22 +1542,49 @@ export class PatrolService {
               } else {
                 failedUrls++;
               }
+            } catch (error) {
+              // 处理测试失败
+              const errorMessage = error instanceof Error ? error.message : '未知错误';
+              console.error(`Test failed for ${urlConfig.name}:`, errorMessage);
+
+              testResults.push({
+                url: urlConfig.url,
+                name: urlConfig.name,
+                status: 'fail',
+                errorMessage,
+                responseTime: 0,
+                testDuration: 0,
+              });
+              failedUrls++;
             } finally {
               // 确保每个URL测试后都关闭页面
-              if (!page.isClosed()) {
+              if (page && !page.isClosed()) {
                 await page.close().catch(() => {});
               }
             }
           }
 
-          await context.close();
+          await context.close().catch(() => {});
         }
       } else {
         // 默认桌面端测试 - 每个URL使用独立的页面实例
-        const context = await browser.newContext();
+        let context = await browser.newContext();
 
         for (const urlConfig of task.urls) {
-          const page = await context.newPage();
+          let page = null;
+
+          try {
+            page = await context.newPage();
+          } catch (error) {
+            // Context 可能已关闭(浏览器崩溃),释放旧浏览器并获取新的
+            console.warn('Failed to create page, acquiring new browser...');
+            if (browser) {
+              await browserPool.release(browser);
+            }
+            browser = await browserPool.acquire();
+            context = await browser.newContext();
+            page = await context.newPage();
+          }
 
           try {
             const result = await this.testUrlWithRetry(
@@ -1556,15 +1600,29 @@ export class PatrolService {
             } else {
               failedUrls++;
             }
+          } catch (error) {
+            // 处理测试失败
+            const errorMessage = error instanceof Error ? error.message : '未知错误';
+            console.error(`Test failed for ${urlConfig.name}:`, errorMessage);
+
+            testResults.push({
+              url: urlConfig.url,
+              name: urlConfig.name,
+              status: 'fail',
+              errorMessage,
+              responseTime: 0,
+              testDuration: 0,
+            });
+            failedUrls++;
           } finally {
             // 确保每个URL测试后都关闭页面
-            if (!page.isClosed()) {
+            if (page && !page.isClosed()) {
               await page.close().catch(() => {});
             }
           }
         }
 
-        await context.close();
+        await context.close().catch(() => {});
       }
 
       const durationMs = Date.now() - startTime;
