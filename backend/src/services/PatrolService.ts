@@ -444,7 +444,7 @@ export class PatrolService {
 
       // 4. 页脚检查 - 简化为只检查元素展示和订阅功能
       const footerResult = await page.evaluate(function() {
-        const selectors = ['footer', '.footer', '[class*="footer"]'];
+        const selectors = ['footer', '.footer', '[class*="footer"]','input[type="email"]'];
 
         // 遍历所有可能的页脚元素
         for (const selector of selectors) {
@@ -1641,22 +1641,34 @@ export class PatrolService {
       );
 
       // 发送邮件通知
-      // 只有当存在真正的页面内容问题时才发送邮件（排除基础设施错误)
-      const hasContentIssues = testResults.some(
-        result => result.status === 'fail' && !result.isInfrastructureError
-      );
-
-      if (task.notificationEmails.length > 0 && hasContentIssues) {
+      // 无论成功或失败都发送邮件通知
+      if (task.notificationEmails.length > 0) {
         try {
-          console.log(`Sending email notification to ${task.notificationEmails.length} recipient(s)...`);
+          const hasContentIssues = testResults.some(
+            result => result.status === 'fail' && !result.isInfrastructureError
+          );
+          const hasInfraErrors = testResults.some(
+            result => result.status === 'fail' && result.isInfrastructureError
+          );
+
+          let statusMsg = '';
+          if (failedUrls === 0) {
+            statusMsg = '(All checks passed)';
+          } else if (hasContentIssues && hasInfraErrors) {
+            statusMsg = '(Content issues + Infrastructure errors detected)';
+          } else if (hasContentIssues) {
+            statusMsg = '(Content issues detected)';
+          } else if (hasInfraErrors) {
+            statusMsg = '(Infrastructure errors only)';
+          }
+
+          console.log(`Sending email notification to ${task.notificationEmails.length} recipient(s)... ${statusMsg}`);
           await patrolEmailService.sendPatrolReport(executionId);
           console.log(`✓ Email notification sent successfully`);
         } catch (emailError) {
           console.error(`Failed to send email notification:`, emailError);
           // 邮件发送失败不影响巡检任务的完成
         }
-      } else if (task.notificationEmails.length > 0 && !hasContentIssues && failedUrls > 0) {
-        console.log(`⚠️  All failures are infrastructure errors - email notification skipped`);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '未知错误';
