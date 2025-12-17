@@ -5,7 +5,7 @@ import performanceAnalysisService from '../performance/PerformanceAnalysisServic
 import screenshotService from '../automation/ScreenshotService.js';
 import testRequestRepository from '../models/repositories/InMemoryTestRequestRepository.js';
 import testReportRepository from '../models/repositories/BitableTestReportRepository.js';
-import { TestRequestStatus, TestReport, TestResultStatus, UITestResult, PerformanceResult, RenderingSnapshot, PerformanceTestMode } from '../models/entities.js';
+import { TestRequestStatus, TestReport, TestResultStatus, UITestResult, PerformanceResult, RenderingSnapshot, PerformanceTestMode, MetricUnit } from '../models/entities.js';
 import { emailService } from './EmailService.js';
 import feishuApiService from './FeishuApiService.js';
 import { pageSpeedService } from './PageSpeedService.js';
@@ -23,9 +23,9 @@ export class TestExecutionService {
         testReportId: '',
         metricName: 'loadTime' as any,
         measuredValue: pageSpeedData.metrics.speedIndex,
-        unit: 'ms',
+        unit: MetricUnit.Milliseconds,
         threshold: 3400,
-        status: pageSpeedData.metrics.speedIndex <= 3400 ? 'pass' : 'fail',
+        status: pageSpeedData.metrics.speedIndex <= 3400 ? TestResultStatus.Pass : TestResultStatus.Fail,
       },
     ];
 

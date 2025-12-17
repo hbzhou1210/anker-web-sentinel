@@ -69,7 +69,6 @@ export class PatrolSchedulerService {
           await this.executeScheduledTask(schedule);
         },
         {
-          scheduled: true,
           timezone: schedule.timeZone,
         }
       );

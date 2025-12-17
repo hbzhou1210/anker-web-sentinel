@@ -61,11 +61,11 @@ class ImageCompareService {
   /**
    * 获取差异图像路径
    */
-  private getDiffPath(url: string, deviceType?: string): string {
+  private getDiffPath(url: string, deviceType?: string): `${string}.${string}` {
     const urlHash = this.generateUrlHash(url);
     const timestamp = Date.now();
     const suffix = deviceType ? `_${deviceType}` : '';
-    return path.join(this.diffDir, `${urlHash}${suffix}_${timestamp}.png`);
+    return path.join(this.diffDir, `${urlHash}${suffix}_${timestamp}.png`) as `${string}.${string}`;
   }
 
   /**
@@ -135,28 +135,40 @@ class ImageCompareService {
       ]);
 
       // 确保尺寸一致
-      if (baseline.getWidth() !== current.getWidth() || baseline.getHeight() !== current.getHeight()) {
-        console.warn(`⚠️  Image dimensions mismatch. Baseline: ${baseline.getWidth()}x${baseline.getHeight()}, Current: ${current.getWidth()}x${current.getHeight()}`);
+      if (baseline.width !== current.width || baseline.height !== current.height) {
+        console.warn(`⚠️  Image dimensions mismatch. Baseline: ${baseline.width}x${baseline.height}, Current: ${current.width}x${current.height}`);
         // 调整尺寸到较小的尺寸
-        const minWidth = Math.min(baseline.getWidth(), current.getWidth());
-        const minHeight = Math.min(baseline.getHeight(), current.getHeight());
-        baseline.resize(minWidth, minHeight);
-        current.resize(minWidth, minHeight);
+        const minWidth = Math.min(baseline.width, current.width);
+        const minHeight = Math.min(baseline.height, current.height);
+        baseline.resize({ w: minWidth, h: minHeight });
+        current.resize({ w: minWidth, h: minHeight });
       }
 
-      const width = baseline.getWidth();
-      const height = baseline.getHeight();
+      const width = baseline.width;
+      const height = baseline.height;
       const totalPixels = width * height;
       let diffPixelCount = 0;
 
       // 创建差异图像
-      const diffImage = generateDiffImage ? new Jimp(width, height) : null;
+      const diffImage = generateDiffImage ? new Jimp({ width, height }) : null;
 
       // 逐像素比较
       for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
-          const baselineColor = Jimp.intToRGBA(baseline.getPixelColor(x, y));
-          const currentColor = Jimp.intToRGBA(current.getPixelColor(x, y));
+          const baselineColorInt = baseline.getPixelColor(x, y);
+          const currentColorInt = current.getPixelColor(x, y);
+          const baselineColor = {
+            r: (baselineColorInt >> 24) & 0xff,
+            g: (baselineColorInt >> 16) & 0xff,
+            b: (baselineColorInt >> 8) & 0xff,
+            a: baselineColorInt & 0xff
+          };
+          const currentColor = {
+            r: (currentColorInt >> 24) & 0xff,
+            g: (currentColorInt >> 16) & 0xff,
+            b: (currentColorInt >> 8) & 0xff,
+            a: currentColorInt & 0xff
+          };
 
           // 计算RGB差异
           const rDiff = Math.abs(baselineColor.r - currentColor.r);
@@ -168,13 +180,15 @@ class ImageCompareService {
             diffPixelCount++;
             // 标记差异像素为红色
             if (diffImage) {
-              diffImage.setPixelColor(Jimp.rgbaToInt(255, 0, 0, 255), x, y);
+              const redColor = (255 << 24) | (0 << 16) | (0 << 8) | 255;
+              diffImage.setPixelColor(redColor, x, y);
             }
           } else {
             // 非差异像素显示为灰度
             if (diffImage) {
               const gray = Math.round((currentColor.r + currentColor.g + currentColor.b) / 3);
-              diffImage.setPixelColor(Jimp.rgbaToInt(gray, gray, gray, 128), x, y);
+              const grayColor = (gray << 24) | (gray << 16) | (gray << 8) | 128;
+              diffImage.setPixelColor(grayColor, x, y);
             }
           }
         }
@@ -183,10 +197,10 @@ class ImageCompareService {
       const diffPercentage = (diffPixelCount / totalPixels) * 100;
       const hasDifference = diffPercentage > diffPercentageThreshold;
 
-      let diffImagePath: string | undefined;
+      let diffImagePath: `${string}.${string}` | undefined;
       if (generateDiffImage && hasDifference && diffImage) {
         diffImagePath = this.getDiffPath(url, deviceType);
-        await diffImage.writeAsync(diffImagePath);
+        await diffImage.write(diffImagePath);
         console.log(`✓ Diff image saved: ${diffImagePath}`);
       }
 
