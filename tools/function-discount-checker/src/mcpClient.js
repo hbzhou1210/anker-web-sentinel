@@ -1,8 +1,8 @@
-import fetch from 'node-fetch';
-
 /**
  * MCP客户端配置
  * 从环境变量读取，支持灵活配置
+ *
+ * 注意: 使用 Node.js 内置 fetch (Node 18+)，不需要 node-fetch 依赖
  */
 const MCP_CONFIG = {
   url: process.env.MCP_SERVER_URL || 'http://beta-dtc-mcp.anker-in.com/mcp/tc_y7odih2ds',

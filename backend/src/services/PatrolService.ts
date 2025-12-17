@@ -1324,16 +1324,54 @@ export class PatrolService {
         };
       }
 
-      // 等待页面稳定
-      await page.waitForTimeout(2000);
+      // 在任何页面操作前检查页面是否仍然有效
+      if (page.isClosed()) {
+        throw new Error('Page was closed after navigation');
+      }
 
-      // 尝试关闭弹窗(在检查页面元素之前)
-      await this.dismissCommonPopups(page);
+      // 等待页面稳定 - 使用 try-catch 保护
+      try {
+        await page.waitForTimeout(2000);
+      } catch (error) {
+        if (page.isClosed()) {
+          throw new Error('Page closed while waiting for stability');
+        }
+        throw error;
+      }
 
-      // 基本可用性检查
-      const bodyExists = await page.evaluate(function() {
-        return document.body !== null && document.body.children.length > 0;
-      });
+      // 再次检查页面状态
+      if (page.isClosed()) {
+        throw new Error('Page closed before popup dismissal');
+      }
+
+      // 尝试关闭弹窗(在检查页面元素之前) - 使用 try-catch 保护
+      try {
+        await this.dismissCommonPopups(page);
+      } catch (error) {
+        if (page.isClosed()) {
+          throw new Error('Page closed during popup dismissal');
+        }
+        // 弹窗关闭失败不影响主流程
+        console.warn(`  Failed to dismiss popups:`, (error as Error).message);
+      }
+
+      // 检查页面状态
+      if (page.isClosed()) {
+        throw new Error('Page closed before content check');
+      }
+
+      // 基本可用性检查 - 使用 try-catch 保护
+      let bodyExists = false;
+      try {
+        bodyExists = await page.evaluate(function() {
+          return document.body !== null && document.body.children.length > 0;
+        });
+      } catch (error) {
+        if (page.isClosed()) {
+          throw new Error('Page closed during content check');
+        }
+        throw error;
+      }
 
       if (!bodyExists) {
         return {
@@ -1350,12 +1388,30 @@ export class PatrolService {
       // 根据页面类型执行对应检查
       let checks: CheckDetail[] = [];
 
-      if (pageType === PageType.ProductPage) {
-        console.log(`  Checking product page functions...`);
-        checks = await this.checkProductPageFunctions(page);
-      } else if (pageType === PageType.Homepage || pageType === PageType.LandingPage) {
-        console.log(`  Checking page modules...`);
-        checks = await this.checkHomepageModules(page, config);
+      // 检查页面状态
+      if (page.isClosed()) {
+        throw new Error('Page closed before element checks');
+      }
+
+      // 执行页面检查 - 使用 try-catch 保护
+      try {
+        if (pageType === PageType.ProductPage) {
+          console.log(`  Checking product page functions...`);
+          checks = await this.checkProductPageFunctions(page);
+        } else if (pageType === PageType.Homepage || pageType === PageType.LandingPage) {
+          console.log(`  Checking page modules...`);
+          checks = await this.checkHomepageModules(page, config);
+        }
+      } catch (error) {
+        if (page.isClosed()) {
+          throw new Error('Page closed during element checks');
+        }
+        // 检查失败,返回错误信息
+        checks = [{
+          name: '模块检查',
+          passed: false,
+          message: `检查过程出错: ${(error as Error).message}`
+        }];
       }
 
       // 评估检查结果
@@ -1373,49 +1429,63 @@ export class PatrolService {
       const finalStatus = evaluation.status === 'pass' ? 'pass' : 'fail';
       const detailedMessage = `页面类型: ${pageType}\n${evaluation.message}\n\n检查详情:\n${checkMessages}`;
 
-      // 截图保存页面状态 - 上传到飞书
+      // 检查页面状态
+      if (page.isClosed()) {
+        throw new Error('Page closed before screenshot capture');
+      }
+
+      // 截图保存页面状态 - 上传到飞书 - 使用 try-catch 保护
       let screenshotUrl: string | undefined;
       try {
         const imageKey = await screenshotService.captureAndUploadToFeishu(page);
         // 转换为后端代理 URL
         screenshotUrl = `/api/v1/images/feishu/${imageKey}`;
       } catch (error) {
-        console.error(`  Failed to capture and upload screenshot:`, error);
+        if (page.isClosed()) {
+          console.warn(`  Page closed during screenshot capture, skipping screenshot`);
+        } else {
+          console.error(`  Failed to capture and upload screenshot:`, error);
+        }
       }
 
       // 视觉对比(如果启用)
       let visualDiff: any = undefined;
       if (config.visualComparison?.enabled && screenshotUrl) {
-        try {
-          console.log(`  Performing visual comparison...`);
-          const deviceType = deviceConfig?.type || 'desktop';
-          const screenshotPath = screenshotUrl.startsWith('/screenshots/')
-            ? `/tmp${screenshotUrl}`
-            : screenshotUrl;
+        // 检查页面状态
+        if (page.isClosed()) {
+          console.warn(`  Page closed before visual comparison, skipping comparison`);
+        } else {
+          try {
+            console.log(`  Performing visual comparison...`);
+            const deviceType = deviceConfig?.type || 'desktop';
+            const screenshotPath = screenshotUrl.startsWith('/screenshots/')
+              ? `/tmp${screenshotUrl}`
+              : screenshotUrl;
 
-          const diffResult = await imageCompareService.compareImages(
-            screenshotPath,
-            url,
-            deviceType,
-            {
-              diffPercentageThreshold: config.visualComparison.diffThreshold || 5,
-              saveBaseline: config.visualComparison.saveBaseline || false,
-              generateDiffImage: true,
+            const diffResult = await imageCompareService.compareImages(
+              screenshotPath,
+              url,
+              deviceType,
+              {
+                diffPercentageThreshold: config.visualComparison.diffThreshold || 5,
+                saveBaseline: config.visualComparison.saveBaseline || false,
+                generateDiffImage: true,
+              }
+            );
+
+            if (diffResult.hasDifference) {
+              console.warn(`  ⚠️  Visual difference detected: ${diffResult.diffPercentage}%`);
             }
-          );
 
-          if (diffResult.hasDifference) {
-            console.warn(`  ⚠️  Visual difference detected: ${diffResult.diffPercentage}%`);
+            visualDiff = {
+              hasDifference: diffResult.hasDifference,
+              diffPercentage: diffResult.diffPercentage,
+              diffImageUrl: diffResult.diffImagePath?.replace('/tmp/screenshots', '/screenshots'),
+              baselineImageUrl: diffResult.previousImagePath?.replace('/tmp/screenshots', '/screenshots'),
+            };
+          } catch (error) {
+            console.error(`  Failed to perform visual comparison:`, error);
           }
-
-          visualDiff = {
-            hasDifference: diffResult.hasDifference,
-            diffPercentage: diffResult.diffPercentage,
-            diffImageUrl: diffResult.diffImagePath?.replace('/tmp/screenshots', '/screenshots'),
-            baselineImageUrl: diffResult.previousImagePath?.replace('/tmp/screenshots', '/screenshots'),
-          };
-        } catch (error) {
-          console.error(`  Failed to perform visual comparison:`, error);
         }
       }
 
@@ -1447,16 +1517,25 @@ export class PatrolService {
         console.error(`✗ ${name} failed:`, errorMessage);
       }
 
-      // 尝试保存截图到飞书,即使检查失败
+      // 尝试保存截图到飞书,即使检查失败 - 使用 try-catch 保护
       let screenshotUrl: string | undefined;
-      try {
-        console.log(`  Capturing screenshot for failed test...`);
-        const imageKey = await screenshotService.captureAndUploadToFeishu(page);
-        // 转换为后端代理 URL
-        screenshotUrl = `/api/v1/images/feishu/${imageKey}`;
-        console.log(`  Screenshot uploaded to Feishu: ${screenshotUrl}`);
-      } catch (screenshotError) {
-        console.error(`  Failed to capture and upload screenshot:`, screenshotError);
+      // 检查页面是否仍然可用
+      if (!page.isClosed()) {
+        try {
+          console.log(`  Capturing screenshot for failed test...`);
+          const imageKey = await screenshotService.captureAndUploadToFeishu(page);
+          // 转换为后端代理 URL
+          screenshotUrl = `/api/v1/images/feishu/${imageKey}`;
+          console.log(`  Screenshot uploaded to Feishu: ${screenshotUrl}`);
+        } catch (screenshotError) {
+          if (page.isClosed()) {
+            console.warn(`  Page closed during error screenshot capture, skipping screenshot`);
+          } else {
+            console.error(`  Failed to capture and upload screenshot:`, screenshotError);
+          }
+        }
+      } else {
+        console.warn(`  Page already closed, cannot capture error screenshot`);
       }
 
       return {
