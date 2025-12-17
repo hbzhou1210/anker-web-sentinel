@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import fetch from 'node-fetch';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -10,6 +9,8 @@ const __dirname = path.dirname(__filename);
 
 /**
  * 全量检查店铺的买赠规则状态
+ *
+ * 注意: 使用 Node.js 内置 fetch (Node 18+)，不需要 node-fetch 依赖
  */
 
 // 从环境变量读取MCP配置
