@@ -27,6 +27,9 @@ services:
       dockerfile: Dockerfile
     container_name: anker-sentinel-backend
     restart: unless-stopped
+    # 增加共享内存大小以防止 Chromium 崩溃
+    # 默认 64MB 对于浏览器自动化太小,增加到 512MB
+    shm_size: '512mb'
     depends_on:
       postgres:
         condition: service_healthy
