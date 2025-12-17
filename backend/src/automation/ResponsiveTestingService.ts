@@ -10,6 +10,35 @@ export class ResponsiveTestingService {
   }
 
   /**
+   * 执行页面操作并在浏览器崩溃时提供更好的错误信息
+   * @param operation 要执行的操作
+   * @param operationName 操作名称(用于日志)
+   */
+  private async executeWithRetry<T>(
+    operation: () => Promise<T>,
+    operationName: string
+  ): Promise<T> {
+    try {
+      return await operation();
+    } catch (error: any) {
+      // 检查是否是浏览器崩溃相关错误
+      const isBrowserCrash =
+        error.message?.includes('Target page, context or browser has been closed') ||
+        error.message?.includes('Browser has been closed') ||
+        error.message?.includes('Protocol error') ||
+        error.message?.includes('Session closed');
+
+      if (isBrowserCrash) {
+        console.warn(`[ResponsiveTestingService] ${operationName} failed due to browser crash: ${error.message}`);
+        console.warn(`[ResponsiveTestingService] This error will be propagated to trigger browser replacement at outer retry layer`);
+      }
+
+      // 直接抛出错误,让外层的 testDeviceWithRetry() 来处理
+      throw error;
+    }
+  }
+
+  /**
    * 在指定设备上测试网站响应式
    */
   async testOnDevice(
@@ -26,65 +55,108 @@ export class ResponsiveTestingService {
         throw new Error('Page is already closed before test');
       }
 
-      // 设置视口
-      await page.setViewportSize({
-        width: device.viewportWidth,
-        height: device.viewportHeight,
-      });
+      // 设置视口 - 使用重试机制
+      await this.executeWithRetry(
+        () => page.setViewportSize({
+          width: device.viewportWidth,
+          height: device.viewportHeight,
+        }),
+        'setViewportSize'
+      );
 
-      // 设置 User Agent (通过 HTTP Header)
-      await page.setExtraHTTPHeaders({
-        'User-Agent': device.userAgent,
-      });
+      // 设置 User Agent (通过 HTTP Header) - 使用重试机制
+      await this.executeWithRetry(
+        () => page.setExtraHTTPHeaders({
+          'User-Agent': device.userAgent,
+        }),
+        'setExtraHTTPHeaders'
+      );
 
-      // 访问页面 - 使用 domcontentloaded 代替 networkidle 加快速度
-      await page.goto(url, {
-        waitUntil: 'domcontentloaded',  // 改为 domcontentloaded,更快
-        timeout: 30000
-      });
+      // 访问页面 - 使用重试机制和 domcontentloaded 代替 networkidle 加快速度
+      await this.executeWithRetry(
+        () => page.goto(url, {
+          waitUntil: 'domcontentloaded',  // 改为 domcontentloaded,更快
+          timeout: 30000
+        }),
+        'page.goto'
+      );
 
-      // 等待页面稳定 - 减少等待时间
-      await page.waitForTimeout(1000);  // 从 2000ms 减少到 1000ms
+      // 等待页面稳定 - 使用重试机制,减少等待时间
+      await this.executeWithRetry(
+        () => page.waitForTimeout(1000),  // 从 2000ms 减少到 1000ms
+        'waitForTimeout'
+      );
 
       // 再次检查页面状态
       if (page.isClosed()) {
         throw new Error('Page closed during initial load');
       }
 
-      // 1. 检查是否有横向滚动条
-      const hasHorizontalScroll = await this.checkHorizontalScroll(page, issues);
+      // 1. 检查是否有横向滚动条 - 使用重试机制
+      const hasHorizontalScroll = await this.executeWithRetry(
+        () => this.checkHorizontalScroll(page, issues),
+        'checkHorizontalScroll'
+      );
 
-      // 2. 检查 viewport meta 标签
-      const hasViewportMeta = await this.checkViewportMeta(page, issues);
+      // 2. 检查 viewport meta 标签 - 使用重试机制
+      const hasViewportMeta = await this.executeWithRetry(
+        () => this.checkViewportMeta(page, issues),
+        'checkViewportMeta'
+      );
 
-      // 3. 检查字体大小是否可读
-      const fontSizeReadable = await this.checkFontSize(page, issues);
+      // 3. 检查字体大小是否可读 - 使用重试机制
+      const fontSizeReadable = await this.executeWithRetry(
+        () => this.checkFontSize(page, issues),
+        'checkFontSize'
+      );
 
-      // 4. 检查触摸目标大小
-      const touchTargetsAdequate = await this.checkTouchTargets(page, issues, device.isMobile);
+      // 4. 检查触摸目标大小 - 使用重试机制
+      const touchTargetsAdequate = await this.executeWithRetry(
+        () => this.checkTouchTargets(page, issues, device.isMobile),
+        'checkTouchTargets'
+      );
 
-      // 5. 检查图片响应式
-      const imagesResponsive = await this.checkImagesResponsive(page, issues);
+      // 5. 检查图片响应式 - 使用重试机制
+      const imagesResponsive = await this.executeWithRetry(
+        () => this.checkImagesResponsive(page, issues),
+        'checkImagesResponsive'
+      );
 
-      // 截图 - 竖屏
-      const screenshotPortraitUrl = await this.screenshotService.captureFullPage(page);
+      // 截图 - 竖屏 - 使用重试机制
+      const screenshotPortraitUrl = await this.executeWithRetry(
+        () => this.screenshotService.captureFullPage(page),
+        'captureFullPage(portrait)'
+      );
 
       // 如果是移动设备,测试横屏
       let screenshotLandscapeUrl: string | undefined;
       if (device.isMobile) {
-        await page.setViewportSize({
-          width: device.viewportHeight,
-          height: device.viewportWidth,
-        });
-        await page.waitForTimeout(500);  // 从 1000ms 减少到 500ms
+        await this.executeWithRetry(
+          () => page.setViewportSize({
+            width: device.viewportHeight,
+            height: device.viewportWidth,
+          }),
+          'setViewportSize(landscape)'
+        );
 
-        screenshotLandscapeUrl = await this.screenshotService.captureFullPage(page);
+        await this.executeWithRetry(
+          () => page.waitForTimeout(500),  // 从 1000ms 减少到 500ms
+          'waitForTimeout(landscape)'
+        );
+
+        screenshotLandscapeUrl = await this.executeWithRetry(
+          () => this.screenshotService.captureFullPage(page),
+          'captureFullPage(landscape)'
+        );
 
         // 恢复竖屏
-        await page.setViewportSize({
-          width: device.viewportWidth,
-          height: device.viewportHeight,
-        });
+        await this.executeWithRetry(
+          () => page.setViewportSize({
+            width: device.viewportWidth,
+            height: device.viewportHeight,
+          }),
+          'setViewportSize(portrait-restore)'
+        );
       }
 
       const testDuration = Date.now() - startTime;
