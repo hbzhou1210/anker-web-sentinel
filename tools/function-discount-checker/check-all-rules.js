@@ -49,10 +49,15 @@ async function callMcpTool(toolName, args) {
       })
     });
 
+    // 检查 HTTP 响应状态
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
     const result = await response.json();
 
     if (result.error) {
-      throw new Error(`MCP错误: ${result.error.message}`);
+      throw new Error(`MCP错误: ${result.error.message || JSON.stringify(result.error)}`);
     }
 
     if (result.result && result.result.content && result.result.content.length > 0) {
@@ -60,13 +65,17 @@ async function callMcpTool(toolName, args) {
       try {
         return JSON.parse(textContent);
       } catch (e) {
+        console.warn(`JSON解析失败,返回原始内容:`, textContent.substring(0, 200));
         return { raw: textContent, parseError: e.message };
       }
     }
 
     throw new Error('MCP返回数据格式错误');
   } catch (error) {
-    console.error(`调用MCP工具 ${toolName} 失败:`, error.message);
+    console.error(`❌ 调用MCP工具 ${toolName} 失败:`);
+    console.error(`   工具名称: ${toolName}`);
+    console.error(`   参数: ${JSON.stringify(args, null, 2)}`);
+    console.error(`   错误: ${error.message}`);
     throw error;
   }
 }
@@ -87,8 +96,14 @@ async function getRulesList(shopDomain) {
       rule_type: 1  // 买赠规则
     });
 
+    // 检查返回结果格式
+    if (!result || typeof result !== 'object') {
+      throw new Error(`获取规则列表失败: MCP返回格式异常`);
+    }
+
     if (result.code !== 0 || !result.data) {
-      throw new Error(`获取规则列表失败: ${result.msg}`);
+      const errorMsg = result.msg || result.message || 'Unknown error';
+      throw new Error(`获取规则列表失败: ${errorMsg}`);
     }
 
     const { list, total } = result.data;
