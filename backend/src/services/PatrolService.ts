@@ -1243,6 +1243,9 @@ export class PatrolService {
       const crashHandler = () => {
         pageCrashed = true;
         console.error(`  ✗ Page crashed while loading: ${url}`);
+        console.error(`  URL: ${url}, Name: ${name}`);
+        console.error(`  Device: ${deviceConfig ? deviceConfig.name : 'desktop'}`);
+        console.error(`  Memory pressure suspected - consider increasing shm_size in docker-compose.yml`);
       };
       page.on('crash', crashHandler);
 
@@ -1581,7 +1584,7 @@ export class PatrolService {
         for (const device of devices) {
           console.log(`\n=== Testing on ${device.name} (${device.viewport.width}x${device.viewport.height}) ===`);
 
-          const context = await browser.newContext({
+          let context = await browser.newContext({
             viewport: device.viewport,
             userAgent: device.userAgent,
           });
@@ -1593,17 +1596,37 @@ export class PatrolService {
               page = await context.newPage();
             } catch (error) {
               // Context 可能已关闭(浏览器崩溃),释放旧浏览器并获取新的
-              console.warn('Failed to create page, acquiring new browser...');
-              if (browser) {
-                await browserPool.release(browser);
+              console.warn(`[Responsive Test] Failed to create page for ${device.name}:`, error);
+              console.warn('[Responsive Test] Acquiring new browser and retrying...');
+
+              try {
+                if (browser) {
+                  await browserPool.release(browser);
+                }
+                browser = await browserPool.acquire();
+                // 重新创建 context
+                const newContext = await browser.newContext({
+                  viewport: device.viewport,
+                  userAgent: device.userAgent,
+                });
+                context = newContext; // 更新 context 引用
+                page = await newContext.newPage();
+                console.log(`[Responsive Test] Successfully created new page with fresh browser`);
+              } catch (retryError) {
+                console.error(`[Responsive Test] Failed to create page even after browser refresh:`, retryError);
+                // 跳过该URL,继续下一个
+                testResults.push({
+                  url: urlConfig.url,
+                  name: urlConfig.name,
+                  status: 'fail',
+                  errorMessage: `无法创建页面 (浏览器不稳定): ${retryError instanceof Error ? retryError.message : 'Unknown error'}`,
+                  responseTime: 0,
+                  testDuration: 0,
+                  isInfrastructureError: true,
+                });
+                failedUrls++;
+                continue; // 跳过这个URL
               }
-              browser = await browserPool.acquire();
-              // 重新创建 context
-              const newContext = await browser.newContext({
-                viewport: device.viewport,
-                userAgent: device.userAgent,
-              });
-              page = await newContext.newPage();
             }
 
             try {
@@ -1656,13 +1679,32 @@ export class PatrolService {
             page = await context.newPage();
           } catch (error) {
             // Context 可能已关闭(浏览器崩溃),释放旧浏览器并获取新的
-            console.warn('Failed to create page, acquiring new browser...');
-            if (browser) {
-              await browserPool.release(browser);
+            console.warn('[Desktop Test] Failed to create page:', error);
+            console.warn('[Desktop Test] Acquiring new browser and retrying...');
+
+            try {
+              if (browser) {
+                await browserPool.release(browser);
+              }
+              browser = await browserPool.acquire();
+              context = await browser.newContext();
+              page = await context.newPage();
+              console.log('[Desktop Test] Successfully created new page with fresh browser');
+            } catch (retryError) {
+              console.error('[Desktop Test] Failed to create page even after browser refresh:', retryError);
+              // 跳过该URL,继续下一个
+              testResults.push({
+                url: urlConfig.url,
+                name: urlConfig.name,
+                status: 'fail',
+                errorMessage: `无法创建页面 (浏览器不稳定): ${retryError instanceof Error ? retryError.message : 'Unknown error'}`,
+                responseTime: 0,
+                testDuration: 0,
+                isInfrastructureError: true,
+              });
+              failedUrls++;
+              continue; // 跳过这个URL
             }
-            browser = await browserPool.acquire();
-            context = await browser.newContext();
-            page = await context.newPage();
           }
 
           try {

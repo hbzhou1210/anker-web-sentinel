@@ -3,6 +3,8 @@ import { chromium, Browser, BrowserContext } from 'playwright';
 interface PooledBrowser {
   browser: Browser;
   inUse: boolean;
+  lastHealthCheck?: number; // 上次健康检查时间戳
+  crashCount?: number; // 崩溃计数
 }
 
 export class BrowserPool {
@@ -12,6 +14,9 @@ export class BrowserPool {
   private waitQueue: Array<(browser: Browser) => void> = [];
   private maxContextsPerBrowser = 3; // 限制每个浏览器的最大上下文数
   private contextCounts = new Map<Browser, number>(); // 跟踪每个浏览器的上下文数
+  private readonly healthCheckInterval = 60000; // 健康检查间隔: 1分钟
+  private readonly maxCrashCount = 3; // 最大崩溃次数,超过则替换浏览器
+  private healthCheckTimer: NodeJS.Timeout | null = null;
 
   // Initialize browser pool with 5 warm instances
   async initialize(): Promise<void> {
@@ -92,14 +97,68 @@ export class BrowserPool {
         return {
           browser,
           inUse: false,
+          lastHealthCheck: Date.now(),
+          crashCount: 0,
         };
       });
 
       this.pool = await Promise.all(browserPromises);
       console.log(`✓ Browser pool initialized with ${this.pool.length} instances`);
+
+      // 启动定期健康检查
+      this.startHealthCheck();
     })();
 
     return this.initPromise;
+  }
+
+  /**
+   * 启动定期健康检查
+   */
+  private startHealthCheck(): void {
+    // 清除旧的定时器
+    if (this.healthCheckTimer) {
+      clearInterval(this.healthCheckTimer);
+    }
+
+    // 每分钟检查一次浏览器健康状态
+    this.healthCheckTimer = setInterval(async () => {
+      console.log('[BrowserPool] Running health check...');
+
+      for (const pooledBrowser of this.pool) {
+        try {
+          // 跳过正在使用的浏览器
+          if (pooledBrowser.inUse) {
+            continue;
+          }
+
+          // 检查浏览器是否仍然连接
+          const isConnected = pooledBrowser.browser.isConnected();
+
+          if (!isConnected) {
+            console.warn('[BrowserPool] Found disconnected browser, replacing...');
+            await this.removeBrowser(pooledBrowser.browser);
+            continue;
+          }
+
+          // 检查崩溃次数
+          if (pooledBrowser.crashCount && pooledBrowser.crashCount >= this.maxCrashCount) {
+            console.warn(`[BrowserPool] Browser exceeded crash limit (${pooledBrowser.crashCount}), replacing...`);
+            await this.removeBrowser(pooledBrowser.browser);
+            continue;
+          }
+
+          // 更新健康检查时间
+          pooledBrowser.lastHealthCheck = Date.now();
+        } catch (error) {
+          console.error('[BrowserPool] Health check error:', error);
+        }
+      }
+
+      console.log(`[BrowserPool] Health check complete. Pool: ${this.pool.length}/${this.poolSize}`);
+    }, this.healthCheckInterval);
+
+    console.log('[BrowserPool] Health check started');
   }
 
   // Acquire a browser from the pool
@@ -107,8 +166,31 @@ export class BrowserPool {
     // Ensure pool is initialized
     await this.initialize();
 
-    // Find available browser
-    const available = this.pool.find((item) => !item.inUse);
+    // Find available and healthy browser
+    const available = this.pool.find((item) => {
+      if (item.inUse) return false;
+
+      // 检查浏览器是否连接
+      if (!item.browser.isConnected()) {
+        console.warn('[BrowserPool] Skipping disconnected browser');
+        // 异步替换崩溃的浏览器
+        this.removeBrowser(item.browser).catch(err => {
+          console.error('[BrowserPool] Failed to replace browser:', err);
+        });
+        return false;
+      }
+
+      // 检查崩溃次数
+      if (item.crashCount && item.crashCount >= this.maxCrashCount) {
+        console.warn('[BrowserPool] Skipping browser with too many crashes');
+        this.removeBrowser(item.browser).catch(err => {
+          console.error('[BrowserPool] Failed to replace browser:', err);
+        });
+        return false;
+      }
+
+      return true;
+    });
 
     if (available) {
       available.inUse = true;
@@ -229,6 +311,8 @@ export class BrowserPool {
       this.pool.push({
         browser: newBrowser,
         inUse: false,
+        lastHealthCheck: Date.now(),
+        crashCount: 0,
       });
 
       console.log(`✓ Replacement browser created. Pool size: ${this.pool.length}/${this.poolSize}`);
@@ -252,6 +336,13 @@ export class BrowserPool {
   async shutdown(): Promise<void> {
     console.log('Closing browser pool...');
 
+    // 停止健康检查
+    if (this.healthCheckTimer) {
+      clearInterval(this.healthCheckTimer);
+      this.healthCheckTimer = null;
+      console.log('[BrowserPool] Health check stopped');
+    }
+
     const closePromises = this.pool.map(async (item) => {
       try {
         await item.browser.close();
@@ -262,6 +353,7 @@ export class BrowserPool {
 
     await Promise.all(closePromises);
     this.pool = [];
+    this.contextCounts.clear();
     console.log('✓ Browser pool closed');
   }
 }
