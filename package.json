@@ -35,6 +35,7 @@
   "author": "Anker Innovation",
   "license": "MIT",
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
     "@types/uuid": "^10.0.0"
   }
 }

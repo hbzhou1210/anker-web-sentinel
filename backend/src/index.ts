@@ -17,6 +17,7 @@ import patrolRouter from './api/routes/patrol.js';
 import imagesRouter from './api/routes/images.js';
 import linkCrawlerRouter from './api/routes/linkCrawler.js';
 import discountRuleRouter from './api/routes/discountRule.js';
+import monitorRouter from './routes/monitor.js';
 import { patrolSchedulerService } from './services/PatrolSchedulerService.js';
 import { imageCompareService } from './automation/ImageCompareService.js';
 import express from 'express';
@@ -56,6 +57,7 @@ app.use('/api/v1/patrol', patrolRouter);
 app.use('/api/v1/images', imagesRouter);
 app.use('/api/v1/link-crawler', linkCrawlerRouter);
 app.use('/api/v1/discount-rule', discountRuleRouter);
+app.use('/api/v1/monitor', monitorRouter);
 
 // Compatibility route for tool interface - maps /api/check-discount to discount rule router
 app.use('/api', discountRuleRouter);
