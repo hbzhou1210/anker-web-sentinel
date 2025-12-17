@@ -1593,10 +1593,44 @@ export class PatrolService {
         for (const device of devices) {
           console.log(`\n=== Testing on ${device.name} (${device.viewport.width}x${device.viewport.height}) ===`);
 
-          let context = await browser.newContext({
-            viewport: device.viewport,
-            userAgent: device.userAgent,
-          });
+          let context: BrowserContext;
+          try {
+            context = await browser.newContext({
+              viewport: device.viewport,
+              userAgent: device.userAgent,
+            });
+          } catch (error) {
+            console.error(`[Responsive Test] Failed to create context for ${device.name}:`, error);
+            console.warn('[Responsive Test] Browser may have crashed, acquiring new browser...');
+
+            try {
+              if (browser) {
+                await browserPool.release(browser);
+              }
+              browser = await browserPool.acquire();
+              context = await browser.newContext({
+                viewport: device.viewport,
+                userAgent: device.userAgent,
+              });
+              console.log(`[Responsive Test] Successfully created context with fresh browser`);
+            } catch (retryError) {
+              console.error(`[Responsive Test] Failed to create context even after browser refresh:`, retryError);
+              // 跳过整个设备的测试
+              for (const urlConfig of task.urls) {
+                testResults.push({
+                  url: urlConfig.url,
+                  name: urlConfig.name,
+                  status: 'fail',
+                  errorMessage: `无法创建浏览器上下文 (浏览器不稳定): ${retryError instanceof Error ? retryError.message : 'Unknown error'}`,
+                  responseTime: 0,
+                  testDuration: 0,
+                  isInfrastructureError: true,
+                });
+                failedUrls++;
+              }
+              continue; // 跳过这个设备
+            }
+          }
 
           for (const urlConfig of task.urls) {
             let page = null;
@@ -1679,7 +1713,39 @@ export class PatrolService {
         }
       } else {
         // 默认桌面端测试 - 每个URL使用独立的页面实例
-        let context = await browser.newContext();
+        let context: BrowserContext;
+        try {
+          context = await browser.newContext();
+        } catch (error) {
+          console.error('[Desktop Test] Failed to create context:', error);
+          console.warn('[Desktop Test] Browser may have crashed, acquiring new browser...');
+
+          try {
+            if (browser) {
+              await browserPool.release(browser);
+            }
+            browser = await browserPool.acquire();
+            context = await browser.newContext();
+            console.log('[Desktop Test] Successfully created context with fresh browser');
+          } catch (retryError) {
+            console.error('[Desktop Test] Failed to create context even after browser refresh:', retryError);
+            // 跳过所有URL测试
+            for (const urlConfig of task.urls) {
+              testResults.push({
+                url: urlConfig.url,
+                name: urlConfig.name,
+                status: 'fail',
+                errorMessage: `无法创建浏览器上下文 (浏览器不稳定): ${retryError instanceof Error ? retryError.message : 'Unknown error'}`,
+                responseTime: 0,
+                testDuration: 0,
+                isInfrastructureError: true,
+              });
+              failedUrls++;
+            }
+            // 无法继续测试,提前结束
+            throw new Error('Failed to create browser context after retry');
+          }
+        }
 
         for (const urlConfig of task.urls) {
           let page = null;
