@@ -1226,11 +1226,6 @@ export class PatrolService {
     const startTime = Date.now();
 
     try {
-      // 检查页面是否已崩溃
-      if (page.isClosed()) {
-        throw new Error('Page is already closed before navigation');
-      }
-
       // 设置设备视口(如果配置了)
       if (deviceConfig) {
         await page.setViewportSize(deviceConfig.viewport);
@@ -1511,15 +1506,48 @@ export class PatrolService {
             viewport: device.viewport,
             userAgent: device.userAgent,
           });
-          const page = await context.newPage();
 
           for (const urlConfig of task.urls) {
+            const page = await context.newPage();
+
+            try {
+              const result = await this.testUrlWithRetry(
+                page,
+                urlConfig.url,
+                urlConfig.name,
+                config,
+                device
+              );
+              testResults.push(result);
+
+              if (result.status === 'pass') {
+                passedUrls++;
+              } else {
+                failedUrls++;
+              }
+            } finally {
+              // 确保每个URL测试后都关闭页面
+              if (!page.isClosed()) {
+                await page.close().catch(() => {});
+              }
+            }
+          }
+
+          await context.close();
+        }
+      } else {
+        // 默认桌面端测试 - 每个URL使用独立的页面实例
+        const context = await browser.newContext();
+
+        for (const urlConfig of task.urls) {
+          const page = await context.newPage();
+
+          try {
             const result = await this.testUrlWithRetry(
               page,
               urlConfig.url,
               urlConfig.name,
-              config,
-              device
+              config
             );
             testResults.push(result);
 
@@ -1528,28 +1556,11 @@ export class PatrolService {
             } else {
               failedUrls++;
             }
-          }
-
-          await context.close();
-        }
-      } else {
-        // 默认桌面端测试
-        const context = await browser.newContext();
-        const page = await context.newPage();
-
-        for (const urlConfig of task.urls) {
-          const result = await this.testUrlWithRetry(
-            page,
-            urlConfig.url,
-            urlConfig.name,
-            config
-          );
-          testResults.push(result);
-
-          if (result.status === 'pass') {
-            passedUrls++;
-          } else {
-            failedUrls++;
+          } finally {
+            // 确保每个URL测试后都关闭页面
+            if (!page.isClosed()) {
+              await page.close().catch(() => {});
+            }
           }
         }
 
