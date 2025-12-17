@@ -1,0 +1,17 @@
+# 双远程推送配置
+# 此文件定义了项目的推送策略
+
+# GitHub 远程仓库配置
+GITHUB_REMOTE=github
+GITHUB_BRANCH=master
+
+# Coding 远程仓库配置
+CODING_REMOTE=coding
+CODING_BRANCH=dev
+
+# 推送策略说明:
+# - GitHub: 直接推送到 master 主分支
+# - Coding: 推送到 dev 开发分支
+#
+# 这样可以保持 GitHub 的 master 分支稳定,
+# 而 Coding 的 dev 分支用于持续集成和测试
