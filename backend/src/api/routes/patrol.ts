@@ -3,6 +3,7 @@ import { patrolService } from '../../services/PatrolService.js';
 import { BitablePatrolScheduleRepository } from '../../models/repositories/BitablePatrolScheduleRepository.js';
 import { patrolSchedulerService } from '../../services/PatrolSchedulerService.js';
 import { PatrolScheduleType } from '../../models/entities.js';
+import { standardLimiter, strictLimiter, createLimiter } from '../middleware/rateLimiter.js';
 
 const router = Router();
 
@@ -13,8 +14,9 @@ const scheduleRepository = new BitablePatrolScheduleRepository();
 
 /**
  * POST /api/v1/patrol/tasks - 创建巡检任务
+ * 应用创建限流器(30次/分钟)
  */
-router.post('/tasks', async (req: Request, res: Response) => {
+router.post('/tasks', createLimiter, async (req: Request, res: Response) => {
   try {
     const { name, description, urls, notificationEmails, config, enabled } = req.body;
 
@@ -190,8 +192,9 @@ router.delete('/tasks/:taskId', async (req: Request, res: Response) => {
 
 /**
  * POST /api/v1/patrol/tasks/:taskId/execute - 手动执行巡检任务
+ * 应用严格限流器(10次/分钟) - 资源密集型操作
  */
-router.post('/tasks/:taskId/execute', async (req: Request, res: Response) => {
+router.post('/tasks/:taskId/execute', strictLimiter, async (req: Request, res: Response) => {
   try {
     const { taskId } = req.params;
 

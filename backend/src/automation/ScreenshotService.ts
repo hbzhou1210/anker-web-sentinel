@@ -182,11 +182,33 @@ export class ScreenshotService {
       }
 
       // 等待页面稳定,防止在渲染过程中截图崩溃
+      // 🔧 优化: 使用更宽容的等待策略,避免 "Page closed while waiting for stability" 错误
       try {
-        await page.waitForLoadState('networkidle', { timeout: 5000 });
-      } catch {
-        // 如果等待超时,继续截图(可能页面有持续的网络请求)
-        console.log('Page did not reach networkidle state, proceeding anyway');
+        // 首先检查页面是否已关闭
+        if (page.isClosed()) {
+          console.warn('Page already closed before waiting for stability');
+          return '';
+        }
+
+        // 尝试等待 networkidle (但超时时间更短)
+        await page.waitForLoadState('networkidle', { timeout: 3000 });
+      } catch (error: any) {
+        // 如果页面关闭,直接返回
+        if (error.message?.includes('closed') || page.isClosed()) {
+          console.warn('Page closed while waiting for stability');
+          return '';
+        }
+
+        // 如果只是超时,继续截图(可能页面有持续的网络请求)
+        console.log('Page did not reach networkidle state within 3s, proceeding with screenshot');
+
+        // 给予最小等待时间让页面基本渲染完成
+        try {
+          await page.waitForTimeout(500);
+        } catch {
+          // 如果连 waitForTimeout 都失败,说明页面已经不可用
+          return '';
+        }
       }
 
       // 尝试完整页面截图

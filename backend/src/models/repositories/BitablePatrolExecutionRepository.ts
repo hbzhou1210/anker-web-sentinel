@@ -1,15 +1,16 @@
 /**
  * 飞书多维表格巡检执行记录 Repository
  *
- * 实现与 PatrolExecutionRepository 相同的接口,但使用飞书多维表格作为存储
+ * 实现 IPatrolExecutionRepository 接口,使用飞书多维表格作为存储
  */
 
 import feishuApiService from '../../services/FeishuApiService.js';
 import { FEISHU_BITABLE_CONFIG } from '../../config/feishu-bitable.config.js';
 import { PatrolExecution, PatrolExecutionStatus } from '../entities.js';
+import { IPatrolExecutionRepository } from '../interfaces/IPatrolExecutionRepository.js';
 import { v4 as uuidv4 } from 'uuid';
 
-export class BitablePatrolExecutionRepository {
+export class BitablePatrolExecutionRepository implements IPatrolExecutionRepository {
   private readonly tableId = FEISHU_BITABLE_CONFIG.tables.patrolExecutions;
 
   /**
@@ -82,7 +83,7 @@ export class BitablePatrolExecutionRepository {
   /**
    * 创建执行记录
    */
-  async create(execution: Omit<PatrolExecution, 'id'>): Promise<PatrolExecution> {
+  async create(execution: Omit<PatrolExecution, 'id'>): Promise<string> {
     const id = uuidv4();
 
     // 清理 testResults,移除过大的 base64 数据
@@ -106,10 +107,7 @@ export class BitablePatrolExecutionRepository {
 
     await feishuApiService.createRecord(this.tableId, fields);
 
-    return {
-      id,
-      ...execution,
-    };
+    return id;
   }
 
   /**
@@ -140,7 +138,14 @@ export class BitablePatrolExecutionRepository {
   /**
    * 根据任务 ID 获取执行历史
    */
-  async findByTaskId(taskId: string, limit: number = 50): Promise<PatrolExecution[]> {
+  async findByTaskId(
+    taskId: string,
+    options?: {
+      limit?: number;
+      offset?: number;
+      orderBy?: 'asc' | 'desc';
+    }
+  ): Promise<PatrolExecution[]> {
     const result = await feishuApiService.searchRecords(this.tableId, {
       filter: {
         conditions: [
@@ -152,11 +157,11 @@ export class BitablePatrolExecutionRepository {
         ],
         conjunction: 'and',
       },
-      page_size: limit,
+      page_size: options?.limit || 50,
     });
 
     // 使用 flatMap + try-catch 过滤掉损坏的记录
-    return result.items
+    let executions = result.items
       .flatMap((record: any) => {
         try {
           return [this.recordToEntity(record)];
@@ -164,8 +169,21 @@ export class BitablePatrolExecutionRepository {
           console.error('[BitablePatrolExecutionRepository] Skipping corrupted record:', error);
           return []; // 跳过损坏的记录
         }
-      })
-      .sort((a: PatrolExecution, b: PatrolExecution) => b.startedAt.getTime() - a.startedAt.getTime());
+      });
+
+    // 排序
+    const orderBy = options?.orderBy || 'desc';
+    executions.sort((a: PatrolExecution, b: PatrolExecution) => {
+      const diff = b.startedAt.getTime() - a.startedAt.getTime();
+      return orderBy === 'desc' ? diff : -diff;
+    });
+
+    // 应用 offset
+    if (options?.offset) {
+      executions = executions.slice(options.offset);
+    }
+
+    return executions;
   }
 
   /**
@@ -347,5 +365,47 @@ export class BitablePatrolExecutionRepository {
     }
 
     return this.recordToEntity(result.items[0]);
+  }
+
+  /**
+   * 获取最近的执行记录
+   * @param taskId 任务ID
+   * @param limit 返回数量
+   * @returns 执行记录列表
+   */
+  async getRecentExecutions(taskId: string, limit: number = 10): Promise<PatrolExecution[]> {
+    return this.findByTaskId(taskId, { limit, orderBy: 'desc' });
+  }
+
+  /**
+   * 统计执行记录数量
+   * @param taskId 任务ID(可选)
+   * @returns 记录数量
+   */
+  async count(taskId?: string): Promise<number> {
+    try {
+      const searchParams: any = {
+        page_size: 1, // 只需要知道总数
+      };
+
+      if (taskId) {
+        searchParams.filter = {
+          conditions: [
+            {
+              field_name: '任务ID',
+              operator: 'is',
+              value: [taskId],
+            },
+          ],
+          conjunction: 'and',
+        };
+      }
+
+      const result = await feishuApiService.searchRecords(this.tableId, searchParams);
+      return result.total;
+    } catch (error) {
+      console.error('[BitablePatrolExecutionRepository] Failed to count executions:', error);
+      throw error;
+    }
   }
 }

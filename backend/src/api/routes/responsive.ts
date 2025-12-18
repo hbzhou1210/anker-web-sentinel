@@ -119,26 +119,46 @@ router.post('/test', async (req: Request, res: Response): Promise<void> => {
 
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         let deviceBrowser = null;
+        let page = null;
+
         try {
           // 获取浏览器实例
           deviceBrowser = await browserPool.acquire();
 
-          // 验证浏览器连接状态
+          // 双重验证浏览器连接状态
           if (!deviceBrowser.isConnected()) {
+            console.warn(`[${device.name}] Browser not connected after acquire, retrying...`);
             throw new Error('Browser is not connected');
           }
 
-          // 创建页面
-          const page = await deviceBrowser.newPage();
-          try {
-            console.log(`Testing on ${device.name}... (attempt ${attempt + 1}/${maxRetries + 1})`);
-            const result = await responsiveTestingService.testOnDevice(page, url, device);
-            return result;
-          } finally {
-            await page.close().catch(err => {
-              console.warn(`Failed to close page for ${device.name}:`, err.message);
-            });
+          // 添加短暂延迟，确保浏览器完全就绪
+          await new Promise(resolve => setTimeout(resolve, 100));
+
+          // 再次检查连接状态
+          if (!deviceBrowser.isConnected()) {
+            console.warn(`[${device.name}] Browser disconnected during wait, retrying...`);
+            throw new Error('Browser disconnected during initialization');
           }
+
+          // 使用 try-catch 包装 newPage() 调用
+          try {
+            page = await deviceBrowser.newPage();
+          } catch (pageError: any) {
+            console.error(`[${device.name}] Failed to create page:`, pageError.message);
+            throw new Error(`Failed to create page: ${pageError.message}`);
+          }
+
+          // 验证页面创建成功
+          if (!page || page.isClosed()) {
+            throw new Error('Page was closed immediately after creation');
+          }
+
+          console.log(`Testing on ${device.name}... (attempt ${attempt + 1}/${maxRetries + 1})`);
+          const result = await responsiveTestingService.testOnDevice(page, url, device);
+
+          console.log(`✓ Completed test on ${device.name}`);
+          return result;
+
         } catch (error: any) {
           lastError = error;
           console.error(`Failed to test on ${device.name} (attempt ${attempt + 1}/${maxRetries + 1}):`, error.message);
@@ -147,16 +167,38 @@ router.post('/test', async (req: Request, res: Response): Promise<void> => {
           const isBrowserCrash =
             error.message?.includes('Target page, context or browser has been closed') ||
             error.message?.includes('Browser is not connected') ||
+            error.message?.includes('Browser disconnected') ||
+            error.message?.includes('Failed to create page') ||
             error.message?.includes('Protocol error');
 
-          // 如果是最后一次尝试或不是浏览器崩溃错误,抛出异常
-          if (attempt === maxRetries || !isBrowserCrash) {
+          // 如果是浏览器崩溃，标记浏览器需要替换
+          if (isBrowserCrash && deviceBrowser) {
+            console.warn(`[${device.name}] Detected browser crash, marking for replacement`);
+          }
+
+          // 如果是最后一次尝试，抛出异常
+          if (attempt === maxRetries) {
             throw error;
           }
 
-          // 等待一小段时间后重试
-          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+          // 如果不是浏览器崩溃错误且不是第一次尝试，抛出异常
+          if (!isBrowserCrash && attempt > 0) {
+            throw error;
+          }
+
+          // 等待后重试，每次等待时间递增
+          const waitTime = 1000 * (attempt + 1);
+          console.log(`[${device.name}] Waiting ${waitTime}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+
         } finally {
+          // 确保页面被关闭
+          if (page && !page.isClosed()) {
+            await page.close().catch(err => {
+              console.warn(`Failed to close page for ${device.name}:`, err.message);
+            });
+          }
+
           // 释放浏览器
           if (deviceBrowser) {
             await browserPool.release(deviceBrowser).catch(err => {

@@ -137,6 +137,7 @@ const PatrolManagement: React.FC = () => {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showAllExecutions, setShowAllExecutions] = useState(false); // 是否显示全部执行记录
+  const [taskSchedules, setTaskSchedules] = useState<Record<string, any[]>>({}); // 存储每个任务的调度配置
 
   // 创建/编辑任务表单状态
   const [formData, setFormData] = useState({
@@ -183,6 +184,23 @@ const PatrolManagement: React.FC = () => {
       }
       const data = await response.json();
       setTasks(data);
+
+      // 加载每个任务的调度信息
+      const schedulesMap: Record<string, any[]> = {};
+      await Promise.all(
+        data.map(async (task: PatrolTask) => {
+          try {
+            const scheduleResponse = await fetch(getFullApiUrl(`/api/v1/patrol/schedules?taskId=${task.id}`));
+            if (scheduleResponse.ok) {
+              const schedules = await scheduleResponse.json();
+              schedulesMap[task.id] = schedules;
+            }
+          } catch (error) {
+            console.error(`加载任务 ${task.id} 的调度信息失败:`, error);
+          }
+        })
+      );
+      setTaskSchedules(schedulesMap);
     } catch (error) {
       console.error('加载巡检任务失败:', error);
       setTasks([]);
@@ -708,6 +726,44 @@ const PatrolManagement: React.FC = () => {
     }
   };
 
+  // 格式化调度信息
+  const formatScheduleInfo = (schedules: any[]) => {
+    if (!schedules || schedules.length === 0) {
+      return '未设置定时';
+    }
+
+    return schedules.map((s) => {
+      const cron = s.cronExpression;
+      const nextRun = s.nextExecutionAt ? new Date(s.nextExecutionAt).toLocaleString('zh-CN', {
+        month: 'numeric',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }) : '';
+
+      // 解析 cron 表达式显示友好的时间
+      if (cron === '0 9 * * *') return '每天 09:00';
+      if (cron === '0 14 * * *' || cron === '0 15 * * *') return '每天 14:00';
+
+      // 解析小时和分钟
+      const parts = cron.split(' ');
+      if (parts.length >= 2) {
+        const minute = parts[0];
+        const hour = parts[1];
+        if (hour.includes(',')) {
+          // 多个时间点
+          const hours = hour.split(',');
+          return `每天 ${hours.map(h => `${h.padStart(2, '0')}:${minute.padStart(2, '0')}`).join(', ')}`;
+        }
+        if (hour !== '*') {
+          return `每天 ${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`;
+        }
+      }
+
+      return cron; // 无法解析则显示原始 cron 表达式
+    }).join(' | ');
+  };
+
   // URL 相关操作
   const handleAddUrl = () => {
     setFormData({ ...formData, urls: [...formData.urls, { url: '', name: '' }] });
@@ -896,6 +952,19 @@ const PatrolManagement: React.FC = () => {
                       <p className="text-xs text-gray-600 mb-0.5">通知邮箱</p>
                       <p className="text-sm font-semibold text-gray-900 truncate">
                         {task.notificationEmails.join(', ')}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 调度信息 */}
+                  <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl">
+                    <div className="p-2 bg-white rounded-lg shadow-sm">
+                      <Clock className="w-4 h-4 text-orange-600" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-600 mb-0.5">定时调度</p>
+                      <p className="text-sm font-semibold text-gray-900">
+                        {taskSchedules[task.id] ? formatScheduleInfo(taskSchedules[task.id]) : '加载中...'}
                       </p>
                     </div>
                   </div>

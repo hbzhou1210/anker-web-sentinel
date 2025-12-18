@@ -1,0 +1,339 @@
+{
+  "dashboard": {
+    "title": "Anita QA System - Performance Dashboard",
+    "tags": ["anita", "qa", "patrol", "monitoring"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Active Patrol Tasks",
+        "type": "stat",
+        "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+        "targets": [
+          {
+            "expr": "active_patrol_tasks",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "value": null, "color": "green" },
+                { "value": 5, "color": "yellow" },
+                { "value": 10, "color": "red" }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Patrol Execution Duration (P95)",
+        "type": "stat",
+        "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(patrol_execution_duration_seconds_bucket[5m]))",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "value": null, "color": "green" },
+                { "value": 60, "color": "yellow" },
+                { "value": 300, "color": "red" }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Browser Pool Status",
+        "type": "graph",
+        "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "browser_pool_browsers_total{state=\"active\"}",
+            "legendFormat": "Active Browsers",
+            "refId": "A"
+          },
+          {
+            "expr": "browser_pool_browsers_total{state=\"idle\"}",
+            "legendFormat": "Idle Browsers",
+            "refId": "B"
+          },
+          {
+            "expr": "browser_pool_browsers_total{state=\"total\"}",
+            "legendFormat": "Total Browsers",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          { "format": "short", "label": "Count" },
+          { "format": "short", "show": false }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "HTTP Request Rate",
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "rate(http_requests_total[5m])",
+            "legendFormat": "{{method}} {{route}} - {{status_code}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          { "format": "reqps", "label": "Requests/sec" },
+          { "format": "short", "show": false }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "HTTP Request Duration (P50, P95, P99)",
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "P50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "P95",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "P99",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          { "format": "s", "label": "Duration" },
+          { "format": "short", "show": false }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Browser Crashes by Reason",
+        "type": "graph",
+        "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "rate(browser_crashes_total[5m])",
+            "legendFormat": "{{reason}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          { "format": "ops", "label": "Crashes/sec" },
+          { "format": "short", "show": false }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Cache Hit Rate",
+        "type": "graph",
+        "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "rate(cache_operations_total{operation=\"hit\"}[5m]) / (rate(cache_operations_total{operation=\"hit\"}[5m]) + rate(cache_operations_total{operation=\"miss\"}[5m]))",
+            "legendFormat": "{{cache_name}} Hit Rate",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          { "format": "percentunit", "label": "Hit Rate", "max": 1, "min": 0 },
+          { "format": "short", "show": false }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Feishu API Calls",
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 20, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "rate(feishu_api_calls_total[5m])",
+            "legendFormat": "{{api}} - {{status}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          { "format": "ops", "label": "Calls/sec" },
+          { "format": "short", "show": false }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "Feishu API Duration (P95)",
+        "type": "graph",
+        "gridPos": { "x": 12, "y": 20, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(feishu_api_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{api}} P95",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          { "format": "s", "label": "Duration" },
+          { "format": "short", "show": false }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Email Notifications Sent",
+        "type": "stat",
+        "gridPos": { "x": 0, "y": 28, "w": 6, "h": 4 },
+        "targets": [
+          {
+            "expr": "sum(increase(emails_sent_total[1h]))",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "value": null, "color": "green" }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 11,
+        "title": "Screenshots Generated",
+        "type": "stat",
+        "gridPos": { "x": 6, "y": 28, "w": 6, "h": 4 },
+        "targets": [
+          {
+            "expr": "sum(increase(screenshots_generated_total[1h]))",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "value": null, "color": "green" }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 12,
+        "title": "Error Rate by Type",
+        "type": "graph",
+        "gridPos": { "x": 12, "y": 28, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "rate(errors_total[5m])",
+            "legendFormat": "{{error_type}} - {{severity}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          { "format": "ops", "label": "Errors/sec" },
+          { "format": "short", "show": false }
+        ]
+      },
+      {
+        "id": 13,
+        "title": "Performance Metrics Distribution",
+        "type": "heatmap",
+        "gridPos": { "x": 0, "y": 32, "w": 24, "h": 8 },
+        "targets": [
+          {
+            "expr": "rate(performance_metric_value_bucket[5m])",
+            "legendFormat": "{{metric_type}}",
+            "refId": "A",
+            "format": "heatmap"
+          }
+        ],
+        "heatmap": {
+          "hideZeroBuckets": true
+        }
+      },
+      {
+        "id": 14,
+        "title": "Database Query Duration (P95)",
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 40, "w": 24, "h": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(database_query_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{operation}} on {{table}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          { "format": "s", "label": "Duration" },
+          { "format": "short", "show": false }
+        ]
+      }
+    ]
+  }
+}

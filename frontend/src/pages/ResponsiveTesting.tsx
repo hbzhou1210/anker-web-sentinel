@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Smartphone, Tablet, Monitor, CheckCircle, XCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import { CircularProgress } from '../components/CircularProgress';
+import { LazyImage } from '../components/LazyImage';
 import { getFullApiUrl } from '../services/api';
 
 interface Device {
@@ -59,7 +60,30 @@ export default function ResponsiveTesting() {
   const [results, setResults] = useState<ResponsiveTestResult[] | null>(() => {
     // 从 localStorage 恢复测试结果
     const saved = localStorage.getItem('responsiveTest_results');
-    return saved ? JSON.parse(saved) : null;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // 验证数据结构:检查是否有截图 URL 字段(新版本数据应该有)
+        // 如果是旧版本数据(没有截图字段),清空缓存
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const hasScreenshotFields = parsed.some(
+            result => result.screenshotPortraitUrl !== undefined
+          );
+          if (!hasScreenshotFields) {
+            console.log('[ResponsiveTesting] Clearing outdated cached data (missing screenshot fields)');
+            localStorage.removeItem('responsiveTest_results');
+            localStorage.removeItem('responsiveTest_stats');
+            return null;
+          }
+        }
+        return parsed;
+      } catch (e) {
+        console.error('[ResponsiveTesting] Failed to parse cached results:', e);
+        localStorage.removeItem('responsiveTest_results');
+        return null;
+      }
+    }
+    return null;
   });
   const [stats, setStats] = useState<Stats | null>(() => {
     // 从 localStorage 恢复统计数据
@@ -177,6 +201,16 @@ export default function ResponsiveTesting() {
       const data = await response.json();
 
       if (data.success && data.data) {
+        // 调试:打印截图 URL
+        console.log('[ResponsiveTesting] Results received:', data.data.results.length);
+        data.data.results.forEach((result: ResponsiveTestResult, index: number) => {
+          console.log(`[ResponsiveTesting] Result ${index}:`, {
+            deviceName: result.deviceName,
+            screenshotPortraitUrl: result.screenshotPortraitUrl,
+            screenshotLandscapeUrl: result.screenshotLandscapeUrl,
+          });
+        });
+
         setResults(data.data.results);
         setStats(data.data.stats);
       } else {
@@ -806,10 +840,15 @@ export default function ResponsiveTesting() {
                           {result.screenshotPortraitUrl && (
                             <div className="group relative">
                               <div className="relative overflow-hidden rounded-lg border-2 border-gray-200 hover:border-blue-400 transition-all shadow-sm hover:shadow-md">
-                                <img
+                                <LazyImage
                                   src={`${getFullApiUrl(result.screenshotPortraitUrl)}`}
                                   alt="竖屏截图"
                                   className="w-full cursor-pointer transition-transform group-hover:scale-105"
+                                  rootMargin="100px"
+                                  onLoad={() => {}}
+                                />
+                                <div
+                                  className="absolute inset-0 cursor-pointer"
                                   onClick={() => setSelectedScreenshot(`${getFullApiUrl(result.screenshotPortraitUrl)}`)}
                                 />
                                 <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all flex items-center justify-center">
@@ -832,10 +871,15 @@ export default function ResponsiveTesting() {
                           {result.screenshotLandscapeUrl && (
                             <div className="group relative">
                               <div className="relative overflow-hidden rounded-lg border-2 border-gray-200 hover:border-blue-400 transition-all shadow-sm hover:shadow-md">
-                                <img
+                                <LazyImage
                                   src={`${getFullApiUrl(result.screenshotLandscapeUrl)}`}
                                   alt="横屏截图"
                                   className="w-full cursor-pointer transition-transform group-hover:scale-105"
+                                  rootMargin="100px"
+                                  onLoad={() => {}}
+                                />
+                                <div
+                                  className="absolute inset-0 cursor-pointer"
                                   onClick={() => setSelectedScreenshot(`${getFullApiUrl(result.screenshotLandscapeUrl)}`)}
                                 />
                                 <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all flex items-center justify-center">
@@ -878,11 +922,12 @@ export default function ResponsiveTesting() {
               >
                 <XCircle className="w-10 h-10" />
               </button>
-              <img
+              <LazyImage
                 src={selectedScreenshot}
                 alt="放大查看"
                 className="max-w-full max-h-[90vh] rounded-lg shadow-2xl"
-                onClick={(e) => e.stopPropagation()}
+                rootMargin="0px"
+                onLoad={() => {}}
               />
             </div>
           </div>

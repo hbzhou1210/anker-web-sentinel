@@ -3,9 +3,15 @@
  *
  * 直接调用飞书开放平台 HTTP API,不依赖 MCP 工具
  * 支持在生产环境中运行
+ *
+ * 优化:
+ * - Bottleneck 限流器:控制飞书 API QPS(5 QPS)
+ * - opossum 熔断器:自动故障恢复
  */
 
 import axios, { AxiosInstance } from 'axios';
+import Bottleneck from 'bottleneck';
+import CircuitBreaker from 'opossum';
 import { FEISHU_BITABLE_CONFIG } from '../config/feishu-bitable.config.js';
 
 interface AccessTokenResponse {
@@ -51,6 +57,13 @@ export class FeishuApiService {
   private accessToken: string | null = null;
   private tokenExpireTime: number = 0;
 
+  // Bottleneck 限流器:控制飞书 API QPS
+  // 飞书开放平台限制:每个应用每个接口 100 QPS,这里设置为 5 QPS 更保守
+  private limiter: Bottleneck;
+
+  // opossum 熔断器:自动故障恢复
+  private breaker: CircuitBreaker;
+
   constructor() {
     this.appId = process.env.FEISHU_APP_ID || FEISHU_BITABLE_CONFIG.appId;
     this.appSecret = process.env.FEISHU_APP_SECRET || FEISHU_BITABLE_CONFIG.appSecret;
@@ -68,6 +81,34 @@ export class FeishuApiService {
       console.warn('[FeishuApi] Warning: FEISHU_APP_ID or FEISHU_APP_SECRET not configured');
       console.warn('[FeishuApi] This will cause authentication failures when accessing Feishu APIs');
     }
+
+    // 初始化 Bottleneck 限流器
+    // 飞书 API 限制:5 QPS(每秒最多 5 个请求)
+    this.limiter = new Bottleneck({
+      maxConcurrent: 5, // 最多 5 个并发请求
+      minTime: 200, // 每个请求之间至少间隔 200ms(即 5 QPS)
+      reservoir: 50, // 令牌桶初始容量
+      reservoirRefreshAmount: 5, // 每次刷新增加 5 个令牌
+      reservoirRefreshInterval: 1000, // 每 1 秒刷新一次
+    });
+
+    // 监听限流器事件
+    this.limiter.on('failed', (error, jobInfo) => {
+      console.warn('[FeishuApi] Limiter job failed:', {
+        error: error.message,
+        retryCount: jobInfo.retryCount,
+      });
+      // 如果是网络错误或 429 错误,自动重试
+      if (jobInfo.retryCount < 3 && (axios.isAxiosError(error) && (error.code === 'ECONNRESET' || error.response?.status === 429))) {
+        console.log('[FeishuApi] Auto-retrying after', 1000 * (jobInfo.retryCount + 1), 'ms');
+        return 1000 * (jobInfo.retryCount + 1); // 返回重试延迟(指数退避)
+      }
+      return undefined; // 不重试
+    });
+
+    this.limiter.on('error', (error) => {
+      console.error('[FeishuApi] Limiter error:', error);
+    });
 
     this.axiosInstance = axios.create({
       baseURL: this.baseUrl,
@@ -90,6 +131,54 @@ export class FeishuApiService {
         throw error;
       }
     );
+
+    // 初始化熔断器
+    // 包装 axios 请求以提供熔断保护
+    const breakerOptions = {
+      timeout: 30000, // 30秒超时
+      errorThresholdPercentage: 50, // 错误率超过 50% 时触发熔断
+      resetTimeout: 30000, // 30秒后尝试恢复
+      rollingCountTimeout: 60000, // 滚动窗口时间:60秒
+      rollingCountBuckets: 10, // 滚动窗口分桶数
+      name: 'FeishuApiBreaker', // 熔断器名称
+    };
+
+    // 创建熔断器,包装通用的 API 请求函数
+    this.breaker = new CircuitBreaker(
+      async (fn: () => Promise<any>) => {
+        return await fn();
+      },
+      breakerOptions
+    );
+
+    // 监听熔断器事件
+    this.breaker.on('open', () => {
+      console.error('[FeishuApi] ⚠️  Circuit breaker opened - Too many failures, stopping requests temporarily');
+    });
+
+    this.breaker.on('halfOpen', () => {
+      console.log('[FeishuApi] 🔄 Circuit breaker half-open - Testing recovery');
+    });
+
+    this.breaker.on('close', () => {
+      console.log('[FeishuApi] ✅ Circuit breaker closed - Service recovered');
+    });
+
+    this.breaker.on('fallback', (result) => {
+      console.warn('[FeishuApi] 🔀 Fallback triggered, returning:', result);
+    });
+
+    console.log('[FeishuApi] ✅ Initialized with rate limiter (5 QPS) and circuit breaker');
+  }
+
+  /**
+   * 包装 API 请求,应用限流器和熔断器
+   * @param fn API 请求函数
+   * @returns API 响应
+   */
+  private async executeWithProtection<T>(fn: () => Promise<T>): Promise<T> {
+    // 先通过限流器,再通过熔断器
+    return this.limiter.schedule(() => this.breaker.fire(fn));
   }
 
   /**
@@ -152,31 +241,32 @@ export class FeishuApiService {
     const token = await this.getAccessToken();
 
     console.log('[FeishuApi] Creating record in table:', tableId);
-    console.log('[FeishuApi] Fields:', JSON.stringify(fields, null, 2));
 
-    try {
-      const response = await this.axiosInstance.post<CreateRecordResponse>(
-        `/bitable/v1/apps/${this.appToken}/tables/${tableId}/records`,
-        { fields },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+    return this.executeWithProtection(async () => {
+      try {
+        const response = await this.axiosInstance.post<CreateRecordResponse>(
+          `/bitable/v1/apps/${this.appToken}/tables/${tableId}/records`,
+          { fields },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (response.data.code !== 0) {
+          throw new Error(`Failed to create record: ${response.data.msg}`);
         }
-      );
 
-      if (response.data.code !== 0) {
-        throw new Error(`Failed to create record: ${response.data.msg}`);
+        const recordId = response.data.data.record.record_id;
+        console.log('[FeishuApi] Record created with ID:', recordId);
+
+        return recordId;
+      } catch (error) {
+        console.error('[FeishuApi] Failed to create record:', error);
+        throw error;
       }
-
-      const recordId = response.data.data.record.record_id;
-      console.log('[FeishuApi] Record created with ID:', recordId);
-
-      return recordId;
-    } catch (error) {
-      console.error('[FeishuApi] Failed to create record:', error);
-      throw error;
-    }
+    });
   }
 
   /**
@@ -231,30 +321,31 @@ export class FeishuApiService {
     const token = await this.getAccessToken();
 
     console.log('[FeishuApi] Searching records in table:', tableId);
-    console.log('[FeishuApi] Search params:', JSON.stringify(params, null, 2));
 
-    try {
-      const response = await this.axiosInstance.post<SearchRecordsResponse>(
-        `/bitable/v1/apps/${this.appToken}/tables/${tableId}/records/search`,
-        params,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+    return this.executeWithProtection(async () => {
+      try {
+        const response = await this.axiosInstance.post<SearchRecordsResponse>(
+          `/bitable/v1/apps/${this.appToken}/tables/${tableId}/records/search`,
+          params,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (response.data.code !== 0) {
+          throw new Error(`Failed to search records: ${response.data.msg}`);
         }
-      );
 
-      if (response.data.code !== 0) {
-        throw new Error(`Failed to search records: ${response.data.msg}`);
+        console.log('[FeishuApi] Found', response.data.data.items.length, 'records');
+
+        return response.data.data;
+      } catch (error) {
+        console.error('[FeishuApi] Failed to search records:', error);
+        throw error;
       }
-
-      console.log('[FeishuApi] Found', response.data.data.items.length, 'records');
-
-      return response.data.data;
-    } catch (error) {
-      console.error('[FeishuApi] Failed to search records:', error);
-      throw error;
-    }
+    });
   }
 
   /**
@@ -269,26 +360,28 @@ export class FeishuApiService {
 
     console.log('[FeishuApi] Updating record:', recordId, 'in table:', tableId);
 
-    try {
-      const response = await this.axiosInstance.put(
-        `/bitable/v1/apps/${this.appToken}/tables/${tableId}/records/${recordId}`,
-        { fields },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+    return this.executeWithProtection(async () => {
+      try {
+        const response = await this.axiosInstance.put(
+          `/bitable/v1/apps/${this.appToken}/tables/${tableId}/records/${recordId}`,
+          { fields },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (response.data.code !== 0) {
+          throw new Error(`Failed to update record: ${response.data.msg}`);
         }
-      );
 
-      if (response.data.code !== 0) {
-        throw new Error(`Failed to update record: ${response.data.msg}`);
+        console.log('[FeishuApi] Record updated successfully');
+      } catch (error) {
+        console.error('[FeishuApi] Failed to update record:', error);
+        throw error;
       }
-
-      console.log('[FeishuApi] Record updated successfully');
-    } catch (error) {
-      console.error('[FeishuApi] Failed to update record:', error);
-      throw error;
-    }
+    });
   }
 
   /**
@@ -302,26 +395,28 @@ export class FeishuApiService {
 
     console.log('[FeishuApi] Batch updating', records.length, 'records in table:', tableId);
 
-    try {
-      const response = await this.axiosInstance.post(
-        `/bitable/v1/apps/${this.appToken}/tables/${tableId}/records/batch_update`,
-        { records },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+    return this.executeWithProtection(async () => {
+      try {
+        const response = await this.axiosInstance.post(
+          `/bitable/v1/apps/${this.appToken}/tables/${tableId}/records/batch_update`,
+          { records },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (response.data.code !== 0) {
+          throw new Error(`Failed to batch update records: ${response.data.msg}`);
         }
-      );
 
-      if (response.data.code !== 0) {
-        throw new Error(`Failed to batch update records: ${response.data.msg}`);
+        console.log('[FeishuApi] Records updated successfully');
+      } catch (error) {
+        console.error('[FeishuApi] Failed to batch update records:', error);
+        throw error;
       }
-
-      console.log('[FeishuApi] Records updated successfully');
-    } catch (error) {
-      console.error('[FeishuApi] Failed to batch update records:', error);
-      throw error;
-    }
+    });
   }
 
   /**

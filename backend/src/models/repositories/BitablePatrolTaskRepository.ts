@@ -1,16 +1,20 @@
 /**
  * 飞书多维表格巡检任务 Repository
  *
- * 实现与 PatrolTaskRepository 相同的接口,但使用飞书多维表格作为存储
+ * 实现 IPatrolTaskRepository 接口,使用飞书多维表格作为存储
  */
 
 import feishuApiService from '../../services/FeishuApiService.js';
+import cacheService from '../../services/CacheService.js';
 import { FEISHU_BITABLE_CONFIG } from '../../config/feishu-bitable.config.js';
 import { PatrolTask } from '../entities.js';
+import { IPatrolTaskRepository } from '../interfaces/IPatrolTaskRepository.js';
 import { v4 as uuidv4 } from 'uuid';
 
-export class BitablePatrolTaskRepository {
+export class BitablePatrolTaskRepository implements IPatrolTaskRepository {
   private readonly tableId = FEISHU_BITABLE_CONFIG.tables.patrolTasks;
+  private readonly CACHE_PREFIX = 'patrol:task:';
+  private readonly CACHE_TTL = 300; // 5分钟缓存
 
   /**
    * 从飞书富文本格式提取纯文本
@@ -53,7 +57,7 @@ export class BitablePatrolTaskRepository {
   /**
    * 创建巡检任务
    */
-  async create(task: Omit<PatrolTask, 'id' | 'createdAt' | 'updatedAt'>): Promise<PatrolTask> {
+  async create(task: Omit<PatrolTask, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
     const id = uuidv4();
     const now = Date.now();
 
@@ -71,23 +75,23 @@ export class BitablePatrolTaskRepository {
 
     await feishuApiService.createRecord(this.tableId, fields);
 
-    return {
-      id,
-      name: task.name,
-      description: task.description,
-      urls: task.urls,
-      config: task.config,
-      notificationEmails: task.notificationEmails,
-      enabled: task.enabled,
-      createdAt: new Date(now),
-      updatedAt: new Date(now),
-    };
+    return id;
   }
 
   /**
    * 根据 ID 获取巡检任务
    */
   async findById(id: string): Promise<PatrolTask | null> {
+    // 1. 尝试从缓存读取
+    const cacheKey = `${this.CACHE_PREFIX}${id}`;
+    const cached = await cacheService.get<PatrolTask>(cacheKey);
+    if (cached) {
+      console.log(`[Cache HIT] ${cacheKey}`);
+      return cached;
+    }
+
+    // 2. 缓存未命中,查询飞书
+    console.log(`[Cache MISS] ${cacheKey}`);
     const result = await feishuApiService.searchRecords(this.tableId, {
       filter: {
         conditions: [
@@ -106,35 +110,55 @@ export class BitablePatrolTaskRepository {
       return null;
     }
 
-    return this.recordToEntity(result.items[0]);
+    const task = this.recordToEntity(result.items[0]);
+
+    // 3. 写入缓存
+    await cacheService.set(cacheKey, task, this.CACHE_TTL);
+
+    return task;
   }
 
   /**
    * 获取所有巡检任务
+   * @param options 查询选项
+   * @returns 任务列表
    */
-  async findAll(enabledOnly: boolean = false): Promise<PatrolTask[]> {
+  async findAll(options?: {
+    enabled?: boolean;
+    limit?: number;
+    offset?: number;
+  }): Promise<PatrolTask[]> {
     const searchParams: any = {
-      page_size: 500,
+      page_size: options?.limit || 500,
     };
 
-    if (enabledOnly) {
+    // 构建筛选条件 - 只在有具体条件时才添加 filter
+    if (options?.enabled !== undefined) {
       searchParams.filter = {
         conditions: [
           {
-            field_name: 'enabled',
+            field_name: '启用',
             operator: 'is',
-            value: [true],
+            value: [options.enabled],
           },
         ],
         conjunction: 'and',
       };
     }
+    // 注意: 如果没有筛选条件,不添加 filter 字段(避免 InvalidFilter 错误)
 
     const result = await feishuApiService.searchRecords(this.tableId, searchParams);
 
-    return result.items
+    let tasks = result.items
       .map((record: any) => this.recordToEntity(record))
       .sort((a: PatrolTask, b: PatrolTask) => b.createdAt.getTime() - a.createdAt.getTime());
+
+    // 应用偏移量
+    if (options?.offset) {
+      tasks = tasks.slice(options.offset);
+    }
+
+    return tasks;
   }
 
   /**
@@ -190,6 +214,10 @@ export class BitablePatrolTaskRepository {
 
     await feishuApiService.updateRecord(this.tableId, recordId, fields);
 
+    // 更新后立即失效缓存
+    const cacheKey = `${this.CACHE_PREFIX}${id}`;
+    await cacheService.del(cacheKey);
+
     // 返回更新后的实体
     return this.findById(id);
   }
@@ -220,6 +248,10 @@ export class BitablePatrolTaskRepository {
     const recordId = existingResult.items[0].record_id;
     await feishuApiService.deleteRecord(this.tableId, recordId);
 
+    // 删除后立即失效缓存
+    const cacheKey = `${this.CACHE_PREFIX}${id}`;
+    await cacheService.del(cacheKey);
+
     return true;
   }
 
@@ -228,5 +260,38 @@ export class BitablePatrolTaskRepository {
    */
   async setEnabled(id: string, enabled: boolean): Promise<PatrolTask | null> {
     return this.update(id, { enabled });
+  }
+
+  /**
+   * 统计任务数量
+   * @param options 统计选项
+   * @returns 任务数量
+   */
+  async count(options?: { enabled?: boolean }): Promise<number> {
+    try {
+      const filter: any = {};
+
+      // 构建筛选条件
+      if (options?.enabled !== undefined) {
+        filter.conditions = [
+          {
+            field_name: '启用',
+            operator: 'is',
+            value: [options.enabled],
+          },
+        ];
+        filter.conjunction = 'and';
+      }
+
+      const result = await feishuApiService.searchRecords(this.tableId, {
+        filter: Object.keys(filter).length > 0 ? filter : undefined,
+        page_size: 1, // 只需要知道总数
+      });
+
+      return result.total;
+    } catch (error) {
+      console.error('[BitablePatrolTaskRepository] Failed to count tasks:', error);
+      throw error;
+    }
   }
 }

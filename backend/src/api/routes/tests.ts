@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { validateUrl } from '../middleware/validateUrl.js';
-import { rateLimit } from '../middleware/rateLimit.js';
+import { strictLimiter } from '../middleware/rateLimiter.js';
 
 // 使用内存版 TestRequest Repository (只用于追踪异步任务状态)
 import testRequestRepository from '../../models/repositories/InMemoryTestRequestRepository.js';
@@ -14,7 +14,8 @@ console.log(`[Tests Route] Using in-memory storage for test requests, Bitable fo
 const router = Router();
 
 // POST /api/v1/tests - Create a new test request
-router.post('/', validateUrl, rateLimit, async (req: Request, res: Response) => {
+// 应用严格限流器(10次/分钟) - 性能测试是资源密集型操作
+router.post('/', validateUrl, strictLimiter, async (req: Request, res: Response) => {
   try {
     const { url, config, notificationEmail } = req.body;
 
@@ -55,7 +56,7 @@ router.post('/', validateUrl, rateLimit, async (req: Request, res: Response) => 
   }
 });
 
-// GET /api/v1/tests/:testId - Get test request status
+// GET /api/v1/tests/:testId - Get test request status and results
 router.get('/:testId', async (req: Request, res: Response) => {
   try {
     const { testId } = req.params;
@@ -70,12 +71,36 @@ router.get('/:testId', async (req: Request, res: Response) => {
       return;
     }
 
+    // 如果测试已完成,获取报告数据
+    let reportData = {};
+    if (testRequest.status === 'completed') {
+      try {
+        const report = await testReportRepository.findByTestRequestId(testId);
+        if (report) {
+          reportData = {
+            overallScore: report.overallScore,
+            totalChecks: report.totalChecks,
+            passedChecks: report.passedChecks,
+            failedChecks: report.failedChecks,
+            warningChecks: report.warningChecks,
+            testDuration: report.testDuration,
+            completedAt: report.completedAt,
+            reportId: report.id,
+          };
+        }
+      } catch (error) {
+        console.error('Failed to get report data:', error);
+        // 即使获取报告失败,也返回基本信息
+      }
+    }
+
     res.json({
       id: testRequest.id,
       url: testRequest.url,
       requestedAt: testRequest.requestedAt,
       status: testRequest.status,
       config: testRequest.config,
+      ...reportData,
     });
   } catch (error) {
     console.error('Failed to get test request:', error);

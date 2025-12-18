@@ -106,12 +106,77 @@
   color: #374151;
 }
 
+.score-label {
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
 .score-breakdown {
   flex: 1;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
   gap: 16px;
   min-width: 300px;
+}
+
+/* LCP Highlight Styles */
+.lcp-highlight-container {
+  min-width: 200px;
+}
+
+.lcp-highlight {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-radius: 12px;
+  border: 2px solid #f59e0b;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+}
+
+.lcp-icon {
+  font-size: 32px;
+  line-height: 1;
+}
+
+.lcp-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lcp-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #92400e;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.lcp-value {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.lcp-value.lcp-good {
+  color: #047857;
+}
+
+.lcp-value.lcp-needs-improvement {
+  color: #d97706;
+}
+
+.lcp-value.lcp-poor {
+  color: #dc2626;
+}
+
+.lcp-target {
+  font-size: 11px;
+  color: #78350f;
+  font-weight: 500;
 }
 
 .breakdown-item {
@@ -560,6 +625,19 @@
   .score-breakdown {
     width: 100%;
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .lcp-highlight-container {
+    width: 100%;
+    min-width: unset;
+  }
+
+  .lcp-highlight {
+    padding: 16px;
+  }
+
+  .lcp-value {
+    font-size: 24px;
   }
 
   .report-meta {

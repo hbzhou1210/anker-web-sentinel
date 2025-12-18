@@ -5,6 +5,8 @@ import { PerformanceResults } from '../PerformanceResults/PerformanceResults';
 import { PerformanceOverview } from '../PerformanceOverview/PerformanceOverview';
 import { WebPageTestOverview } from '../WebPageTestOverview/WebPageTestOverview';
 import { PageSpeedOverview } from '../PageSpeedOverview/PageSpeedOverview';
+import { PageSpeedOverviewCompact } from '../PageSpeedOverview/PageSpeedOverviewCompact';
+import { PageSpeedOverviewMinimal } from '../PageSpeedOverview/PageSpeedOverviewMinimal';
 import { WebPageTestReport } from '../WebPageTestReport/WebPageTestReport';
 import { PageSpeedReport } from '../PageSpeedReport/PageSpeedReport';
 import './TestReport.css';
@@ -134,10 +136,7 @@ function DualPerformanceReport({ report }: TestReportProps) {
 }
 
 export function TestReport({ report }: TestReportProps) {
-  // 根据性能测试模式路由到专属报告组件
-  // 优先检查数据完整性,避免在同时运行两种测试时显示不完整的报告
-
-  // 检查 WebPageTest 数据是否被损坏(旧版本数据问题)
+  // 检查各种测试数据是否存在
   const isWebPageTestDataCorrupted = report.webPageTestData &&
     (report.webPageTestData as any)._error === 'DATA_TRUNCATED';
 
@@ -149,14 +148,22 @@ export function TestReport({ report }: TestReportProps) {
   const hasPageSpeedData = report.pageSpeedData &&
     report.pageSpeedData.performanceScore !== undefined;
 
-  // 隐藏WebPageTest - 始终优先显示PageSpeed报告
-  if (hasPageSpeedData) {
-    return <PageSpeedReport report={report} />;
-  }
+  const hasUITestData = report.uiTestResults && report.uiTestResults.length > 0;
 
-  // 如果没有PageSpeed但有WebPageTest数据(历史数据),仍显示但不推荐
-  if (hasWebPageTestData && !hasPageSpeedData) {
-    return <WebPageTestReport report={report} />;
+  // 检查是否是纯性能测试报告(没有UI测试数据)
+  const isPurePerformanceReport = !hasUITestData && (hasPageSpeedData || hasWebPageTestData);
+
+  // 如果是纯性能测试且只有一种数据,使用专用组件
+  if (isPurePerformanceReport) {
+    if (hasWebPageTestData && hasPageSpeedData) {
+      return <DualPerformanceReport report={report} />;
+    }
+    if (hasPageSpeedData) {
+      return <PageSpeedReport report={report} />;
+    }
+    if (hasWebPageTestData) {
+      return <WebPageTestReport report={report} />;
+    }
   }
 
   // 如果数据被损坏,显示友好的错误提示
@@ -198,8 +205,10 @@ export function TestReport({ report }: TestReportProps) {
     }
   }
 
-  // 性能检测部分默认收起
-  const [performanceExpanded, setPerformanceExpanded] = useState(false);
+  // 所有报告部分默认收起
+  const [uiTestExpanded, setUITestExpanded] = useState(false);
+  const [pageSpeedExpanded, setPageSpeedExpanded] = useState(false);
+  const [webPageTestExpanded, setWebPageTestExpanded] = useState(false);
   const {
     url,
     overallScore,
@@ -275,6 +284,7 @@ export function TestReport({ report }: TestReportProps) {
             <div className="score-max">/100</div>
           </div>
           <div className="score-status">{getScoreStatus(overallScore)}</div>
+          <div className="score-label">功能测试分数</div>
         </div>
 
         <div className="score-breakdown">
@@ -295,40 +305,146 @@ export function TestReport({ report }: TestReportProps) {
             <div className="breakdown-value">{failedChecks}</div>
           </div>
         </div>
+
+        {/* LCP Performance Metric - Highlighted */}
+        {report.pageSpeedData && report.pageSpeedData.metrics && (
+          <div className="lcp-highlight-container">
+            <div className="lcp-highlight">
+              <div className="lcp-icon">⚡</div>
+              <div className="lcp-content">
+                <div className="lcp-label">LCP (最大内容绘制)</div>
+                <div className={`lcp-value ${
+                  report.pageSpeedData.metrics.largestContentfulPaint <= 2500 ? 'lcp-good' :
+                  report.pageSpeedData.metrics.largestContentfulPaint <= 4000 ? 'lcp-needs-improvement' :
+                  'lcp-poor'
+                }`}>
+                  {(report.pageSpeedData.metrics.largestContentfulPaint / 1000).toFixed(2)}s
+                </div>
+                <div className="lcp-target">目标: &lt; 2.5s</div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* UI Test Results */}
-      <div className="results-section">
-        <h3 className="section-title">
-          <span className="section-icon">🔍</span>
-          UI功能检测
-        </h3>
-        <UITestResults results={uiTestResults} />
-      </div>
-
-      {/* Performance Results - Collapsible */}
-      {(performanceResults.length > 0 || report.pageSpeedData || (renderingSnapshots && renderingSnapshots.length > 0)) && (
+      {/* UI Test Results - Collapsible */}
+      {hasUITestData && (
         <div className="results-section">
           <h3
             className="section-title collapsible"
-            onClick={() => setPerformanceExpanded(!performanceExpanded)}
+            onClick={() => setUITestExpanded(!uiTestExpanded)}
             style={{ cursor: 'pointer' }}
           >
-            <span className="collapse-indicator">{performanceExpanded ? '▼' : '▶'}</span>
-            <span className="section-icon">⚡</span>
-            性能检测
-            <span className="section-hint">(点击{performanceExpanded ? '收起' : '展开'})</span>
+            <span className="collapse-indicator">{uiTestExpanded ? '▼' : '▶'}</span>
+            <span className="section-icon">🔍</span>
+            UI功能检测
+            <span className="section-hint">(点击{uiTestExpanded ? '收起' : '展开'})</span>
           </h3>
 
-          {performanceExpanded && (
+          {uiTestExpanded && (
+            <UITestResults results={uiTestResults} />
+          )}
+        </div>
+      )}
+
+      {/* PageSpeed Insights Report - Collapsible */}
+      {hasPageSpeedData && (
+        <div className="results-section">
+          <h3
+            className="section-title collapsible"
+            onClick={() => setPageSpeedExpanded(!pageSpeedExpanded)}
+            style={{ cursor: 'pointer' }}
+          >
+            <span className="collapse-indicator">{pageSpeedExpanded ? '▼' : '▶'}</span>
+            <span className="section-icon">🚀</span>
+            PageSpeed Insights 报告
+            <span className="section-hint">(点击{pageSpeedExpanded ? '收起' : '展开'})</span>
+          </h3>
+
+          {pageSpeedExpanded && (
+            <div className="performance-overview-section">
+              <PageSpeedOverviewMinimal data={report.pageSpeedData} />
+
+              {/* 跳转到 PageSpeed Insights 按钮 */}
+              <div className="pagespeed-redirect-section" style={{ marginTop: '20px', padding: '20px', background: '#f8f9fa', borderRadius: '8px', textAlign: 'center' }}>
+                <a
+                  href={`https://pagespeed.web.dev/analysis?url=${encodeURIComponent(url)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="view-full-report-button"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 24px', background: '#1a73e8', color: 'white', textDecoration: 'none', borderRadius: '6px', fontWeight: '500', transition: 'background 0.2s' }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#1557b0'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = '#1a73e8'}
+                >
+                  <span className="button-icon">🚀</span>
+                  <span className="button-text">在 PageSpeed Insights 查看完整报告</span>
+                  <span className="button-arrow">→</span>
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* WebPageTest Report - Collapsible */}
+      {hasWebPageTestData && (
+        <div className="results-section">
+          <h3
+            className="section-title collapsible"
+            onClick={() => setWebPageTestExpanded(!webPageTestExpanded)}
+            style={{ cursor: 'pointer' }}
+          >
+            <span className="collapse-indicator">{webPageTestExpanded ? '▼' : '▶'}</span>
+            <span className="section-icon">🎬</span>
+            WebPageTest 报告
+            <span className="section-hint">(点击{webPageTestExpanded ? '收起' : '展开'})</span>
+          </h3>
+
+          {webPageTestExpanded && (
+            <div className="webpagetest-redirect-section">
+              <div className="redirect-icon">🌐</div>
+              <h4 className="redirect-title">查看完整的 WebPageTest 报告</h4>
+              <p className="redirect-description">
+                WebPageTest 提供了详细的性能分析,包括视频帧分析、瀑布图等高级诊断。
+              </p>
+              {report.webPageTestData?.testId && (
+                <a
+                  href={`https://www.webpagetest.org/result/${report.webPageTestData.testId}/`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="view-full-report-button"
+                >
+                  <span className="button-icon">🚀</span>
+                  <span className="button-text">前往 WebPageTest.org 查看完整报告</span>
+                  <span className="button-arrow">→</span>
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Basic Performance Results (Playwright fallback) - Collapsible */}
+      {(performanceResults.length > 0 || (renderingSnapshots && renderingSnapshots.length > 0)) && !hasPageSpeedData && !hasWebPageTestData && (
+        <div className="results-section">
+          <h3
+            className="section-title collapsible"
+            onClick={() => setPageSpeedExpanded(!pageSpeedExpanded)}
+            style={{ cursor: 'pointer' }}
+          >
+            <span className="collapse-indicator">{pageSpeedExpanded ? '▼' : '▶'}</span>
+            <span className="section-icon">⚡</span>
+            基础性能检测
+            <span className="section-hint">(点击{pageSpeedExpanded ? '收起' : '展开'})</span>
+          </h3>
+
+          {pageSpeedExpanded && (
             <>
-              {/* Performance Metrics */}
               {performanceResults.length > 0 && (
                 <PerformanceResults results={performanceResults} />
               )}
 
-              {/* 隐藏WebPageTest - 仅显示基础性能快照 */}
-              {renderingSnapshots && renderingSnapshots.length > 0 && !report.pageSpeedData ? (
+              {renderingSnapshots && renderingSnapshots.length > 0 && (
                 <div className="performance-overview-section">
                   <h4 className="performance-mode-title">
                     <span className="mode-icon">⚡</span>
@@ -336,41 +452,28 @@ export function TestReport({ report }: TestReportProps) {
                   </h4>
                   <PerformanceOverview snapshots={renderingSnapshots} testDuration={testDuration} />
                 </div>
-              ) : null}
-
-              {/* PageSpeed Overview - if available */}
-              {report.pageSpeedData && (
-                <div className="performance-overview-section">
-                  <h4 className="performance-mode-title">
-                    <span className="mode-icon">🚀</span>
-                    PageSpeed Insights 分析
-                  </h4>
-                  <PageSpeedOverview data={report.pageSpeedData} />
-                </div>
-              )}
-
-              {/* 性能测试 API 失败警告 */}
-              {report.performanceTestMode && report.performanceTestMode !== 'none' && (
-                !hasWebPageTestData && !hasPageSpeedData
-              ) && (
-                <div className="performance-api-warning">
-                  <div className="warning-header">
-                    <span className="warning-icon">⚠️</span>
-                    <span className="warning-title">
-                      {report.performanceTestMode === 'webpagetest' && 'WebPageTest API 调用失败'}
-                      {report.performanceTestMode === 'pagespeed' && 'PageSpeed Insights API 调用失败'}
-                    </span>
-                  </div>
-                  <p className="warning-message">
-                    外部性能测试服务未返回数据。可能的原因包括 API 超时、目标网站响应慢或服务繁忙。
-                    {(renderingSnapshots && renderingSnapshots.length > 0) &&
-                      ' 已使用 Playwright 兼容模式提供基础性能数据。'
-                    }
-                  </p>
-                </div>
               )}
             </>
           )}
+        </div>
+      )}
+
+      {/* Performance Test API Failure Warning */}
+      {report.performanceTestMode && report.performanceTestMode !== 'none' && !hasWebPageTestData && !hasPageSpeedData && (
+        <div className="performance-api-warning">
+          <div className="warning-header">
+            <span className="warning-icon">⚠️</span>
+            <span className="warning-title">
+              {report.performanceTestMode === 'webpagetest' && 'WebPageTest API 调用失败'}
+              {report.performanceTestMode === 'pagespeed' && 'PageSpeed Insights API 调用失败'}
+            </span>
+          </div>
+          <p className="warning-message">
+            外部性能测试服务未返回数据。可能的原因包括 API 超时、目标网站响应慢或服务繁忙。
+            {(renderingSnapshots && renderingSnapshots.length > 0) &&
+              ' 已使用 Playwright 兼容模式提供基础性能数据。'
+            }
+          </p>
         </div>
       )}
     </div>

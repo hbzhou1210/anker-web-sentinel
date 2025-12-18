@@ -2,8 +2,10 @@
 // before any other modules that depend on them
 import './config/env.js';
 
-import app from './api/app.js';
+import { configService } from './config/index.js';
+import app, { notFoundHandler, errorLoggingMiddleware, errorHandler } from './api/app.js';
 import browserPool from './automation/BrowserPool.js';
+import cacheService from './services/CacheService.js';
 import { setupStaticFiles } from './api/middleware/staticFiles.js';
 import testsRouter from './api/routes/tests.js';
 import reportsRouter from './api/routes/reports.js';
@@ -20,6 +22,8 @@ import discountRuleRouter from './api/routes/discountRule.js';
 import monitorRouter from './routes/monitor.js';
 import { patrolSchedulerService } from './services/PatrolSchedulerService.js';
 import { imageCompareService } from './automation/ImageCompareService.js';
+import { initializeEventSystem, cleanupEventSystem } from './events/index.js';
+import { getMetrics } from './monitoring/metrics.js';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -28,7 +32,8 @@ import fs from 'fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PORT = process.env.PORT || 3000;
+// 使用配置服务获取端口
+const PORT = configService.getAppConfig().port;
 
 // Setup static file serving
 setupStaticFiles(app);
@@ -88,11 +93,38 @@ app.get('/api/version', (req, res) => {
   }
 });
 
+// 404 未找到处理 (应该在所有路由之后注册)
+app.use(notFoundHandler);
+
+// 错误日志中间件 (在错误处理器之前记录错误)
+app.use(errorLoggingMiddleware);
+
+// 全局错误处理中间件 (应该最后注册)
+app.use(errorHandler);
+
 // Start server
 async function startServer() {
   try {
+    // 打印配置摘要
+    configService.printConfigSummary();
+
     // Using Bitable storage - no PostgreSQL connection needed
-    console.log('✓ Using Bitable storage for data persistence');
+    const storageType = configService.getDatabaseConfig().storage;
+    console.log(`✓ Using ${storageType} storage for data persistence`);
+
+    // Initialize event system
+    console.log('Initializing event system...');
+    initializeEventSystem();
+    console.log('✓ Event system ready');
+
+    // Initialize Redis cache service
+    console.log('Initializing Redis cache service...');
+    await cacheService.connect();
+    if (cacheService.isAvailable()) {
+      console.log('✓ Redis cache service ready');
+    } else {
+      console.warn('⚠️  Redis cache service unavailable - running without cache');
+    }
 
     // Initialize browser pool
     console.log('Initializing browser pool...');
@@ -129,6 +161,9 @@ async function startServer() {
       server.close(() => {
         console.log('✓ HTTP server closed');
       });
+
+      // Cleanup event system
+      cleanupEventSystem();
 
       // Shutdown patrol scheduler
       patrolSchedulerService.shutdown();

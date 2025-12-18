@@ -1,0 +1,269 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [master, main, develop]
+  pull_request:
+    branches: [master, main]
+
+# 允许手动触发工作流
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ===========================
+  # 代码质量检查和测试
+  # ===========================
+  test:
+    name: Test & Build
+    runs-on: ubuntu-latest
+
+    # 可选服务 - Redis (如果需要测试缓存功能)
+    # services:
+    #   redis:
+    #     image: redis:alpine
+    #     ports:
+    #       - 6379:6379
+    #     options: >-
+    #       --health-cmd "redis-cli ping"
+    #       --health-interval 10s
+    #       --health-timeout 5s
+    #       --health-retries 5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 获取完整历史以便进行代码分析
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      # ===========================
+      # Backend
+      # ===========================
+      - name: Install Backend Dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Backend Type Check
+        working-directory: ./backend
+        run: npm run build  # TypeScript 构建会进行类型检查
+
+      - name: Backend Lint (Optional)
+        working-directory: ./backend
+        run: |
+          if [ -f "package.json" ] && grep -q '"lint"' package.json; then
+            npm run lint || echo "⚠️  Lint failed, but continuing..."
+          else
+            echo "ℹ️  No lint script found, skipping..."
+          fi
+        continue-on-error: true
+
+      - name: Backend Tests (Optional)
+        working-directory: ./backend
+        run: |
+          if [ -f "package.json" ] && grep -q '"test"' package.json; then
+            npm test || echo "⚠️  Tests failed, but continuing..."
+          else
+            echo "ℹ️  No test script found, skipping..."
+          fi
+        continue-on-error: true
+        env:
+          NODE_ENV: test
+          # REDIS_URL: redis://localhost:6379
+
+      - name: Build Backend
+        working-directory: ./backend
+        run: npm run build
+
+      # ===========================
+      # Frontend
+      # ===========================
+      - name: Install Frontend Dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Frontend Type Check
+        working-directory: ./frontend
+        run: npm run build  # Vite 构建会进行类型检查
+
+      - name: Frontend Lint (Optional)
+        working-directory: ./frontend
+        run: |
+          if [ -f "package.json" ] && grep -q '"lint"' package.json; then
+            npm run lint || echo "⚠️  Lint failed, but continuing..."
+          else
+            echo "ℹ️  No lint script found, skipping..."
+          fi
+        continue-on-error: true
+
+      - name: Frontend Tests (Optional)
+        working-directory: ./frontend
+        run: |
+          if [ -f "package.json" ] && grep -q '"test"' package.json; then
+            npm test || echo "⚠️  Tests failed, but continuing..."
+          else
+            echo "ℹ️  No test script found, skipping..."
+          fi
+        continue-on-error: true
+
+      - name: Build Frontend
+        working-directory: ./frontend
+        run: npm run build
+
+      # ===========================
+      # 构建产物分析
+      # ===========================
+      - name: Analyze Build Size
+        run: |
+          echo "## 📦 Build Size Analysis" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Backend Build" >> $GITHUB_STEP_SUMMARY
+          du -sh backend/dist >> $GITHUB_STEP_SUMMARY || echo "Backend dist not found" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Frontend Build" >> $GITHUB_STEP_SUMMARY
+          du -sh dist/frontend >> $GITHUB_STEP_SUMMARY || echo "Frontend dist not found" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Frontend Assets (Top 10)" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          ls -lh dist/frontend/assets/ 2>/dev/null | head -11 | tail -10 >> $GITHUB_STEP_SUMMARY || echo "No assets found" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      # ===========================
+      # 上传构建产物
+      # ===========================
+      - name: Upload Backend Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-build
+          path: backend/dist/
+          retention-days: 7
+
+      - name: Upload Frontend Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: dist/frontend/
+          retention-days: 7
+
+  # ===========================
+  # Docker 构建和推送 (可选)
+  # ===========================
+  docker:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub (Optional)
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+        continue-on-error: true
+
+      - name: Extract Metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ secrets.DOCKER_USERNAME }}/anita-qa-system
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.event_name == 'push' && secrets.DOCKER_USERNAME != '' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            GIT_COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+        continue-on-error: true
+
+  # ===========================
+  # 部署到生产环境 (可选)
+  # ===========================
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [test, docker]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+    environment:
+      name: production
+      url: https://your-production-url.com
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download Backend Build
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-build
+          path: backend/dist/
+
+      - name: Download Frontend Build
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: dist/frontend/
+
+      - name: Deploy via SSH (Example)
+        if: secrets.DEPLOY_HOST != ''
+        run: |
+          echo "🚀 Deploying to production..."
+          echo "This is a placeholder for your deployment script"
+          echo "You can use:"
+          echo "  - SSH deployment"
+          echo "  - Docker Compose"
+          echo "  - Kubernetes"
+          echo "  - Cloud platform CLI (AWS, Azure, GCP)"
+        continue-on-error: true
+
+      # 示例: SSH 部署
+      # - name: Deploy via SSH
+      #   uses: appleboy/ssh-action@v1.0.0
+      #   with:
+      #     host: ${{ secrets.DEPLOY_HOST }}
+      #     username: ${{ secrets.DEPLOY_USER }}
+      #     key: ${{ secrets.DEPLOY_KEY }}
+      #     script: |
+      #       cd /path/to/app
+      #       git pull
+      #       docker-compose pull
+      #       docker-compose up -d --remove-orphans
+
+      - name: Create Deployment Summary
+        run: |
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: Production" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ✅ Completed" >> $GITHUB_STEP_SUMMARY

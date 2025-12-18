@@ -17,8 +17,8 @@ export function TestInput({ onTestCreated }: TestInputProps) {
   const [performanceTestModes, setPerformanceTestModes] = useState<Set<PerformanceTestMode>>(
     new Set(['pagespeed'])
   );
-  // 设备类型选择
-  const [deviceStrategy, setDeviceStrategy] = useState<'mobile' | 'desktop'>('desktop');
+  // WebPageTest设备类型选择
+  const [webPageTestStrategy, setWebPageTestStrategy] = useState<'mobile' | 'desktop'>('desktop');
 
   // Test options state
   const [testOptions, setTestOptions] = useState({
@@ -67,7 +67,7 @@ export function TestInput({ onTestCreated }: TestInputProps) {
       // 支持多选性能测试模式
       const modesArray = Array.from(performanceTestModes);
       const performanceTestMode = modesArray[0] || 'pagespeed'; // 主要模式 - 默认PageSpeed
-      const enableWebPageTest = false; // 隐藏WebPageTest
+      const enableWebPageTest = modesArray.includes('webpagetest');
       const enablePageSpeed = modesArray.includes('pagespeed');
 
       const requestPayload = {
@@ -79,7 +79,7 @@ export function TestInput({ onTestCreated }: TestInputProps) {
           performanceTestMode,
           enableWebPageTest,
           enablePageSpeed,
-          deviceStrategy,
+          webPageTestStrategy, // WebPageTest 的设备策略
           testOptions,
         },
       };
@@ -245,7 +245,7 @@ export function TestInput({ onTestCreated }: TestInputProps) {
               <span className="checkbox-hint">检测加载速度和资源大小</span>
             </label>
 
-            {/* Performance Test Mode Selector - 仅显示PageSpeed Insights */}
+            {/* Performance Test Mode Selector - 支持PageSpeed和WebPageTest */}
             {testOptions.performance && (
               <div className="performance-mode-selector">
                 <label className="mode-selector-label">性能测试方式:</label>
@@ -274,48 +274,67 @@ export function TestInput({ onTestCreated }: TestInputProps) {
                       </div>
                     </div>
                   </label>
+
+                  <label className={`mode-option ${performanceTestModes.has('webpagetest') ? 'selected' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={performanceTestModes.has('webpagetest')}
+                      onChange={(e) => {
+                        const newModes = new Set(performanceTestModes);
+                        if (e.target.checked) {
+                          newModes.add('webpagetest');
+                        } else {
+                          newModes.delete('webpagetest');
+                        }
+                        setPerformanceTestModes(newModes);
+                      }}
+                      disabled={isLoading}
+                    />
+                    <div className="mode-content">
+                      <div className="mode-title">
+                        🌐 WebPageTest.org
+                      </div>
+                      <div className="mode-description">
+                        使用 WebPageTest API,包含视频帧分析、瀑布图等高级诊断
+                      </div>
+                    </div>
+                  </label>
                 </div>
               </div>
             )}
 
-            {/* Device Strategy Selector - 设备选择器 */}
-            {testOptions.performance && performanceTestModes.size > 0 && (
+            {/* WebPageTest Device Strategy Selector - WebPageTest设备选择器 */}
+            {testOptions.performance && performanceTestModes.has('webpagetest') && (
               <div className="device-strategy-selector">
-                <label className="device-selector-label">测试设备:</label>
-                <div className="device-options">
-                  <label className={`device-option ${deviceStrategy === 'desktop' ? 'selected' : ''}`}>
+                <label className="device-selector-label">WebPageTest 测试设备:</label>
+                <div className="device-options compact">
+                  <label className={`device-option ${webPageTestStrategy === 'desktop' ? 'selected' : ''}`}>
                     <input
                       type="radio"
-                      name="deviceStrategy"
+                      name="webPageTestStrategy"
                       value="desktop"
-                      checked={deviceStrategy === 'desktop'}
-                      onChange={() => setDeviceStrategy('desktop')}
+                      checked={webPageTestStrategy === 'desktop'}
+                      onChange={() => setWebPageTestStrategy('desktop')}
                       disabled={isLoading}
                     />
                     <div className="device-content">
                       <div className="device-title">
-                        🖥️ 桌面端 (Chrome)
-                      </div>
-                      <div className="device-description">
-                        使用桌面浏览器进行测试,适合PC端网站性能评估
+                        🖥️ 桌面端
                       </div>
                     </div>
                   </label>
-                  <label className={`device-option ${deviceStrategy === 'mobile' ? 'selected' : ''}`}>
+                  <label className={`device-option ${webPageTestStrategy === 'mobile' ? 'selected' : ''}`}>
                     <input
                       type="radio"
-                      name="deviceStrategy"
+                      name="webPageTestStrategy"
                       value="mobile"
-                      checked={deviceStrategy === 'mobile'}
-                      onChange={() => setDeviceStrategy('mobile')}
+                      checked={webPageTestStrategy === 'mobile'}
+                      onChange={() => setWebPageTestStrategy('mobile')}
                       disabled={isLoading}
                     />
                     <div className="device-content">
                       <div className="device-title">
-                        📱 移动端 (Moto G4, 3G)
-                      </div>
-                      <div className="device-description">
-                        使用移动设备模拟进行测试,适合移动端网站性能评估
+                        📱 移动端
                       </div>
                     </div>
                   </label>

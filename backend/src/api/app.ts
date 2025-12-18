@@ -1,7 +1,20 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import { requestIdMiddleware, errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import { metricsMiddleware } from './middleware/metricsMiddleware.js';
+import { loggingMiddleware, errorLoggingMiddleware } from './middleware/loggingMiddleware.js';
+import { getMetrics } from '../monitoring/metrics.js';
 
 const app: Express = express();
+
+// Request ID middleware (应该最先应用)
+app.use(requestIdMiddleware);
+
+// Logging middleware (应该在 Request ID 之后,用于记录所有请求)
+app.use(loggingMiddleware);
+
+// Metrics middleware (应该在 Request ID 之后应用,用于追踪所有请求)
+app.use(metricsMiddleware);
 
 // Middleware
 app.use(express.json());
@@ -43,36 +56,26 @@ app.use(
   })
 );
 
-// Request logging middleware
-app.use((req: Request, res: Response, next: NextFunction) => {
-  const start = Date.now();
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    console.log(`${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`);
-  });
-  next();
-});
-
 // Health check endpoint
 app.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Global error handler middleware
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-  console.error('Global error handler:', err);
-
-  // Check if headers already sent
-  if (res.headersSent) {
-    return next(err);
+// Prometheus metrics endpoint
+app.get('/metrics', async (req: Request, res: Response) => {
+  try {
+    res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+    const metrics = await getMetrics();
+    res.send(metrics);
+  } catch (error) {
+    console.error('Failed to generate metrics:', error);
+    res.status(500).send('Failed to generate metrics');
   }
-
-  // Default error response
-  res.status(500).json({
-    error: 'Internal Server Error',
-    message: err.message || 'An unexpected error occurred',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
-  });
 });
 
+// 注意: API 路由应该在 index.ts 中注册
+// 注意: 404 和错误处理中间件也应该在 index.ts 中所有路由注册后添加
+
+// 导出 app 以及错误处理中间件,供 index.ts 使用
+export { notFoundHandler, errorLoggingMiddleware, errorHandler };
 export default app;

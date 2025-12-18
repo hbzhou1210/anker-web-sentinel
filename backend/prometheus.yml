@@ -1,0 +1,42 @@
+# Prometheus 配置文件
+# 用于抓取 Anita QA System 的指标
+
+global:
+  scrape_interval: 15s # 每 15 秒抓取一次指标
+  evaluation_interval: 15s # 每 15 秒评估一次规则
+  scrape_timeout: 10s # 抓取超时时间
+
+# 告警管理器配置 (可选)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#             - alertmanager:9093
+
+# 抓取配置
+scrape_configs:
+  # Anita QA System Backend
+  - job_name: 'anita-backend'
+    static_configs:
+      - targets: ['localhost:3000']
+        labels:
+          service: 'anita-qa-backend'
+          environment: 'development'
+
+    # 指标路径
+    metrics_path: '/metrics'
+
+    # 抓取间隔(覆盖全局配置)
+    scrape_interval: 10s
+
+    # 抓取超时
+    scrape_timeout: 5s
+
+  # Prometheus 自身监控
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+# 告警规则文件 (可选)
+# rule_files:
+#   - 'alerts.yml'

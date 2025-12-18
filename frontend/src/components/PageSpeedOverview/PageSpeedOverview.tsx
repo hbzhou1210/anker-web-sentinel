@@ -90,7 +90,7 @@ export function PageSpeedOverview({ data }: PageSpeedOverviewProps) {
             <div className="metric-header">
               <span className="metric-name">Total Blocking Time</span>
               <span className={`metric-badge ${getMetricClass('tbt', data.metrics.totalBlockingTime)}`}>
-                {formatTime(data.metrics.totalBlockingTime)}
+                {Math.round(data.metrics.totalBlockingTime)}ms
               </span>
             </div>
             <div className="metric-description">总阻塞时间</div>

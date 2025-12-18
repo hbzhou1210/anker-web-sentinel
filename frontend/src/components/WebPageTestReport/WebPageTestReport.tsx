@@ -53,6 +53,11 @@ export function WebPageTestReport({ report }: WebPageTestReportProps) {
     );
   }
 
+  // 构建WebPageTest完整报告链接
+  const webPageTestUrl = webPageTestData.testId
+    ? `https://www.webpagetest.org/result/${webPageTestData.testId}/`
+    : null;
+
   return (
     <div className="webpagetest-report">
       {/* Header - WebPageTest Style */}
@@ -76,29 +81,75 @@ export function WebPageTestReport({ report }: WebPageTestReportProps) {
           {webPageTestData.testId && (
             <span className="meta-item">
               <span className="meta-label">Test ID:</span>
-              <a
-                href={`https://www.webpagetest.org/result/${webPageTestData.testId}/`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="test-link"
-              >
-                {webPageTestData.testId}
-              </a>
+              <span className="test-id-text">{webPageTestData.testId}</span>
             </span>
           )}
         </div>
       </div>
 
-      {/* WebPageTest Results */}
+      {/* 主要引导区域 - 去WebPageTest.org查看完整报告 */}
       <div className="webpagetest-content">
-        <WebPageTestOverview data={webPageTestData} />
+        <div className="webpagetest-redirect-section">
+          <div className="redirect-icon">🌐</div>
+          <h3 className="redirect-title">查看完整的 WebPageTest 报告</h3>
+          <p className="redirect-description">
+            WebPageTest 提供了详细的性能分析,包括:
+          </p>
+          <ul className="features-list">
+            <li>📹 <strong>视频帧分析</strong> - 逐帧回放页面加载过程</li>
+            <li>📊 <strong>瀑布图</strong> - 资源加载时序详细分析</li>
+            <li>🎯 <strong>性能指标</strong> - FCP、LCP、TTI、TBT 等核心指标</li>
+            <li>🔍 <strong>优化建议</strong> - 专业的性能优化指导</li>
+            <li>📸 <strong>截图对比</strong> - 不同时间点的视觉对比</li>
+            <li>🌍 <strong>多地点测试</strong> - 全球不同位置的测试结果</li>
+          </ul>
+
+          {webPageTestUrl ? (
+            <a
+              href={webPageTestUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="view-full-report-button"
+            >
+              <span className="button-icon">🚀</span>
+              <span className="button-text">前往 WebPageTest.org 查看完整报告</span>
+              <span className="button-arrow">→</span>
+            </a>
+          ) : (
+            <div className="no-link-message">
+              <span className="warning-icon">⚠️</span>
+              <p>测试 ID 不可用,无法生成报告链接</p>
+            </div>
+          )}
+
+          {/* 基本性能指标摘要(如果有) */}
+          {webPageTestData.performanceScore !== undefined && (
+            <div className="performance-summary">
+              <div className="summary-title">性能评分摘要</div>
+              <div className="summary-score">
+                <div className="score-circle" style={{
+                  background: webPageTestData.performanceScore >= 90 ? '#0cce6b'
+                    : webPageTestData.performanceScore >= 50 ? '#ffa400'
+                    : '#ff4e42'
+                }}>
+                  <span className="score-value">{webPageTestData.performanceScore}</span>
+                  <span className="score-max">/100</span>
+                </div>
+                <div className="score-label">总体性能评分</div>
+              </div>
+              <p className="summary-note">
+                更多详细指标和分析请访问完整报告
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Footer */}
       <div className="report-footer">
         <p className="footer-note">
           <span className="info-icon">ℹ️</span>
-          此报告由 WebPageTest 官方 API 生成,展示真实浏览器环境下的性能指标
+          此测试由 WebPageTest 官方 API 生成,展示真实浏览器环境下的性能指标
         </p>
       </div>
     </div>

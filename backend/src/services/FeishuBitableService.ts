@@ -8,11 +8,92 @@
 import { FEISHU_BITABLE_CONFIG } from '../config/feishu-bitable.config.js';
 import feishuApiService from './FeishuApiService.js';
 import type { TestReport, ResponsiveTestResult, PatrolTask, PatrolExecution } from '../models/entities.js';
-import * as zlib from 'zlib';
+import { createGzip, createGunzip } from 'zlib';
+import { pipeline } from 'stream/promises';
+import { Readable, Writable } from 'stream';
 import { promisify } from 'util';
+import * as zlib from 'zlib';
 
 const gzipAsync = promisify(zlib.gzip);
 const gunzipAsync = promisify(zlib.gunzip);
+
+/**
+ * LRU 压缩结果缓存
+ * 用于缓存频繁压缩的数据(如相同 URL 的多次测试结果)
+ */
+class CompressionCache {
+  private cache = new Map<string, { data: string; timestamp: number }>();
+  private readonly MAX_SIZE = 100; // 最多缓存100个条目
+  private readonly TTL = 60000; // 缓存1分钟
+
+  /**
+   * 生成缓存键(基于数据内容的哈希)
+   */
+  private generateKey(data: any): string {
+    // 简单的哈希实现:JSON字符串的长度 + 前后各50字符
+    const str = JSON.stringify(data);
+    const hash = `${str.length}_${str.substring(0, 50)}_${str.substring(str.length - 50)}`;
+    return hash;
+  }
+
+  /**
+   * 获取缓存
+   */
+  get(data: any): string | null {
+    const key = this.generateKey(data);
+    const cached = this.cache.get(key);
+
+    if (!cached) {
+      return null;
+    }
+
+    // 检查是否过期
+    if (Date.now() - cached.timestamp > this.TTL) {
+      this.cache.delete(key);
+      return null;
+    }
+
+    return cached.data;
+  }
+
+  /**
+   * 设置缓存
+   */
+  set(data: any, compressed: string): void {
+    // LRU 淘汰:如果缓存已满,删除最旧的条目
+    if (this.cache.size >= this.MAX_SIZE) {
+      const firstKey = this.cache.keys().next().value;
+      this.cache.delete(firstKey);
+    }
+
+    const key = this.generateKey(data);
+    this.cache.set(key, {
+      data: compressed,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * 清空缓存
+   */
+  clear(): void {
+    this.cache.clear();
+  }
+
+  /**
+   * 获取缓存统计信息
+   */
+  getStats() {
+    return {
+      size: this.cache.size,
+      maxSize: this.MAX_SIZE,
+      ttl: this.TTL,
+    };
+  }
+}
+
+// 全局压缩缓存实例
+const compressionCache = new CompressionCache();
 
 export interface BitableRecord {
   record_id?: string;
@@ -93,12 +174,57 @@ function optimizeWebPageTestData(data: any): any {
 /**
  * 压缩JSON数据为Base64字符串
  * 解决飞书文本字段长度限制问题(通常限制5000字符)
+ *
+ * 优化策略:
+ * 1. 检查缓存,避免重复压缩相同数据
+ * 2. 小数据(< 10KB)使用快速压缩
+ * 3. 大数据(>= 10KB)使用流式压缩,避免内存占用
  */
 async function compressJSON(data: any): Promise<string> {
   try {
+    // 1. 尝试从缓存获取
+    const cached = compressionCache.get(data);
+    if (cached) {
+      console.log('[Compression] Cache hit, skipping compression');
+      return cached;
+    }
+
     const jsonStr = JSON.stringify(data);
-    const compressed = await gzipAsync(Buffer.from(jsonStr, 'utf-8'));
-    return compressed.toString('base64');
+    const dataSize = Buffer.byteLength(jsonStr, 'utf-8');
+
+    let compressed: Buffer;
+
+    // 2. 根据数据大小选择压缩策略
+    if (dataSize < 10000) {
+      // 小数据:使用快速压缩(单次内存操作)
+      compressed = await gzipAsync(Buffer.from(jsonStr, 'utf-8'));
+      console.log(`[Compression] Fast compression: ${dataSize} -> ${compressed.length} bytes (${Math.round((1 - compressed.length / dataSize) * 100)}% reduction)`);
+    } else {
+      // 大数据:使用流式压缩(避免大内存占用)
+      console.log(`[Compression] Large data detected (${dataSize} bytes), using streaming compression...`);
+
+      const chunks: Buffer[] = [];
+      const readable = Readable.from([jsonStr]);
+      const gzip = createGzip({ level: 6 }); // 压缩级别6:平衡速度和压缩率
+      const writable = new Writable({
+        write(chunk, encoding, callback) {
+          chunks.push(chunk);
+          callback();
+        }
+      });
+
+      await pipeline(readable, gzip, writable);
+      compressed = Buffer.concat(chunks);
+
+      console.log(`[Compression] Streaming compression complete: ${dataSize} -> ${compressed.length} bytes (${Math.round((1 - compressed.length / dataSize) * 100)}% reduction)`);
+    }
+
+    const result = compressed.toString('base64');
+
+    // 3. 写入缓存
+    compressionCache.set(data, result);
+
+    return result;
   } catch (error) {
     console.error('[FeishuBitable] Failed to compress JSON:', error);
     return JSON.stringify(data); // 降级方案:返回原始JSON
@@ -107,6 +233,10 @@ async function compressJSON(data: any): Promise<string> {
 
 /**
  * 解压Base64字符串为JSON对象
+ *
+ * 优化策略:
+ * 1. 小数据(< 10KB)使用快速解压
+ * 2. 大数据(>= 10KB)使用流式解压,避免内存占用
  */
 async function decompressJSON(compressedStr: string): Promise<any> {
   try {
@@ -117,7 +247,34 @@ async function decompressJSON(compressedStr: string): Promise<any> {
     }
 
     const buffer = Buffer.from(compressedStr, 'base64');
-    const decompressed = await gunzipAsync(buffer);
+    const compressedSize = buffer.length;
+
+    let decompressed: Buffer;
+
+    // 根据压缩数据大小选择解压策略
+    if (compressedSize < 10000) {
+      // 小数据:快速解压
+      decompressed = await gunzipAsync(buffer);
+    } else {
+      // 大数据:使用流式解压
+      console.log(`[Decompression] Large compressed data (${compressedSize} bytes), using streaming decompression...`);
+
+      const chunks: Buffer[] = [];
+      const readable = Readable.from([buffer]);
+      const gunzip = createGunzip();
+      const writable = new Writable({
+        write(chunk, encoding, callback) {
+          chunks.push(chunk);
+          callback();
+        }
+      });
+
+      await pipeline(readable, gunzip, writable);
+      decompressed = Buffer.concat(chunks);
+
+      console.log(`[Decompression] Streaming decompression complete: ${compressedSize} -> ${decompressed.length} bytes`);
+    }
+
     return JSON.parse(decompressed.toString('utf-8'));
   } catch (error: any) {
     console.error('[FeishuBitable] Failed to decompress JSON:', error);

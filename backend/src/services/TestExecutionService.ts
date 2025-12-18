@@ -169,7 +169,9 @@ export class TestExecutionService {
       performanceTestMode?: PerformanceTestMode;
       enableWebPageTest?: boolean;  // 是否启用 WebPageTest API
       enablePageSpeed?: boolean;     // 是否启用 PageSpeed API
-      deviceStrategy?: 'mobile' | 'desktop';  // 设备策略
+      pageSpeedStrategy?: 'mobile' | 'desktop';  // PageSpeed 设备策略
+      webPageTestStrategy?: 'mobile' | 'desktop';  // WebPageTest 设备策略
+      deviceStrategy?: 'mobile' | 'desktop';  // 兼容旧版本的设备策略
       testOptions?: {
         links?: boolean;
         forms?: boolean;
@@ -232,7 +234,8 @@ export class TestExecutionService {
     // Run PageSpeed test
     if (config?.testOptions?.performance !== false) {
       try {
-        const strategy = config?.deviceStrategy || 'desktop';
+        // 优先使用 pageSpeedStrategy,其次使用 deviceStrategy,最后默认为 'desktop'
+        const strategy = config?.pageSpeedStrategy || config?.deviceStrategy || 'desktop';
         console.log(`Running PageSpeed Insights performance analysis with ${strategy} strategy...`);
         const pageSpeedResult = await this.executePageSpeedTest(url, strategy);
         performanceResults = pageSpeedResult.performanceResults;
@@ -359,8 +362,8 @@ export class TestExecutionService {
           performancePromises.push(
             (async () => {
               try {
-                // 使用 config 中的 deviceStrategy 参数,默认为 desktop
-                const strategy = config?.deviceStrategy || 'desktop';
+                // 优先使用 webPageTestStrategy,其次使用 deviceStrategy,最后默认为 'desktop'
+                const strategy = config?.webPageTestStrategy || config?.deviceStrategy || 'desktop';
                 console.log(`Running WebPageTest API with ${strategy} strategy...`);
                 const wptResult = await performanceAnalysisService.runWebPageTest(url, strategy);
                 performanceResults = wptResult.metrics;
@@ -377,8 +380,8 @@ export class TestExecutionService {
           performancePromises.push(
             (async () => {
               try {
-                // 使用 config 中的 deviceStrategy 参数,默认为 desktop
-                const strategy = config?.deviceStrategy || 'desktop';
+                // 优先使用 pageSpeedStrategy,其次使用 deviceStrategy,最后默认为 'desktop'
+                const strategy = config?.pageSpeedStrategy || config?.deviceStrategy || 'desktop';
                 console.log(`Running PageSpeed Insights with ${strategy} strategy...`);
                 const pageSpeedResult = await this.executePageSpeedTest(url, strategy);
                 pageSpeedData = pageSpeedResult.pageSpeedData;
@@ -455,6 +458,21 @@ export class TestExecutionService {
           warningChecks: report.warningChecks,
           reportUrl: `${appUrl}/report/${report.id}`,
           completedAt: report.completedAt.toISOString(),
+          // 新增: UI测试结果(用于详细分类统计)
+          uiTestResults: report.uiTestResults?.map(result => ({
+            testType: result.testType,
+            status: result.status,
+          })),
+          // 新增: 包含完整的性能测试数据
+          performanceTestMode: report.performanceTestMode,
+          pageSpeedData: report.pageSpeedData ? {
+            performanceScore: report.pageSpeedData.performanceScore,
+            metrics: report.pageSpeedData.metrics,
+          } : undefined,
+          webPageTestData: report.webPageTestData ? {
+            testId: report.webPageTestData.testId,
+            performanceScore: report.webPageTestData.performanceScore,
+          } : undefined,
         });
         console.log(`✓ Email notification sent to ${testRequest.notificationEmail}`);
       } catch (emailError) {

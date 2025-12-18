@@ -8,16 +8,22 @@ interface PooledBrowser {
   createdAt: number; // 创建时间
   totalUsage: number; // 总使用次数
   lastError?: string; // 最后一次错误信息
+  lastUsedAt?: number; // 最后使用时间(用于缩容判断)
 }
 
 interface BrowserPoolConfig {
-  poolSize: number; // 连接池大小
+  poolSize: number; // 初始连接池大小
+  minPoolSize: number; // 最小连接池大小(缩容下限)
+  maxPoolSize: number; // 最大连接池大小(扩容上限)
   maxContextsPerBrowser: number; // 每个浏览器最大上下文数
   healthCheckInterval: number; // 健康检查间隔(毫秒)
   maxCrashCount: number; // 最大崩溃次数
   maxBrowserAge: number; // 浏览器最大存活时间(毫秒)
   maxBrowserUsage: number; // 浏览器最大使用次数
   launchTimeout: number; // 浏览器启动超时时间(毫秒)
+  acquireTimeout: number; // 获取浏览器超时时间(毫秒)
+  scaleUpThreshold: number; // 扩容阈值:队列长度达到此值时触发扩容
+  scaleDownThreshold: number; // 缩容阈值:空闲时间超过此值时触发缩容(毫秒)
 }
 
 interface BrowserPoolStats {
@@ -34,21 +40,31 @@ interface BrowserPoolStats {
 
 export class BrowserPool {
   private pool: PooledBrowser[] = [];
-  private waitQueue: Array<(browser: Browser) => void> = [];
+  private waitQueue: Array<{
+    resolve: (browser: Browser) => void;
+    reject: (error: Error) => void;
+    timestamp: number;
+  }> = [];
   private contextCounts = new Map<Browser, number>(); // 跟踪每个浏览器的上下文数
   private healthCheckTimer: NodeJS.Timeout | null = null;
   private initPromise: Promise<void> | null = null;
   private isShuttingDown = false;
+  private isScaling = false; // 防止并发扩容
 
   // 可配置参数
   private config: BrowserPoolConfig = {
     poolSize: parseInt(process.env.BROWSER_POOL_SIZE || '5', 10),
+    minPoolSize: parseInt(process.env.MIN_BROWSER_POOL_SIZE || '3', 10),
+    maxPoolSize: parseInt(process.env.MAX_BROWSER_POOL_SIZE || '10', 10),
     maxContextsPerBrowser: parseInt(process.env.MAX_CONTEXTS_PER_BROWSER || '3', 10),
-    healthCheckInterval: parseInt(process.env.HEALTH_CHECK_INTERVAL || '60000', 10), // 1分钟
+    healthCheckInterval: parseInt(process.env.HEALTH_CHECK_INTERVAL || '30000', 10), // 30秒(从60秒优化)
     maxCrashCount: parseInt(process.env.MAX_CRASH_COUNT || '3', 10),
-    maxBrowserAge: parseInt(process.env.MAX_BROWSER_AGE || '3600000', 10), // 1小时
-    maxBrowserUsage: parseInt(process.env.MAX_BROWSER_USAGE || '100', 10),
+    maxBrowserAge: parseInt(process.env.MAX_BROWSER_AGE || '1800000', 10), // 30分钟(从1小时优化)
+    maxBrowserUsage: parseInt(process.env.MAX_BROWSER_USAGE || '30', 10), // 30次(从100次优化)
     launchTimeout: parseInt(process.env.BROWSER_LAUNCH_TIMEOUT || '60000', 10),
+    acquireTimeout: parseInt(process.env.ACQUIRE_TIMEOUT || '120000', 10), // 2分钟
+    scaleUpThreshold: parseInt(process.env.SCALE_UP_THRESHOLD || '3', 10), // 队列长度≥3时扩容
+    scaleDownThreshold: parseInt(process.env.SCALE_DOWN_THRESHOLD || '60000', 10), // 空闲1分钟后缩容
   };
 
   // 统计数据
@@ -89,6 +105,7 @@ export class BrowserPool {
             crashCount: 0,
             createdAt: Date.now(),
             totalUsage: 0,
+            lastUsedAt: Date.now(),
           };
         } catch (error) {
           console.error(`[BrowserPool] Failed to create browser ${index + 1}:`, error);
@@ -121,8 +138,10 @@ export class BrowserPool {
         '--disable-dev-shm-usage', // 使用 /tmp 而不是 /dev/shm
         '--disable-features=VizDisplayCompositor',
         '--disable-features=IsolateOrigins,site-per-process',
-        '--single-process', // 使用单进程模式减少内存占用和崩溃
-        '--no-zygote', // 禁用 zygote 进程
+        // 移除 --single-process，使用多进程模式提高稳定性
+        // '--single-process',
+        // 移除 --no-zygote，允许使用 zygote 进程以提高隔离性
+        // '--no-zygote',
 
         // GPU 和渲染 - 完全禁用 GPU
         '--disable-gpu',
@@ -148,9 +167,9 @@ export class BrowserPool {
         '--disable-features=site-per-process',
         '--disable-blink-features=AutomationControlled',
 
-        // 内存限制 - 更保守的设置
-        '--js-flags=--max-old-space-size=512',
-        '--max_old_space_size=512',
+        // 内存限制 - 提高到 2GB 以支持复杂页面
+        '--js-flags=--max-old-space-size=2048',
+        '--max_old_space_size=2048',
 
         // 额外的稳定性参数
         '--disable-extensions',
@@ -272,6 +291,9 @@ export class BrowserPool {
         this.stats.totalReplacements += replacements.length;
       }
 
+      // 检查是否需要缩容
+      this.checkScaleDown();
+
       const stats = this.getStats();
       console.log(`[BrowserPool] Health check complete. Stats:`, stats);
     }, this.config.healthCheckInterval);
@@ -332,15 +354,48 @@ export class BrowserPool {
     if (available) {
       available.inUse = true;
       available.totalUsage++;
+      available.lastUsedAt = Date.now();
       this.stats.totalAcquired++;
       console.log(`✓ Browser acquired from pool (usage: ${available.totalUsage}/${this.config.maxBrowserUsage})`);
       return available.browser;
     }
 
-    // 没有可用的浏览器,加入等待队列
-    console.log('⌛ No available browsers, queuing request...');
-    return new Promise((resolve) => {
-      this.waitQueue.push(resolve);
+    // 没有可用的浏览器,检查是否需要扩容
+    if (this.pool.length < this.config.maxPoolSize &&
+        this.waitQueue.length >= this.config.scaleUpThreshold &&
+        !this.isScaling) {
+      console.log(`🔼 Scaling up: queue length ${this.waitQueue.length} >= threshold ${this.config.scaleUpThreshold}`);
+      this.scaleUp().catch(err => {
+        console.error('[BrowserPool] Failed to scale up:', err);
+      });
+    }
+
+    // 加入等待队列,带超时机制
+    console.log(`⌛ No available browsers, queuing request (queue: ${this.waitQueue.length}, pool: ${this.pool.length}/${this.config.maxPoolSize})...`);
+    return new Promise((resolve, reject) => {
+      const queueItem = {
+        resolve,
+        reject,
+        timestamp: Date.now(),
+      };
+
+      this.waitQueue.push(queueItem);
+
+      // 超时检查
+      const timeoutId = setTimeout(() => {
+        const index = this.waitQueue.indexOf(queueItem);
+        if (index !== -1) {
+          this.waitQueue.splice(index, 1);
+          reject(new Error(`Acquire timeout after ${this.config.acquireTimeout}ms. Queue length: ${this.waitQueue.length}, Pool: ${this.pool.length}`));
+        }
+      }, this.config.acquireTimeout);
+
+      // 如果成功获取,清除超时
+      const originalResolve = queueItem.resolve;
+      queueItem.resolve = (browser: Browser) => {
+        clearTimeout(timeoutId);
+        originalResolve(browser);
+      };
     });
   }
 
@@ -355,31 +410,59 @@ export class BrowserPool {
       return;
     }
 
+    // 检查浏览器健康状态
+    let isHealthy = true;
+    if (!browser.isConnected()) {
+      console.warn('⚠️  Browser disconnected during release, removing from pool');
+      await this.removeBrowser(browser);
+      return;
+    }
+
     // 清理浏览器上下文以释放内存
     try {
       const contexts = browser.contexts();
       for (const context of contexts) {
         await context.close().catch(err => {
           console.warn('Failed to close context:', err.message);
+          isHealthy = false;
         });
       }
       this.contextCounts.set(browser, 0);
     } catch (error) {
       console.warn('Error cleaning up browser contexts:', error);
       pooledBrowser.lastError = (error as Error).message;
+      isHealthy = false;
+    }
+
+    // 如果浏览器不健康，从池中移除并替换
+    if (!isHealthy) {
+      console.warn('⚠️  Browser unhealthy during release, removing from pool');
+      await this.removeBrowser(browser);
+      return;
     }
 
     pooledBrowser.inUse = false;
+    pooledBrowser.lastUsedAt = Date.now();
     this.stats.totalReleased++;
 
     // 检查是否有等待的请求
     if (this.waitQueue.length > 0) {
       const nextWaiting = this.waitQueue.shift();
       if (nextWaiting) {
+        // 再次验证浏览器状态
+        if (!browser.isConnected()) {
+          console.warn('⚠️  Browser disconnected before reassignment, removing from pool');
+          await this.removeBrowser(browser);
+          // 将请求放回队列
+          this.waitQueue.unshift(nextWaiting);
+          return;
+        }
+
         pooledBrowser.inUse = true;
         pooledBrowser.totalUsage++;
+        pooledBrowser.lastUsedAt = Date.now();
         console.log('✓ Browser reassigned to waiting request');
-        nextWaiting(browser);
+        nextWaiting.resolve(browser);
       }
     } else {
       console.log('✓ Browser released back to pool');
@@ -421,6 +504,7 @@ export class BrowserPool {
           crashCount: 0,
           createdAt: Date.now(),
           totalUsage: 0,
+          lastUsedAt: Date.now(),
         });
 
         console.log(`✓ Replacement browser created. Pool size: ${this.pool.length}/${this.config.poolSize}`);
@@ -432,8 +516,9 @@ export class BrowserPool {
             const pooledBrowser = this.pool[this.pool.length - 1];
             pooledBrowser.inUse = true;
             pooledBrowser.totalUsage++;
+            pooledBrowser.lastUsedAt = Date.now();
             console.log('✓ New browser assigned to waiting request');
-            nextWaiting(newBrowser);
+            nextWaiting.resolve(newBrowser);
           }
         }
       } catch (error) {
@@ -446,6 +531,102 @@ export class BrowserPool {
             });
           }
         }, 5000);
+      }
+    }
+  }
+
+  /**
+   * 动态扩容:增加浏览器实例
+   */
+  private async scaleUp(): Promise<void> {
+    if (this.isScaling || this.isShuttingDown) {
+      return;
+    }
+
+    if (this.pool.length >= this.config.maxPoolSize) {
+      console.log(`[BrowserPool] Already at max pool size (${this.pool.length}/${this.config.maxPoolSize})`);
+      return;
+    }
+
+    this.isScaling = true;
+
+    try {
+      console.log(`[BrowserPool] 🔼 Scaling up from ${this.pool.length} to ${this.pool.length + 1} browsers...`);
+      const newBrowser = await this.createBrowser();
+
+      this.pool.push({
+        browser: newBrowser,
+        inUse: false,
+        lastHealthCheck: Date.now(),
+        crashCount: 0,
+        createdAt: Date.now(),
+        totalUsage: 0,
+        lastUsedAt: Date.now(),
+      });
+
+      console.log(`✓ Scale up complete. Pool size: ${this.pool.length}/${this.config.maxPoolSize}`);
+
+      // 如果有等待的请求,立即分配
+      if (this.waitQueue.length > 0) {
+        const nextWaiting = this.waitQueue.shift();
+        if (nextWaiting) {
+          const pooledBrowser = this.pool[this.pool.length - 1];
+          pooledBrowser.inUse = true;
+          pooledBrowser.totalUsage++;
+          pooledBrowser.lastUsedAt = Date.now();
+          console.log('✓ Scaled browser immediately assigned to waiting request');
+          nextWaiting.resolve(newBrowser);
+        }
+      }
+    } catch (error) {
+      console.error('[BrowserPool] Failed to scale up:', error);
+    } finally {
+      this.isScaling = false;
+    }
+  }
+
+  /**
+   * 动态缩容:移除空闲浏览器
+   */
+  private checkScaleDown(): void {
+    if (this.isShuttingDown || this.pool.length <= this.config.minPoolSize) {
+      return;
+    }
+
+    const now = Date.now();
+    const idleBrowsers = this.pool
+      .filter(item => !item.inUse)
+      .sort((a, b) => (a.lastUsedAt || a.createdAt) - (b.lastUsedAt || b.createdAt)); // 按最后使用时间排序
+
+    // 找出空闲时间最长的浏览器
+    for (const browserItem of idleBrowsers) {
+      // 如果已经到达最小池大小,停止缩容
+      if (this.pool.length <= this.config.minPoolSize) {
+        break;
+      }
+
+      const idleTime = now - (browserItem.lastUsedAt || browserItem.createdAt);
+
+      // 如果空闲时间超过阈值,移除这个浏览器
+      if (idleTime > this.config.scaleDownThreshold) {
+        console.log(`[BrowserPool] 🔽 Scaling down: removing browser idle for ${Math.round(idleTime / 1000)}s (threshold: ${Math.round(this.config.scaleDownThreshold / 1000)}s)`);
+
+        // 异步移除,但不创建替换(通过直接删除实现)
+        const index = this.pool.indexOf(browserItem);
+        if (index !== -1) {
+          this.pool.splice(index, 1);
+          this.contextCounts.delete(browserItem.browser);
+
+          console.log(`✓ Scale down complete. Pool size: ${this.pool.length}/${this.config.maxPoolSize} (min: ${this.config.minPoolSize})`);
+
+          // 异步关闭浏览器
+          browserItem.browser.close().catch(err => {
+            console.warn('[BrowserPool] Error closing browser during scale down:', err);
+          });
+
+          // 只移除一个,下次健康检查再继续评估
+          break;
+        }
       }
     }
   }
@@ -525,8 +706,8 @@ export class BrowserPool {
     while (this.waitQueue.length > 0) {
       const waiting = this.waitQueue.shift();
       if (waiting) {
-        // 这里我们不能提供浏览器,但要防止Promise永久挂起
-        console.warn('[BrowserPool] Rejecting waiting request due to shutdown');
+        waiting.reject(new Error('BrowserPool is shutting down'));
+        console.warn('[BrowserPool] Rejected waiting request due to shutdown');
       }
     }
 

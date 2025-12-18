@@ -20,6 +20,22 @@ services:
       timeout: 5s
       retries: 5
 
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: anker-sentinel-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # 后端 API
   backend:
     build:
@@ -33,10 +49,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       NODE_ENV: production
       PORT: 3000
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-your_secure_password_here}@postgres:5432/anker_web_sentinel
+      REDIS_URL: redis://redis:6379
+      REDIS_ENABLED: true
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
       SCREENSHOT_DIR: /app/screenshots
 
@@ -90,6 +110,8 @@ services:
 
 volumes:
   postgres_data:
+    driver: local
+  redis_data:
     driver: local
   screenshot_data:
     driver: local

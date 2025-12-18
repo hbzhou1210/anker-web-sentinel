@@ -1,11 +1,16 @@
 import { Browser, Page, BrowserContext } from 'playwright';
+import pLimit from 'p-limit';
 import browserPool from '../automation/BrowserPool.js';
+import { IPatrolTaskRepository, IPatrolExecutionRepository } from '../models/interfaces/index.js';
 import { BitablePatrolTaskRepository } from '../models/repositories/BitablePatrolTaskRepository.js';
 import { BitablePatrolExecutionRepository } from '../models/repositories/BitablePatrolExecutionRepository.js';
 import { PatrolExecutionStatus, PatrolTestResult, PatrolTask, PatrolConfig } from '../models/entities.js';
 import screenshotService from '../automation/ScreenshotService.js';
 import { patrolEmailService } from './PatrolEmailService.js';
 import { imageCompareService } from '../automation/ImageCompareService.js';
+import { EventEmitter, PatrolEventType } from '../events/index.js';
+import { configService } from '../config/index.js';
+import { recordPatrolExecution, metrics } from '../monitoring/metrics.js';
 
 // 页面类型枚举
 // Updated: Removed TypeScript type annotations from page.evaluate() functions
@@ -25,14 +30,28 @@ interface CheckDetail {
 }
 
 export class PatrolService {
-  private taskRepository: BitablePatrolTaskRepository;
-  private executionRepository: BitablePatrolExecutionRepository;
+  private taskRepository: IPatrolTaskRepository;
+  private executionRepository: IPatrolExecutionRepository;
+  private eventEmitter: EventEmitter;
+  // 并发控制:同时测试的最大 URL 数量(从配置服务获取)
+  private readonly MAX_CONCURRENT_URLS: number;
 
-  constructor() {
-    // Use Bitable for patrol task and execution repositories
-    this.taskRepository = new BitablePatrolTaskRepository();
-    this.executionRepository = new BitablePatrolExecutionRepository();
-    console.log('[PatrolService] Using Bitable storage');
+  constructor(
+    taskRepository?: IPatrolTaskRepository,
+    executionRepository?: IPatrolExecutionRepository,
+    eventEmitter?: EventEmitter
+  ) {
+    // 依赖注入:允许传入自定义实现,默认使用 Bitable
+    this.taskRepository = taskRepository || new BitablePatrolTaskRepository();
+    this.executionRepository = executionRepository || new BitablePatrolExecutionRepository();
+    this.eventEmitter = eventEmitter || new EventEmitter();
+
+    // 从配置服务获取巡检配置
+    const patrolConfig = configService.getPatrolConfig();
+    this.MAX_CONCURRENT_URLS = patrolConfig.maxConcurrentUrls;
+
+    console.log(`[PatrolService] Using ${configService.getDatabaseConfig().storage} storage`);
+    console.log(`[PatrolService] Max concurrent URL tests: ${this.MAX_CONCURRENT_URLS}`);
   }
 
   /**
@@ -1258,19 +1277,24 @@ export class PatrolService {
       };
       page.on('crash', crashHandler);
 
-      // 访问页面 - 使用渐进式加载策略,添加崩溃检测
+      // 访问页面 - 使用保守的加载策略,优先稳定性而非完整性
+      // 🔧 优化: 直接使用 domcontentloaded,避免 networkidle 导致的崩溃和超时
       let response: any;
       try {
-        // 优先尝试 networkidle (网络空闲)
+        // 直接使用 domcontentloaded (更快更稳定)
         response = await page.goto(url, {
-          waitUntil: 'networkidle',
-          timeout: 30000,
+          waitUntil: 'domcontentloaded',
+          timeout: 30000,  // 30秒超时
         });
 
         // 检查页面是否在加载过程中崩溃
         if (pageCrashed || page.isClosed()) {
           throw new Error('Page crashed during navigation');
         }
+
+        // 等待页面部分渲染(减少从 3秒 到 1.5秒)
+        await page.waitForTimeout(1500);
+
       } catch (error) {
         const errorMsg = (error as Error).message.toLowerCase();
 
@@ -1280,30 +1304,9 @@ export class PatrolService {
           throw new Error('Page crashed during navigation - browser may be under memory pressure');
         }
 
-        // 如果 networkidle 超时,降级到 domcontentloaded
-        console.warn(`  NetworkIdle timeout, falling back to domcontentloaded...`);
+        // 如果 domcontentloaded 也失败,降级到 load
+        console.warn(`  DOMContentLoaded failed, falling back to load event...`);
         try {
-          response = await page.goto(url, {
-            waitUntil: 'domcontentloaded',
-            timeout: 20000,
-          });
-
-          if (pageCrashed || page.isClosed()) {
-            throw new Error('Page crashed during navigation');
-          }
-
-          // 额外等待一段时间让页面继续加载
-          await page.waitForTimeout(3000);
-        } catch (fallbackError) {
-          const fallbackMsg = (fallbackError as Error).message.toLowerCase();
-
-          if (fallbackMsg.includes('crash') || fallbackMsg.includes('closed') || pageCrashed) {
-            page.off('crash', crashHandler);
-            throw new Error('Page crashed during navigation - browser may be under memory pressure');
-          }
-
-          // 最后降级到 load 事件
-          console.warn(`  DOMContentLoaded timeout, falling back to load...`);
           response = await page.goto(url, {
             waitUntil: 'load',
             timeout: 20000,
@@ -1313,7 +1316,30 @@ export class PatrolService {
             throw new Error('Page crashed during navigation');
           }
 
-          await page.waitForTimeout(2000);
+          // 最小等待时间
+          await page.waitForTimeout(1000);
+
+        } catch (fallbackError) {
+          const fallbackMsg = (fallbackError as Error).message.toLowerCase();
+
+          if (fallbackMsg.includes('crash') || fallbackMsg.includes('closed') || pageCrashed) {
+            page.off('crash', crashHandler);
+            throw new Error('Page crashed during navigation - browser may be under memory pressure');
+          }
+
+          // 最后尝试 commit (最基础的加载状态)
+          console.warn(`  Load event failed, falling back to commit...`);
+          response = await page.goto(url, {
+            waitUntil: 'commit',
+            timeout: 15000,
+          });
+
+          if (pageCrashed || page.isClosed()) {
+            throw new Error('Page crashed during navigation');
+          }
+
+          // 给予最小等待时间让页面初始化
+          await page.waitForTimeout(500);
         }
       } finally {
         // 清理事件监听
@@ -1573,6 +1599,17 @@ export class PatrolService {
     try {
       console.log(`Starting patrol execution for task: ${task.name}`);
 
+      // 增加活跃任务计数
+      metrics.activePatrolTasks.inc();
+
+      // 发射巡检开始事件
+      await this.eventEmitter.emit({
+        type: PatrolEventType.PATROL_STARTED,
+        timestamp: new Date(),
+        executionId,
+        task,
+      });
+
       // 更新状态为运行中
       await this.executionRepository.updateStatus(executionId, PatrolExecutionStatus.Running);
 
@@ -1632,87 +1669,113 @@ export class PatrolService {
             }
           }
 
-          for (const urlConfig of task.urls) {
-            let page = null;
+          // 🚀 并行测试当前设备上的所有 URL,限制并发数
+          console.log(`  Testing ${task.urls.length} URLs with max concurrency: ${this.MAX_CONCURRENT_URLS}`);
+          const limit = pLimit(this.MAX_CONCURRENT_URLS);
 
-            try {
-              page = await context.newPage();
-            } catch (error) {
-              // Context 可能已关闭(浏览器崩溃),释放旧浏览器并获取新的
-              console.warn(`[Responsive Test] Failed to create page for ${device.name}:`, error);
-              console.warn('[Responsive Test] Acquiring new browser and retrying...');
+          const testPromises = task.urls.map((urlConfig) =>
+            limit(async () => {
+              let page: Page | null = null;
 
               try {
-                if (browser) {
-                  await browserPool.release(browser);
+                // 验证浏览器和上下文状态
+                if (!browser.isConnected()) {
+                  throw new Error('Browser is not connected');
                 }
-                browser = await browserPool.acquire();
-                // 重新创建 context
-                const newContext = await browser.newContext({
-                  viewport: device.viewport,
-                  userAgent: device.userAgent,
-                });
-                context = newContext; // 更新 context 引用
-                page = await newContext.newPage();
-                console.log(`[Responsive Test] Successfully created new page with fresh browser`);
-              } catch (retryError) {
-                console.error(`[Responsive Test] Failed to create page even after browser refresh:`, retryError);
-                // 跳过该URL,继续下一个
-                testResults.push({
+
+                // 添加短暂延迟，确保上下文就绪
+                await new Promise(resolve => setTimeout(resolve, 50));
+
+                // 使用 try-catch 包装 newPage() 调用
+                try {
+                  page = await context.newPage();
+                } catch (pageError: any) {
+                  console.error(`[Responsive Test] Failed to create page for ${urlConfig.name}:`, pageError.message);
+                  throw new Error(`Failed to create page: ${pageError.message}`);
+                }
+
+                // 验证页面创建成功
+                if (!page || page.isClosed()) {
+                  throw new Error('Page was closed immediately after creation');
+                }
+              } catch (error) {
+                // Context 可能已关闭(浏览器崩溃)
+                console.warn(`[Responsive Test] Failed to create page for ${urlConfig.name} on ${device.name}:`, error);
+                return {
                   url: urlConfig.url,
                   name: urlConfig.name,
-                  status: 'fail',
-                  errorMessage: `无法创建页面 (浏览器不稳定): ${retryError instanceof Error ? retryError.message : 'Unknown error'}`,
+                  status: 'fail' as const,
+                  errorMessage: `无法创建页面 (浏览器不稳定): ${error instanceof Error ? error.message : 'Unknown error'}`,
                   responseTime: 0,
                   testDuration: 0,
                   isInfrastructureError: true,
-                });
-                failedUrls++;
-                continue; // 跳过这个URL
+                };
               }
-            }
 
-            try {
-              const result = await this.testUrlWithRetry(
-                page,
-                urlConfig.url,
-                urlConfig.name,
-                config,
-                device
-              );
-              testResults.push(result);
+              try {
+                const result = await this.testUrlWithRetry(
+                  page,
+                  urlConfig.url,
+                  urlConfig.name,
+                  config,
+                  device
+                );
+                return result;
+              } catch (error) {
+                // 处理测试失败
+                const errorMessage = error instanceof Error ? error.message : '未知错误';
+                console.error(`[Responsive Test] Test failed for ${urlConfig.name} on ${device.name}:`, errorMessage);
 
-              if (result.status === 'pass') {
+                return {
+                  url: urlConfig.url,
+                  name: urlConfig.name,
+                  status: 'fail' as const,
+                  errorMessage,
+                  responseTime: 0,
+                  testDuration: 0,
+                };
+              } finally {
+                // 确保每个URL测试后都关闭页面
+                if (page && !page.isClosed()) {
+                  await page.close().catch(() => {});
+                }
+              }
+            })
+          );
+
+          // 等待所有测试完成
+          const results = await Promise.allSettled(testPromises);
+
+          // 处理结果
+          results.forEach((result, index) => {
+            if (result.status === 'fulfilled') {
+              const testResult = result.value;
+              testResults.push(testResult);
+
+              if (testResult.status === 'pass') {
                 passedUrls++;
               } else {
                 failedUrls++;
               }
-            } catch (error) {
-              // 处理测试失败
-              const errorMessage = error instanceof Error ? error.message : '未知错误';
-              console.error(`Test failed for ${urlConfig.name}:`, errorMessage);
-
+            } else {
+              // Promise rejected
+              console.error(`[Responsive Test] URL ${task.urls[index].name} test rejected on ${device.name}:`, result.reason);
               testResults.push({
-                url: urlConfig.url,
-                name: urlConfig.name,
+                url: task.urls[index].url,
+                name: task.urls[index].name,
                 status: 'fail',
-                errorMessage,
+                errorMessage: result.reason instanceof Error ? result.reason.message : '测试失败',
                 responseTime: 0,
                 testDuration: 0,
               });
               failedUrls++;
-            } finally {
-              // 确保每个URL测试后都关闭页面
-              if (page && !page.isClosed()) {
-                await page.close().catch(() => {});
-              }
             }
-          }
+          });
 
           await context.close().catch(() => {});
         }
       } else {
-        // 默认桌面端测试 - 每个URL使用独立的页面实例
+        // 默认桌面端测试 - 并行测试所有 URL
         let context: BrowserContext;
         try {
           context = await browser.newContext();
@@ -1747,76 +1810,107 @@ export class PatrolService {
           }
         }
 
-        for (const urlConfig of task.urls) {
-          let page = null;
+        // 🚀 并行测试所有 URL,限制并发数
+        console.log(`\n[Desktop Test] Testing ${task.urls.length} URLs with max concurrency: ${this.MAX_CONCURRENT_URLS}`);
+        const limit = pLimit(this.MAX_CONCURRENT_URLS);
 
-          try {
-            page = await context.newPage();
-          } catch (error) {
-            // Context 可能已关闭(浏览器崩溃),释放旧浏览器并获取新的
-            console.warn('[Desktop Test] Failed to create page:', error);
-            console.warn('[Desktop Test] Acquiring new browser and retrying...');
+        const testPromises = task.urls.map((urlConfig) =>
+          limit(async () => {
+            let page: Page | null = null;
 
             try {
-              if (browser) {
-                await browserPool.release(browser);
+              // 验证浏览器和上下文状态
+              if (!browser.isConnected()) {
+                throw new Error('Browser is not connected');
               }
-              browser = await browserPool.acquire();
-              context = await browser.newContext();
-              page = await context.newPage();
-              console.log('[Desktop Test] Successfully created new page with fresh browser');
-            } catch (retryError) {
-              console.error('[Desktop Test] Failed to create page even after browser refresh:', retryError);
-              // 跳过该URL,继续下一个
-              testResults.push({
+
+              // 添加短暂延迟，确保上下文就绪
+              await new Promise(resolve => setTimeout(resolve, 50));
+
+              // 使用 try-catch 包装 newPage() 调用
+              try {
+                page = await context.newPage();
+              } catch (pageError: any) {
+                console.error(`[Desktop Test] Failed to create page for ${urlConfig.name}:`, pageError.message);
+                throw new Error(`Failed to create page: ${pageError.message}`);
+              }
+
+              // 验证页面创建成功
+              if (!page || page.isClosed()) {
+                throw new Error('Page was closed immediately after creation');
+              }
+            } catch (error) {
+              // Context 可能已关闭(浏览器崩溃)
+              console.warn(`[Desktop Test] Failed to create page for ${urlConfig.name}:`, error);
+              return {
                 url: urlConfig.url,
                 name: urlConfig.name,
-                status: 'fail',
-                errorMessage: `无法创建页面 (浏览器不稳定): ${retryError instanceof Error ? retryError.message : 'Unknown error'}`,
+                status: 'fail' as const,
+                errorMessage: `无法创建页面 (浏览器不稳定): ${error instanceof Error ? error.message : 'Unknown error'}`,
                 responseTime: 0,
                 testDuration: 0,
                 isInfrastructureError: true,
-              });
-              failedUrls++;
-              continue; // 跳过这个URL
+              };
             }
-          }
 
-          try {
-            const result = await this.testUrlWithRetry(
-              page,
-              urlConfig.url,
-              urlConfig.name,
-              config
-            );
-            testResults.push(result);
+            try {
+              const result = await this.testUrlWithRetry(
+                page,
+                urlConfig.url,
+                urlConfig.name,
+                config
+              );
+              return result;
+            } catch (error) {
+              // 处理测试失败
+              const errorMessage = error instanceof Error ? error.message : '未知错误';
+              console.error(`[Desktop Test] Test failed for ${urlConfig.name}:`, errorMessage);
 
-            if (result.status === 'pass') {
+              return {
+                url: urlConfig.url,
+                name: urlConfig.name,
+                status: 'fail' as const,
+                errorMessage,
+                responseTime: 0,
+                testDuration: 0,
+              };
+            } finally {
+              // 确保每个URL测试后都关闭页面
+              if (page && !page.isClosed()) {
+                await page.close().catch(() => {});
+              }
+            }
+          })
+        );
+
+        // 等待所有测试完成
+        const results = await Promise.allSettled(testPromises);
+
+        // 处理结果
+        results.forEach((result, index) => {
+          if (result.status === 'fulfilled') {
+            const testResult = result.value;
+            testResults.push(testResult);
+
+            if (testResult.status === 'pass') {
               passedUrls++;
             } else {
               failedUrls++;
             }
-          } catch (error) {
-            // 处理测试失败
-            const errorMessage = error instanceof Error ? error.message : '未知错误';
-            console.error(`Test failed for ${urlConfig.name}:`, errorMessage);
-
+          } else {
+            // Promise rejected
+            console.error(`[Desktop Test] URL ${task.urls[index].name} test rejected:`, result.reason);
             testResults.push({
-              url: urlConfig.url,
-              name: urlConfig.name,
+              url: task.urls[index].url,
+              name: task.urls[index].name,
               status: 'fail',
-              errorMessage,
+              errorMessage: result.reason instanceof Error ? result.reason.message : '测试失败',
               responseTime: 0,
               testDuration: 0,
             });
             failedUrls++;
-          } finally {
-            // 确保每个URL测试后都关闭页面
-            if (page && !page.isClosed()) {
-              await page.close().catch(() => {});
-            }
           }
-        }
+        });
 
         await context.close().catch(() => {});
       }
@@ -1835,6 +1929,29 @@ export class PatrolService {
       console.log(
         `✓ Patrol execution completed: ${passedUrls} passed, ${failedUrls} failed in ${durationMs}ms`
       );
+
+      // 记录 Prometheus 指标
+      const status = failedUrls === 0 ? 'success' : 'failed';
+      recordPatrolExecution(task.id, status, durationMs / 1000);
+
+      // 减少活跃任务计数
+      metrics.activePatrolTasks.dec();
+
+      // 获取完整的执行记录
+      const execution = await this.executionRepository.findById(executionId);
+      if (execution) {
+        // 发射巡检完成事件
+        await this.eventEmitter.emit({
+          type: PatrolEventType.PATROL_COMPLETED,
+          timestamp: new Date(),
+          executionId,
+          task,
+          execution,
+          passedUrls,
+          failedUrls,
+          durationMs,
+        });
+      }
 
       // 发送邮件通知
       // 无论成功或失败都发送邮件通知
@@ -1867,8 +1984,16 @@ export class PatrolService {
         }
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : '未知错误';
+      const errorObj = error instanceof Error ? error : new Error('未知错误');
+      const errorMessage = errorObj.message;
       console.error(`Patrol execution failed:`, errorMessage);
+
+      // 记录失败的 Prometheus 指标
+      const durationMs = Date.now() - startTime;
+      recordPatrolExecution(task.id, 'failed', durationMs / 1000);
+
+      // 减少活跃任务计数
+      metrics.activePatrolTasks.dec();
 
       // 更新状态为失败
       await this.executionRepository.updateStatus(
@@ -1876,6 +2001,16 @@ export class PatrolService {
         PatrolExecutionStatus.Failed,
         errorMessage
       );
+
+      // 发射巡检失败事件
+      await this.eventEmitter.emit({
+        type: PatrolEventType.PATROL_FAILED,
+        timestamp: new Date(),
+        executionId,
+        task,
+        error: errorObj,
+        errorMessage,
+      });
     } finally {
       // 释放浏览器
       if (browser) {
@@ -1899,7 +2034,7 @@ export class PatrolService {
     }
 
     // 创建执行记录
-    const execution = await this.executionRepository.create({
+    const executionId = await this.executionRepository.create({
       patrolTaskId: taskId,
       status: PatrolExecutionStatus.Pending,
       startedAt: new Date(),
@@ -1910,20 +2045,30 @@ export class PatrolService {
       emailSent: false,
     });
 
+    // 发射执行记录创建事件
+    await this.eventEmitter.emit({
+      type: PatrolEventType.EXECUTION_CREATED,
+      timestamp: new Date(),
+      executionId,
+      taskId,
+    });
+
     // 在后台异步执行测试
-    this.runPatrolTests(execution.id, task).catch((error) => {
+    this.runPatrolTests(executionId, task).catch((error) => {
       console.error(`Background patrol test execution failed:`, error);
     });
 
     // 立即返回executionId
-    return execution.id;
+    return executionId;
   }
 
   /**
    * 获取巡检任务列表
    */
   async getPatrolTasks(enabledOnly: boolean = false): Promise<PatrolTask[]> {
-    return this.taskRepository.findAll(enabledOnly);
+    // enabledOnly=true: 只获取启用的任务
+    // enabledOnly=false: 获取所有任务(不传递筛选条件,避免 InvalidFilter)
+    return this.taskRepository.findAll(enabledOnly ? { enabled: true } : {});
   }
 
   /**
@@ -1939,7 +2084,20 @@ export class PatrolService {
   async createPatrolTask(
     task: Omit<PatrolTask, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<PatrolTask> {
-    return this.taskRepository.create(task);
+    const id = await this.taskRepository.create(task);
+    const createdTask = await this.taskRepository.findById(id);
+    if (!createdTask) {
+      throw new Error(`Failed to retrieve created task with id ${id}`);
+    }
+
+    // 发射任务创建事件
+    await this.eventEmitter.emit({
+      type: PatrolEventType.TASK_CREATED,
+      timestamp: new Date(),
+      task: createdTask,
+    });
+
+    return createdTask;
   }
 
   /**
@@ -1949,14 +2107,38 @@ export class PatrolService {
     taskId: string,
     updates: Partial<Omit<PatrolTask, 'id' | 'createdAt' | 'updatedAt'>>
   ): Promise<PatrolTask | null> {
-    return this.taskRepository.update(taskId, updates);
+    const updatedTask = await this.taskRepository.update(taskId, updates);
+
+    if (updatedTask) {
+      // 发射任务更新事件
+      await this.eventEmitter.emit({
+        type: PatrolEventType.TASK_UPDATED,
+        timestamp: new Date(),
+        taskId,
+        task: updatedTask,
+        changes: updates,
+      });
+    }
+
+    return updatedTask;
   }
 
   /**
    * 删除巡检任务
    */
   async deletePatrolTask(taskId: string): Promise<boolean> {
-    return this.taskRepository.delete(taskId);
+    const deleted = await this.taskRepository.delete(taskId);
+
+    if (deleted) {
+      // 发射任务删除事件
+      await this.eventEmitter.emit({
+        type: PatrolEventType.TASK_DELETED,
+        timestamp: new Date(),
+        taskId,
+      });
+    }
+
+    return deleted;
   }
 
   /**
@@ -1964,7 +2146,7 @@ export class PatrolService {
    */
   async getExecutionHistory(taskId?: string, limit: number = 50) {
     if (taskId) {
-      return this.executionRepository.findByTaskId(taskId, limit);
+      return this.executionRepository.findByTaskId(taskId, { limit });
     }
     return this.executionRepository.findAll(limit);
   }

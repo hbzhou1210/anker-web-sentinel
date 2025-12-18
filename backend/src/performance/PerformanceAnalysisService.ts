@@ -172,24 +172,30 @@ export class PerformanceAnalysisService {
         ? 'Dulles:Moto G4' // Mobile device with 3G network
         : 'Dulles:Chrome';  // Desktop Chrome
 
+      console.log(`[WebPageTest] Submitting test with strategy: ${strategy}, location: ${location}`);
+
+      const params = {
+        url,
+        f: 'json',
+        location,
+        runs: 1, // Single run for faster results
+        fvonly: 1, // First view only
+        video: 1, // Enable video for filmstrip
+        lighthouse: 0, // No Lighthouse (we already have PageSpeed)
+        priority: 5, // Higher priority for faster results
+        ...(strategy === 'mobile' && {
+          mobile: 1, // Enable mobile mode
+          mobileDevice: 'Moto G4', // Specific mobile device
+        }),
+      };
+
+      console.log('[WebPageTest] Request params:', JSON.stringify(params, null, 2));
+
       const response = await axios.post<WebPageTestResponse>(
         `${this.WPT_API_URL}/runtest.php`,
         null,
         {
-          params: {
-            url,
-            f: 'json',
-            location,
-            runs: 1, // Single run for faster results
-            fvonly: 1, // First view only
-            video: 1, // Enable video for filmstrip
-            lighthouse: 0, // No Lighthouse (we already have PageSpeed)
-            priority: 5, // Higher priority for faster results
-            ...(strategy === 'mobile' && {
-              mobile: 1, // Enable mobile mode
-              mobileDevice: 'Moto G4', // Specific mobile device
-            }),
-          },
+          params,
           headers: {
             'X-WPT-API-KEY': this.WPT_API_KEY,
           },
