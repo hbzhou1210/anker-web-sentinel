@@ -104,11 +104,13 @@ export default function ResponsiveTesting() {
 
       if (data.success && data.data) {
         setDevices(data.data);
-        // 默认选中所有移动设备
-        const mobileDeviceIds = data.data
-          .filter((d: Device) => d.deviceType === 'mobile')
-          .map((d: Device) => d.id);
-        setSelectedDevices(mobileDeviceIds);
+        // 只在没有已保存的设备选择时，才设置默认选中所有移动设备
+        if (selectedDevices.length === 0) {
+          const mobileDeviceIds = data.data
+            .filter((d: Device) => d.deviceType === 'mobile')
+            .map((d: Device) => d.id);
+          setSelectedDevices(mobileDeviceIds);
+        }
       } else {
         console.error('Failed to load devices:', data.error || data.message || 'Unknown error');
       }
