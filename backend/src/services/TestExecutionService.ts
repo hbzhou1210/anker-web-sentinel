@@ -471,8 +471,24 @@ export class TestExecutionService {
           } : undefined,
           webPageTestData: report.webPageTestData ? {
             testId: report.webPageTestData.testId,
-            // 简化为总分,基于 SpeedIndex 计算(100 - speedIndex/100 的简单映射)
-            performanceScore: Math.max(0, Math.min(100, 100 - (report.webPageTestData.metrics.speedIndex / 100))),
+            // 基于 SpeedIndex 计算性能分数
+            // 如果 SpeedIndex 不存在或过大(>10000),不显示分数
+            performanceScore: (() => {
+              const si = report.webPageTestData.metrics?.speedIndex;
+
+              // 数据无效或质量太差,不显示分数
+              if (!si || si > 10000 || si <= 0) {
+                console.log('[Email] SpeedIndex not available or too poor, skipping score display:', si);
+                return undefined;
+              }
+
+              // SpeedIndex < 1000: 90-100分
+              if (si < 1000) return Math.round(90 + (1000 - si) / 100);
+              // SpeedIndex 1000-3000: 50-89分
+              if (si < 3000) return Math.round(50 + (3000 - si) / 50);
+              // SpeedIndex 3000-10000: 1-49分
+              return Math.max(1, Math.round(50 - (si - 3000) / 150));
+            })(),
           } : undefined,
         });
         console.log(`✓ Email notification sent to ${testRequest.notificationEmail}`);

@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { BitablePatrolScheduleRepository } from '../models/repositories/BitablePatrolScheduleRepository.js';
 import { PatrolSchedule } from '../models/entities.js';
 import { patrolService } from './PatrolService.js';
+import taskQueue from './TaskQueueService.js';
 
 interface ScheduledTask {
   schedule: PatrolSchedule;
@@ -109,27 +110,38 @@ export class PatrolSchedulerService {
 
   /**
    * 执行调度的巡检任务
+   * 使用低优先级队列,避免与用户测试抢占资源
    */
   private async executeScheduledTask(schedule: PatrolSchedule): Promise<void> {
     const now = new Date();
-    console.log(`⏰ Executing scheduled patrol task: ${schedule.patrolTaskId} at ${now.toISOString()}`);
+    console.log(`⏰ Triggering scheduled patrol task: ${schedule.patrolTaskId} at ${now.toISOString()}`);
 
-    try {
-      // 执行巡检 (邮件将在 PatrolService.runPatrolTests() 中自动发送)
-      const executionId = await patrolService.executePatrol(schedule.patrolTaskId);
+    // 将定时巡检任务加入低优先级队列
+    await taskQueue.executeLowPriority({
+      id: `patrol-${schedule.patrolTaskId}-${Date.now()}`,
+      name: `Patrol: ${schedule.patrolTaskId}`,
+      execute: async () => {
+        try {
+          console.log(`[PatrolScheduler] Executing patrol task: ${schedule.patrolTaskId}`);
 
-      // 更新最后执行时间和下次执行时间
-      const nextExecution = this.calculateNextExecution(schedule.cronExpression, schedule.timeZone);
-      await this.scheduleRepository.updateExecutionTime(
-        schedule.id,
-        now,
-        nextExecution || new Date()
-      );
+          // 执行巡检 (邮件将在 PatrolService.runPatrolTests() 中自动发送)
+          const executionId = await patrolService.executePatrol(schedule.patrolTaskId);
 
-      console.log(`✓ Scheduled patrol task completed: ${schedule.patrolTaskId}`);
-    } catch (error) {
-      console.error(`Failed to execute scheduled patrol task ${schedule.patrolTaskId}:`, error);
-    }
+          // 更新最后执行时间和下次执行时间
+          const nextExecution = this.calculateNextExecution(schedule.cronExpression, schedule.timeZone);
+          await this.scheduleRepository.updateExecutionTime(
+            schedule.id,
+            now,
+            nextExecution || new Date()
+          );
+
+          console.log(`[PatrolScheduler] ✓ Patrol task completed: ${schedule.patrolTaskId}`);
+        } catch (error) {
+          console.error(`[PatrolScheduler] Failed to execute patrol task ${schedule.patrolTaskId}:`, error);
+          throw error; // 让队列记录失败
+        }
+      }
+    });
   }
 
   /**
