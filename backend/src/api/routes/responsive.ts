@@ -3,6 +3,7 @@ import browserPool from '../../automation/BrowserPool.js';
 import { ResponsiveTestingService } from '../../automation/ResponsiveTestingService.js';
 import { BitableResponsiveTestRepository } from '../../models/repositories/BitableResponsiveTestRepository.js';
 import { DeviceType, ResponsiveTestResult, ResponsiveTestIssue } from '../../models/entities.js';
+import asyncTaskService from '../../services/AsyncTaskService.js';
 
 const router = Router();
 const responsiveTestingService = new ResponsiveTestingService();
@@ -66,7 +67,8 @@ router.get('/devices/:type', async (req: Request, res: Response): Promise<void> 
 
 /**
  * POST /api/v1/responsive/test
- * 执行响应式测试
+ * 执行响应式测试 (异步)
+ * 立即返回任务ID,通过 /api/v1/responsive/tasks/:taskId 查询结果
  */
 router.post('/test', async (req: Request, res: Response): Promise<void> => {
   try {
@@ -107,149 +109,242 @@ router.post('/test', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // 并行执行测试 - 限制并发数量避免资源耗尽
-    // 注意: 每个设备使用独立的browser实例,避免browser崩溃影响其他测试
-    const CONCURRENT_LIMIT = 3; // 同时最多测试3个设备
-    console.log(`Starting tests on ${devicesToTest.length} devices (max ${CONCURRENT_LIMIT} concurrent)...`);
-    const startTime = Date.now();
+    // 创建异步任务
+    const taskId = await asyncTaskService.executeTask(
+      'responsive-test',
+      async (taskId) => {
+        return await executeResponsiveTest(url, devicesToTest, taskId);
+      },
+      { url, deviceCount: devicesToTest.length }
+    );
 
-    // 辅助函数:带重试的设备测试
-    const testDeviceWithRetry = async (device: any, maxRetries = 2): Promise<ResponsiveTestResult> => {
-      let lastError: Error | null = null;
+    // 立即返回任务ID
+    res.json({
+      success: true,
+      data: {
+        taskId,
+        message: '响应式测试已启动',
+        deviceCount: devicesToTest.length,
+        estimatedTime: Math.ceil(devicesToTest.length / 3) * 60, // 秒
+      },
+    });
+  } catch (error) {
+    console.error('Failed to start responsive test:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : '启动响应式测试失败',
+    });
+  }
+});
 
-      for (let attempt = 0; attempt <= maxRetries; attempt++) {
-        let deviceBrowser = null;
-        let page = null;
+/**
+ * 执行响应式测试的核心逻辑
+ */
+async function executeResponsiveTest(
+  url: string,
+  devicesToTest: any[],
+  taskId: string
+): Promise<{
+  url: string;
+  results: ResponsiveTestResult[];
+  stats: any;
+}> {
+  // 并行执行测试 - 限制并发数量避免资源耗尽
+  // 注意: 每个设备使用独立的browser实例,避免browser崩溃影响其他测试
+  const CONCURRENT_LIMIT = 3; // 同时最多测试3个设备
+  console.log(`[Task ${taskId}] Starting tests on ${devicesToTest.length} devices (max ${CONCURRENT_LIMIT} concurrent)...`);
+  const startTime = Date.now();
 
+  // 更新任务进度
+  asyncTaskService.updateTaskProgress(taskId, 0, `开始测试 ${devicesToTest.length} 个设备`);
+
+  // 辅助函数:带重试的设备测试
+  const testDeviceWithRetry = async (device: any, maxRetries = 2): Promise<ResponsiveTestResult> => {
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      let deviceBrowser = null;
+      let page = null;
+
+      try {
+        // 获取浏览器实例
+        deviceBrowser = await browserPool.acquire();
+
+        // 双重验证浏览器连接状态
+        if (!deviceBrowser.isConnected()) {
+          console.warn(`[Task ${taskId}] [${device.name}] Browser not connected after acquire, retrying...`);
+          throw new Error('Browser is not connected');
+        }
+
+        // 添加短暂延迟，确保浏览器完全就绪
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // 再次检查连接状态
+        if (!deviceBrowser.isConnected()) {
+          console.warn(`[Task ${taskId}] [${device.name}] Browser disconnected during wait, retrying...`);
+          throw new Error('Browser disconnected during initialization');
+        }
+
+        // 使用 try-catch 包装 newPage() 调用
         try {
-          // 获取浏览器实例
-          deviceBrowser = await browserPool.acquire();
+          page = await deviceBrowser.newPage();
+        } catch (pageError: any) {
+          console.error(`[Task ${taskId}] [${device.name}] Failed to create page:`, pageError.message);
+          throw new Error(`Failed to create page: ${pageError.message}`);
+        }
 
-          // 双重验证浏览器连接状态
-          if (!deviceBrowser.isConnected()) {
-            console.warn(`[${device.name}] Browser not connected after acquire, retrying...`);
-            throw new Error('Browser is not connected');
-          }
+        // 验证页面创建成功
+        if (!page || page.isClosed()) {
+          throw new Error('Page was closed immediately after creation');
+        }
 
-          // 添加短暂延迟，确保浏览器完全就绪
-          await new Promise(resolve => setTimeout(resolve, 100));
+        console.log(`[Task ${taskId}] Testing on ${device.name}... (attempt ${attempt + 1}/${maxRetries + 1})`);
+        const result = await responsiveTestingService.testOnDevice(page, url, device);
 
-          // 再次检查连接状态
-          if (!deviceBrowser.isConnected()) {
-            console.warn(`[${device.name}] Browser disconnected during wait, retrying...`);
-            throw new Error('Browser disconnected during initialization');
-          }
+        console.log(`[Task ${taskId}] ✓ Completed test on ${device.name}`);
+        return result;
 
-          // 使用 try-catch 包装 newPage() 调用
-          try {
-            page = await deviceBrowser.newPage();
-          } catch (pageError: any) {
-            console.error(`[${device.name}] Failed to create page:`, pageError.message);
-            throw new Error(`Failed to create page: ${pageError.message}`);
-          }
+      } catch (error: any) {
+        lastError = error;
+        console.error(`[Task ${taskId}] Failed to test on ${device.name} (attempt ${attempt + 1}/${maxRetries + 1}):`, error.message);
 
-          // 验证页面创建成功
-          if (!page || page.isClosed()) {
-            throw new Error('Page was closed immediately after creation');
-          }
+        // 检查是否是浏览器崩溃相关错误
+        const isBrowserCrash =
+          error.message?.includes('Target page, context or browser has been closed') ||
+          error.message?.includes('Browser is not connected') ||
+          error.message?.includes('Browser disconnected') ||
+          error.message?.includes('Failed to create page') ||
+          error.message?.includes('Protocol error');
 
-          console.log(`Testing on ${device.name}... (attempt ${attempt + 1}/${maxRetries + 1})`);
-          const result = await responsiveTestingService.testOnDevice(page, url, device);
+        // 如果是浏览器崩溃，标记浏览器需要替换
+        if (isBrowserCrash && deviceBrowser) {
+          console.warn(`[Task ${taskId}] [${device.name}] Detected browser crash, marking for replacement`);
+        }
 
-          console.log(`✓ Completed test on ${device.name}`);
-          return result;
+        // 如果是最后一次尝试，抛出异常
+        if (attempt === maxRetries) {
+          throw error;
+        }
 
-        } catch (error: any) {
-          lastError = error;
-          console.error(`Failed to test on ${device.name} (attempt ${attempt + 1}/${maxRetries + 1}):`, error.message);
+        // 如果不是浏览器崩溃错误且不是第一次尝试，抛出异常
+        if (!isBrowserCrash && attempt > 0) {
+          throw error;
+        }
 
-          // 检查是否是浏览器崩溃相关错误
-          const isBrowserCrash =
-            error.message?.includes('Target page, context or browser has been closed') ||
-            error.message?.includes('Browser is not connected') ||
-            error.message?.includes('Browser disconnected') ||
-            error.message?.includes('Failed to create page') ||
-            error.message?.includes('Protocol error');
+        // 等待后重试，每次等待时间递增
+        const waitTime = 1000 * (attempt + 1);
+        console.log(`[Task ${taskId}] [${device.name}] Waiting ${waitTime}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
 
-          // 如果是浏览器崩溃，标记浏览器需要替换
-          if (isBrowserCrash && deviceBrowser) {
-            console.warn(`[${device.name}] Detected browser crash, marking for replacement`);
-          }
+      } finally {
+        // 确保页面被关闭
+        if (page && !page.isClosed()) {
+          await page.close().catch(err => {
+            console.warn(`[Task ${taskId}] Failed to close page for ${device.name}:`, err.message);
+          });
+        }
 
-          // 如果是最后一次尝试，抛出异常
-          if (attempt === maxRetries) {
-            throw error;
-          }
-
-          // 如果不是浏览器崩溃错误且不是第一次尝试，抛出异常
-          if (!isBrowserCrash && attempt > 0) {
-            throw error;
-          }
-
-          // 等待后重试，每次等待时间递增
-          const waitTime = 1000 * (attempt + 1);
-          console.log(`[${device.name}] Waiting ${waitTime}ms before retry...`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-
-        } finally {
-          // 确保页面被关闭
-          if (page && !page.isClosed()) {
-            await page.close().catch(err => {
-              console.warn(`Failed to close page for ${device.name}:`, err.message);
-            });
-          }
-
-          // 释放浏览器
-          if (deviceBrowser) {
-            await browserPool.release(deviceBrowser).catch(err => {
-              console.warn(`Failed to release browser for ${device.name}:`, err.message);
-            });
-          }
+        // 释放浏览器
+        if (deviceBrowser) {
+          await browserPool.release(deviceBrowser).catch(err => {
+            console.warn(`[Task ${taskId}] Failed to release browser for ${device.name}:`, err.message);
+          });
         }
       }
-
-      // 如果所有重试都失败,抛出最后的错误
-      throw lastError || new Error('All retries failed');
-    };
-
-    // 分批并行执行测试
-    const results: ResponsiveTestResult[] = [];
-    for (let i = 0; i < devicesToTest.length; i += CONCURRENT_LIMIT) {
-      const batch = devicesToTest.slice(i, i + CONCURRENT_LIMIT);
-      console.log(`Testing batch ${Math.floor(i / CONCURRENT_LIMIT) + 1}/${Math.ceil(devicesToTest.length / CONCURRENT_LIMIT)}: ${batch.map(d => d.name).join(', ')}`);
-
-      const batchResults = await Promise.all(
-        batch.map(device => testDeviceWithRetry(device))
-      );
-
-      results.push(...batchResults);
     }
 
-    const totalTime = Date.now() - startTime;
-    console.log(`✓ Completed ${devicesToTest.length} device tests in ${totalTime}ms`);
+    // 如果所有重试都失败,抛出最后的错误
+    throw lastError || new Error('All retries failed');
+  };
 
-    // 计算统计数据
-    // 只有 error 级别的问题才算测试失败,warning 级别不影响通过状态
-    const stats = {
-      totalDevices: results.length,
-      passed: results.filter(r => !r.issues.some(issue => issue.severity === 'error')).length,
-      failed: results.filter(r => r.issues.some(issue => issue.severity === 'error')).length,
-      totalIssues: results.reduce((sum, r) => sum + r.issues.length, 0),
-    };
+  // 分批并行执行测试
+  const results: ResponsiveTestResult[] = [];
+  let completedDevices = 0;
+
+  for (let i = 0; i < devicesToTest.length; i += CONCURRENT_LIMIT) {
+    const batch = devicesToTest.slice(i, i + CONCURRENT_LIMIT);
+    const batchNumber = Math.floor(i / CONCURRENT_LIMIT) + 1;
+    const totalBatches = Math.ceil(devicesToTest.length / CONCURRENT_LIMIT);
+
+    console.log(`[Task ${taskId}] Testing batch ${batchNumber}/${totalBatches}: ${batch.map(d => d.name).join(', ')}`);
+
+    // 更新进度
+    const progress = Math.round((completedDevices / devicesToTest.length) * 100);
+    asyncTaskService.updateTaskProgress(
+      taskId,
+      progress,
+      `正在测试第 ${batchNumber}/${totalBatches} 批 (${completedDevices}/${devicesToTest.length} 已完成)`
+    );
+
+    const batchResults = await Promise.all(
+      batch.map(device => testDeviceWithRetry(device))
+    );
+
+    results.push(...batchResults);
+    completedDevices += batch.length;
+  }
+
+  const totalTime = Date.now() - startTime;
+  console.log(`[Task ${taskId}] ✓ Completed ${devicesToTest.length} device tests in ${totalTime}ms`);
+
+  // 计算统计数据
+  // 只有 error 级别的问题才算测试失败,warning 级别不影响通过状态
+  const stats = {
+    totalDevices: results.length,
+    passed: results.filter(r => !r.issues.some(issue => issue.severity === 'error')).length,
+    failed: results.filter(r => r.issues.some(issue => issue.severity === 'error')).length,
+    totalIssues: results.reduce((sum, r) => sum + r.issues.length, 0),
+    duration: totalTime,
+  };
+
+  // 更新最终进度
+  asyncTaskService.updateTaskProgress(taskId, 100, '测试完成');
+
+  return {
+    url,
+    results,
+    stats,
+  };
+}
+
+/**
+ * GET /api/v1/responsive/tasks/:taskId
+ * 查询异步任务状态和结果
+ */
+router.get('/tasks/:taskId', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { taskId } = req.params;
+
+    const task = asyncTaskService.getTask(taskId);
+
+    if (!task) {
+      res.status(404).json({
+        error: 'Task not found',
+        message: '任务不存在',
+      });
+      return;
+    }
 
     res.json({
       success: true,
       data: {
-        url,
-        results,
-        stats,
+        taskId: task.id,
+        status: task.status,
+        progress: task.progress || 0,
+        progressMessage: task.progressMessage,
+        result: task.result,
+        error: task.error,
+        createdAt: task.createdAt,
+        startedAt: task.startedAt,
+        completedAt: task.completedAt,
+        metadata: task.metadata,
       },
     });
   } catch (error) {
-    console.error('Failed to run responsive test:', error);
+    console.error('Failed to get task status:', error);
     res.status(500).json({
       error: 'Internal server error',
-      message: error instanceof Error ? error.message : '响应式测试失败',
+      message: '获取任务状态失败',
     });
   }
 });

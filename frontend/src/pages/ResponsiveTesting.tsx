@@ -165,6 +165,10 @@ export default function ResponsiveTesting() {
     }
   }, [results, stats, loading]);
 
+  const [taskId, setTaskId] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [progressMessage, setProgressMessage] = useState('');
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -183,12 +187,15 @@ export default function ResponsiveTesting() {
     setError('');
     setResults(null);
     setStats(null);
+    setProgress(0);
+    setProgressMessage('正在启动测试...');
 
     // 清理 localStorage 中的旧结果
     localStorage.removeItem('responsiveTest_results');
     localStorage.removeItem('responsiveTest_stats');
 
     try {
+      // 步骤 1: 启动异步测试任务
       const response = await fetch(getFullApiUrl('/api/v1/responsive/test'), {
         method: 'POST',
         headers: {
@@ -202,27 +209,89 @@ export default function ResponsiveTesting() {
 
       const data = await response.json();
 
-      if (data.success && data.data) {
-        // 调试:打印截图 URL
-        console.log('[ResponsiveTesting] Results received:', data.data.results.length);
-        data.data.results.forEach((result: ResponsiveTestResult, index: number) => {
-          console.log(`[ResponsiveTesting] Result ${index}:`, {
-            deviceName: result.deviceName,
-            screenshotPortraitUrl: result.screenshotPortraitUrl,
-            screenshotLandscapeUrl: result.screenshotLandscapeUrl,
-          });
-        });
+      if (data.success && data.data && data.data.taskId) {
+        const newTaskId = data.data.taskId;
+        setTaskId(newTaskId);
+        setProgressMessage(`测试已启动，预计需要 ${data.data.estimatedTime} 秒`);
 
-        setResults(data.data.results);
-        setStats(data.data.stats);
+        // 步骤 2: 轮询任务状态
+        await pollTaskStatus(newTaskId);
       } else {
-        setError(data.message || data.error || '测试失败');
+        setError(data.message || data.error || '启动测试失败');
+        setLoading(false);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '网络错误');
-    } finally {
       setLoading(false);
     }
+  };
+
+  // 轮询任务状态
+  const pollTaskStatus = async (taskId: string) => {
+    const pollInterval = 2000; // 每2秒轮询一次
+    const maxAttempts = 300; // 最多轮询5分钟 (300 * 2s = 600s)
+    let attempts = 0;
+
+    const poll = async () => {
+      if (attempts >= maxAttempts) {
+        setError('任务超时，请重试');
+        setLoading(false);
+        return;
+      }
+
+      attempts++;
+
+      try {
+        const response = await fetch(getFullApiUrl(`/api/v1/responsive/tasks/${taskId}`));
+        const data = await response.json();
+
+        if (!data.success) {
+          setError(data.message || '获取任务状态失败');
+          setLoading(false);
+          return;
+        }
+
+        const task = data.data;
+
+        // 更新进度
+        if (task.progress !== undefined) {
+          setProgress(task.progress);
+        }
+        if (task.progressMessage) {
+          setProgressMessage(task.progressMessage);
+        }
+
+        // 检查任务状态
+        if (task.status === 'completed') {
+          // 任务完成
+          console.log('[ResponsiveTesting] Task completed, results:', task.result);
+
+          if (task.result && task.result.results) {
+            setResults(task.result.results);
+            setStats(task.result.stats);
+            setProgress(100);
+            setProgressMessage('测试完成');
+          } else {
+            setError('测试结果为空');
+          }
+          setLoading(false);
+        } else if (task.status === 'failed') {
+          // 任务失败
+          setError(task.error || '测试失败');
+          setLoading(false);
+        } else {
+          // 继续轮询
+          setTimeout(poll, pollInterval);
+        }
+      } catch (err) {
+        console.error('[ResponsiveTesting] Poll error:', err);
+        setError(err instanceof Error ? err.message : '网络错误');
+        setLoading(false);
+      }
+    };
+
+    // 开始轮询
+    poll();
   };
 
   const toggleDevice = (deviceId: number) => {
@@ -510,13 +579,32 @@ export default function ResponsiveTesting() {
               {loading ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  测试中... ({selectedDevices.length} 个设备)
+                  测试中... ({progress}%)
                 </>
               ) : (
                 '开始测试'
               )}
             </button>
           </form>
+
+          {/* 进度条 */}
+          {loading && (
+            <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-blue-900">测试进度</span>
+                <span className="text-sm font-semibold text-blue-700">{progress}%</span>
+              </div>
+              <div className="w-full bg-blue-200 rounded-full h-2.5 mb-2">
+                <div
+                  className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                ></div>
+              </div>
+              {progressMessage && (
+                <p className="text-xs text-blue-700 mt-2">{progressMessage}</p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* 统计摘要 */}
