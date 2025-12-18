@@ -2,17 +2,35 @@ import React, { useState, useEffect } from 'react';
 import './DiscountRuleQuery.css';
 
 interface Report {
-  filename: string;
-  url: string;
+  reportId: string;
   type: 'single' | 'batch';
+  shopDomain: string;
+  ruleIds: number[];
   createdAt: string;
-  size: number;
+  summary: {
+    // 单规则
+    ruleId?: number;
+    status?: string;
+    totalVariants?: number;
+    activeVariants?: number;
+    inactiveVariants?: number;
+    errorVariants?: number;
+    // 批量
+    totalRules?: number;
+    activeRules?: number;
+    inactiveRules?: number;
+    errorRules?: number;
+  };
+  status: string;
+  url?: string; // 向后兼容
 }
 
 interface QueryResult {
   success: boolean;
+  reportId: string;
   type: 'single' | 'batch';
   reportUrl: string;
+  detailUrl?: string;
   summary: any;
 }
 
@@ -33,6 +51,11 @@ export const DiscountRuleQuery: React.FC = () => {
   const [reportsLoading, setReportsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const reportsPerPage = 6;
+
+  // 详情查看状态
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [reportDetail, setReportDetail] = useState<any>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   // 加载历史报告
   useEffect(() => {
@@ -179,11 +202,27 @@ export const DiscountRuleQuery: React.FC = () => {
     return date.toLocaleDateString('zh-CN') + ' ' + date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
   };
 
-  // 格式化文件大小
-  const formatSize = (bytes: number): string => {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  // 查看报告详情
+  const viewReportDetail = async (report: Report) => {
+    setSelectedReport(report);
+    setDetailLoading(true);
+    try {
+      const response = await fetch(`/api/v1/discount-rule/reports/${report.reportId}`);
+      const data = await response.json();
+      if (data.success) {
+        setReportDetail(data.report.detailResults);
+      }
+    } catch (error) {
+      console.error('加载报告详情失败:', error);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  // 关闭详情模态框
+  const closeDetailModal = () => {
+    setSelectedReport(null);
+    setReportDetail(null);
   };
 
   // 计算分页数据
@@ -363,9 +402,8 @@ export const DiscountRuleQuery: React.FC = () => {
             <div className="reports-list">
               {currentReports.map((report) => (
                 <div
-                  key={report.filename}
+                  key={report.reportId}
                   className="report-card"
-                  onClick={() => window.open(report.url, '_blank')}
                 >
                   <div className="report-icon">
                     {report.type === 'batch' ? '📊' : '📄'}
@@ -373,13 +411,47 @@ export const DiscountRuleQuery: React.FC = () => {
                   <div className="report-info">
                     <div className="report-name">
                       {report.type === 'batch' ? '批量查询报告' : '单规则查询报告'}
+                      <span className={`status-badge ${report.status}`}>
+                        {report.status === 'active' ? '✓ 正常' : '✗ 异常'}
+                      </span>
                     </div>
                     <div className="report-meta">
+                      <span className="meta-item">🏪 {report.shopDomain}</span>
+                      <span className="meta-item">🔢 规则: {report.ruleIds.join(', ')}</span>
                       <span className="meta-item">⏰ {formatDate(report.createdAt)}</span>
-                      <span className="meta-item">📦 {formatSize(report.size)}</span>
+                    </div>
+                    <div className="report-summary">
+                      {report.type === 'single' ? (
+                        <>
+                          <span>总数: {report.summary.totalVariants}</span>
+                          <span>正常: {report.summary.activeVariants}</span>
+                          <span>异常: {report.summary.inactiveVariants}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>规则总数: {report.summary.totalRules}</span>
+                          <span>正常: {report.summary.activeRules}</span>
+                          <span>异常: {report.summary.inactiveRules}</span>
+                        </>
+                      )}
                     </div>
                   </div>
-                  <div className="report-action">查看 →</div>
+                  <div className="report-actions">
+                    <button
+                      className="btn-view-detail"
+                      onClick={() => viewReportDetail(report)}
+                    >
+                      查看详情
+                    </button>
+                    {report.url && (
+                      <button
+                        className="btn-view-html"
+                        onClick={() => window.open(report.url, '_blank')}
+                      >
+                        HTML报告
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -418,6 +490,107 @@ export const DiscountRuleQuery: React.FC = () => {
           </>
         )}
       </div>
+
+      {/* 报告详情模态框 */}
+      {selectedReport && (
+        <div className="modal-overlay" onClick={closeDetailModal}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>报告详情 - {selectedReport.shopDomain}</h3>
+              <button className="modal-close" onClick={closeDetailModal}>✕</button>
+            </div>
+
+            <div className="modal-body">
+              {detailLoading ? (
+                <div className="loading-message">
+                  <span className="loading-spinner">⏳</span>
+                  加载中...
+                </div>
+              ) : reportDetail ? (
+                <div className="detail-content">
+                  {selectedReport.type === 'single' ? (
+                    // 单规则详情
+                    <div className="variant-results">
+                      <h4>Variant 检查结果</h4>
+                      <table className="detail-table">
+                        <thead>
+                          <tr>
+                            <th>Product</th>
+                            <th>Variant</th>
+                            <th>状态</th>
+                            <th>Metafield 值</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reportDetail.variants?.map((variant: any, index: number) => (
+                            <tr key={index}>
+                              <td>{variant.productTitle}</td>
+                              <td>{variant.variantTitle}</td>
+                              <td>
+                                <span className={`status-badge ${variant.status}`}>
+                                  {variant.status === 'active' ? '✓' : '✗'}
+                                </span>
+                              </td>
+                              <td>{variant.metafieldValue || 'N/A'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    // 批量查询详情
+                    <div className="batch-results">
+                      <h4>规则检查结果</h4>
+                      <table className="detail-table">
+                        <thead>
+                          <tr>
+                            <th>规则 ID</th>
+                            <th>状态</th>
+                            <th>Variant 总数</th>
+                            <th>正常</th>
+                            <th>异常</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reportDetail.results?.map((result: any, index: number) => (
+                            <tr key={index}>
+                              <td>{result.ruleId}</td>
+                              <td>
+                                <span className={`status-badge ${result.status}`}>
+                                  {result.status === 'active' ? '✓ 正常' : '✗ 异常'}
+                                </span>
+                              </td>
+                              <td>{result.summary.totalVariants}</td>
+                              <td>{result.summary.activeVariants}</td>
+                              <td>{result.summary.inactiveVariants}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="error-message">加载失败</div>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              {selectedReport.url && (
+                <button
+                  className="btn-view-html-full"
+                  onClick={() => window.open(selectedReport.url, '_blank')}
+                >
+                  查看完整 HTML 报告
+                </button>
+              )}
+              <button className="btn-close-modal" onClick={closeDetailModal}>
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

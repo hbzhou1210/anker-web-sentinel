@@ -471,7 +471,8 @@ export class TestExecutionService {
           } : undefined,
           webPageTestData: report.webPageTestData ? {
             testId: report.webPageTestData.testId,
-            performanceScore: report.webPageTestData.performanceScore,
+            // 简化为总分,基于 SpeedIndex 计算(100 - speedIndex/100 的简单映射)
+            performanceScore: Math.max(0, Math.min(100, 100 - (report.webPageTestData.metrics.speedIndex / 100))),
           } : undefined,
         });
         console.log(`✓ Email notification sent to ${testRequest.notificationEmail}`);

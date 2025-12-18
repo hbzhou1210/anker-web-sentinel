@@ -32,6 +32,9 @@ export const FEISHU_BITABLE_CONFIG = {
 
     // 巡检执行记录表
     patrolExecutions: process.env.FEISHU_TABLE_PATROL_EXECUTIONS || 'tbleHxX6bYCwCuVW',
+
+    // 折扣规则查询报告表
+    discountRuleReports: process.env.FEISHU_TABLE_DISCOUNT_REPORTS || '',
   },
 
   // 飞书应用凭证
@@ -118,5 +121,17 @@ export const FIELD_MAPPINGS = {
     emailSentAt: 'email_sent_at',
     errorMessage: 'error_message',
     durationMs: 'duration_ms',
+  },
+  discountRuleReports: {
+    recordId: 'record_id',
+    reportId: 'report_id',
+    type: 'type',
+    shopDomain: 'shop_domain',
+    ruleIds: 'rule_ids',
+    createdAt: 'created_at',
+    summary: 'summary',
+    detailResults: 'detail_results',
+    status: 'status',
+    htmlReportUrl: 'html_report_url',
   },
 };

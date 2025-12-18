@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
+import discountReportRepo from '../../models/repositories/BitableDiscountReportRepository.js';
 
 const router = express.Router();
 
@@ -22,59 +23,37 @@ const getToolDir = () => {
 
 /**
  * GET /api/v1/discount-rule/reports
- * 获取历史报告列表
+ * 获取历史报告列表(从 Bitable)
  */
 router.get('/reports', async (req, res) => {
   try {
-    const outputDir = getOutputDir();
+    const { limit = '20', offset = '0', shopDomain, type } = req.query;
 
-    // 检查目录是否存在,如不存在则自动创建
-    try {
-      await fs.access(outputDir);
-    } catch (error) {
-      console.log('⚠️  Output directory not found, creating:', outputDir);
-      await fs.mkdir(outputDir, { recursive: true });
-      console.log('✓ Output directory created successfully');
+    // 从 Bitable 获取报告
+    const { reports, total } = await discountReportRepo.findAll({
+      limit: parseInt(limit as string),
+      offset: parseInt(offset as string),
+      shopDomain: shopDomain as string | undefined,
+      type: type as 'single' | 'batch' | undefined,
+    });
 
-      // 目录刚创建,返回空列表
-      return res.json({
-        success: true,
-        reports: [],
-        total: 0
-      });
-    }
-
-    // 读取 output 目录
-    const files = await fs.readdir(outputDir);
-
-    // 过滤 HTML 文件并获取文件信息
-    const reports = await Promise.all(
-      files
-        .filter(file => file.endsWith('.html'))
-        .map(async (file) => {
-          const filePath = path.join(outputDir, file);
-          const stats = await fs.stat(filePath);
-
-          // 判断报告类型
-          const isBatch = file.startsWith('batch-report-');
-
-          return {
-            filename: file,
-            url: `/discount-rule-output/${file}`,
-            type: isBatch ? 'batch' : 'single',
-            createdAt: stats.mtime.toISOString(),
-            size: stats.size
-          };
-        })
-    );
-
-    // 按创建时间倒序排序
-    reports.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    // 转换为前端格式
+    const formattedReports = reports.map(report => ({
+      reportId: report.reportId,
+      type: report.type,
+      shopDomain: report.shopDomain,
+      ruleIds: report.ruleIds,
+      createdAt: report.createdAt.toISOString(),
+      summary: report.summary,
+      status: report.status,
+      // 保持向后兼容
+      url: report.htmlReportUrl || `/discount-rule-output/${report.reportId}.html`,
+    }));
 
     res.json({
       success: true,
-      reports,
-      total: reports.length
+      reports: formattedReports,
+      total,
     });
   } catch (error) {
     console.error('获取报告列表失败:', error);
@@ -126,43 +105,62 @@ async function executeDiscountCheck(ruleIds: number[], shopDomain: string): Prom
     console.log('✓ Output directory created successfully');
   }
 
+  let result: any;
+  let detailResults: any;
+  let reportFilename: string;
+
   if (ruleIds.length === 1) {
     // 单个规则查询
-    const result = await checkDiscountStatus(ruleIds[0], shopDomain);
-    const reportPath = generateHtmlReport(result, `${outputDir}/report-${Date.now()}.html`);
-    const reportFilename = path.basename(reportPath);
+    result = await checkDiscountStatus(ruleIds[0], shopDomain);
+    detailResults = result;
 
-    return {
-      success: true,
-      type: 'single',
-      reportFilename,
-      summary: {
-        ruleId: ruleIds[0],
-        status: result.overallStatus || 'error',  // 如果没有status，说明查询出错
-        totalVariants: result.summary.totalVariants,
-        activeVariants: result.summary.activeVariants,
-        inactiveVariants: result.summary.inactiveVariants,
-        errorVariants: result.summary.errorVariants
-      }
-    };
+    // 仍然生成 HTML(向后兼容)
+    const reportPath = generateHtmlReport(result, `${outputDir}/report-${Date.now()}.html`);
+    reportFilename = path.basename(reportPath);
   } else {
     // 批量查询
-    const batchResult = await batchCheckDiscountStatus(ruleIds, shopDomain);
-    const reportPath = generateBatchHtmlReport(batchResult, `${outputDir}/batch-report-${Date.now()}.html`);
-    const reportFilename = path.basename(reportPath);
+    result = await batchCheckDiscountStatus(ruleIds, shopDomain);
+    detailResults = result;
 
-    return {
-      success: true,
-      type: 'batch',
-      reportFilename,
-      summary: {
-        totalRules: batchResult.summary.totalRules,
-        activeRules: batchResult.summary.activeRules,
-        inactiveRules: batchResult.summary.inactiveRules,
-        errorRules: batchResult.summary.errorRules
-      }
-    };
+    const reportPath = generateBatchHtmlReport(result, `${outputDir}/batch-report-${Date.now()}.html`);
+    reportFilename = path.basename(reportPath);
   }
+
+  // 保存到 Bitable
+  const reportId = Date.now().toString();
+  const discountReport = {
+    reportId,
+    type: ruleIds.length === 1 ? 'single' as const : 'batch' as const,
+    shopDomain,
+    ruleIds,
+    createdAt: new Date(),
+    summary: ruleIds.length === 1 ? {
+      ruleId: ruleIds[0],
+      status: (result.overallStatus || 'error') as 'active' | 'inactive' | 'error',
+      totalVariants: result.summary.totalVariants,
+      activeVariants: result.summary.activeVariants,
+      inactiveVariants: result.summary.inactiveVariants,
+      errorVariants: result.summary.errorVariants
+    } : {
+      totalRules: result.summary.totalRules,
+      activeRules: result.summary.activeRules,
+      inactiveRules: result.summary.inactiveRules,
+      errorRules: result.summary.errorRules
+    },
+    detailResults,
+    status: (result.overallStatus || 'error') as 'active' | 'inactive' | 'error',
+    htmlReportUrl: `/discount-rule-output/${reportFilename}`,
+  };
+
+  await discountReportRepo.create(discountReport);
+
+  return {
+    success: true,
+    reportId,
+    type: discountReport.type,
+    summary: discountReport.summary,
+    reportFilename, // 保留用于向后兼容
+  };
 }
 
 /**
@@ -194,14 +192,16 @@ const checkHandler = async (req: express.Request, res: express.Response) => {
     // 执行查询
     const result = await executeDiscountCheck(ruleIds, shopDomain);
 
-    if (result.success && result.reportFilename) {
-      const reportUrl = `/discount-rule-output/${result.reportFilename}`;
-
+    if (result.success && result.reportId) {
       res.json({
         success: true,
+        reportId: result.reportId,
         type: result.type,
-        reportUrl,
-        summary: result.summary
+        summary: result.summary,
+        // 前端可以用 reportId 查询详情
+        detailUrl: `/api/v1/discount-rule/reports/${result.reportId}`,
+        // 向后兼容:仍返回 HTML 报告 URL
+        reportUrl: `/discount-rule-output/${result.reportFilename}`,
       });
     } else {
       throw new Error('查询失败，未能生成报告');
@@ -219,6 +219,46 @@ const checkHandler = async (req: express.Request, res: express.Response) => {
 // 注册两个路径指向同一个处理函数
 router.post('/check', checkHandler);
 router.post('/check-discount', checkHandler);
+
+/**
+ * GET /api/v1/discount-rule/reports/:reportId
+ * 获取报告详细信息
+ */
+router.get('/reports/:reportId', async (req: express.Request, res: express.Response) => {
+  try {
+    const { reportId } = req.params;
+
+    const report = await discountReportRepo.findById(reportId);
+
+    if (!report) {
+      return res.status(404).json({
+        success: false,
+        error: '报告不存在'
+      });
+    }
+
+    res.json({
+      success: true,
+      report: {
+        reportId: report.reportId,
+        type: report.type,
+        shopDomain: report.shopDomain,
+        ruleIds: report.ruleIds,
+        createdAt: report.createdAt.toISOString(),
+        summary: report.summary,
+        detailResults: report.detailResults,
+        status: report.status,
+        htmlReportUrl: report.htmlReportUrl,
+      }
+    });
+  } catch (error) {
+    console.error('获取报告详情失败:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
 
 /**
  * POST /api/v1/discount-rule/check-all
