@@ -304,7 +304,8 @@ export function TestInput({ onTestCreated }: TestInputProps) {
             )}
 
             {/* WebPageTest Device Strategy Selector - WebPageTest设备选择器 */}
-            {testOptions.performance && performanceTestModes.has('webpagetest') && (
+            {/* 已隐藏：WebPageTest.org 目前不支持设备选择 */}
+            {false && testOptions.performance && performanceTestModes.has('webpagetest') && (
               <div className="device-strategy-selector">
                 <label className="device-selector-label">WebPageTest 测试设备:</label>
                 <div className="device-options compact">
