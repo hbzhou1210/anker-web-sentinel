@@ -1,0 +1,109 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 获取完整历史记录
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Display deployment info
+        run: |
+          echo "=========================================="
+          echo "部署信息"
+          echo "=========================================="
+          echo "Commit: $(git rev-parse --short HEAD)"
+          echo "Branch: ${GITHUB_REF#refs/heads/}"
+          echo "Message: $(git log -1 --pretty=%B | head -1)"
+          echo "Deployer: $GITHUB_ACTOR"
+          echo "Time: $(date '+%Y-%m-%d %H:%M:%S')"
+          echo "=========================================="
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd backend && npm ci
+          cd ../frontend && npm ci
+
+      - name: Build backend
+        run: |
+          cd backend
+          npm run build
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Run tests
+        run: |
+          # 如果有测试，在这里运行
+          # npm test
+          echo "Tests would run here"
+
+      - name: Generate deployment info
+        run: |
+          cat > deployment-info.json <<EOF
+          {
+            "deployTime": "$(date '+%Y-%m-%d %H:%M:%S')",
+            "branch": "${GITHUB_REF#refs/heads/}",
+            "commit": "$GITHUB_SHA",
+            "commitShort": "$(git rev-parse --short HEAD)",
+            "commitMessage": "$(git log -1 --pretty=%B | head -1)",
+            "deployer": "$GITHUB_ACTOR",
+            "nodeVersion": "$(node --version)",
+            "npmVersion": "$(npm --version)",
+            "workflow": "$GITHUB_WORKFLOW",
+            "runNumber": "$GITHUB_RUN_NUMBER"
+          }
+          EOF
+          cat deployment-info.json
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-artifacts
+          path: |
+            deployment-info.json
+            backend/dist/
+            frontend/dist/
+          retention-days: 30
+
+      # 如果使用 Docker
+      - name: Build Docker images
+        if: hashFiles('docker-compose.yml') != ''
+        run: |
+          docker-compose build --no-cache
+
+      # 部署步骤（根据实际部署方式配置）
+      # - name: Deploy to production
+      #   run: |
+      #     # SSH 到生产服务器并部署
+      #     # 或使用其他部署方式
+
+      - name: Create deployment summary
+        run: |
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit**: \`$(git rev-parse --short HEAD)\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch**: \`${GITHUB_REF#refs/heads/}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Message**: $(git log -1 --pretty=%B | head -1)" >> $GITHUB_STEP_SUMMARY
+          echo "**Time**: $(date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Build completed successfully" >> $GITHUB_STEP_SUMMARY
