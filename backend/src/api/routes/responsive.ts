@@ -276,12 +276,50 @@ async function executeResponsiveTest(
       `正在测试第 ${batchNumber}/${totalBatches} 批 (${completedDevices}/${devicesToTest.length} 已完成)`
     );
 
-    const batchResults = await Promise.all(
+    // 使用 Promise.allSettled 替代 Promise.all，确保即使有失败也不影响其他任务
+    const batchSettled = await Promise.allSettled(
       batch.map(device => testDeviceWithRetry(device))
     );
 
-    results.push(...batchResults);
+    // 处理结果
+    batchSettled.forEach((settled, index) => {
+      if (settled.status === 'fulfilled') {
+        results.push(settled.value);
+      } else {
+        // 失败的设备创建一个错误结果
+        const device = batch[index];
+        console.error(`[Task ${taskId}] Device ${device.name} test failed:`, settled.reason);
+        results.push({
+          id: '',
+          testReportId: '',
+          deviceName: device.name,
+          deviceType: device.deviceType,
+          viewportWidth: device.viewportWidth,
+          viewportHeight: device.viewportHeight,
+          userAgent: device.userAgent,
+          hasHorizontalScroll: false,
+          hasViewportMeta: false,
+          fontSizeReadable: false,
+          touchTargetsAdequate: false,
+          imagesResponsive: false,
+          issues: [{
+            type: 'horizontal_scroll',
+            severity: 'error',
+            message: `测试失败: ${settled.reason?.message || '未知错误'}`,
+          }],
+          testDuration: 0,
+          createdAt: new Date(),
+        } as ResponsiveTestResult);
+      }
+    });
+
     completedDevices += batch.length;
+
+    // 批次间添加短暂延迟，确保浏览器资源完全释放
+    if (i + CONCURRENT_LIMIT < devicesToTest.length) {
+      console.log(`[Task ${taskId}] Waiting 1s before next batch...`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
   }
 
   const totalTime = Date.now() - startTime;
