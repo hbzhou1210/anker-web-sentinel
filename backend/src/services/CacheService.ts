@@ -18,10 +18,32 @@ export class CacheService {
       return;
     }
 
+    // 延迟创建 Redis 客户端，只在 connect() 被调用时创建
+    console.log('[CacheService] Redis caching is enabled (will connect on demand)');
+  }
+
+  /**
+   * 初始化 Redis 客户端
+   */
+  private initClient(): void {
+    if (this.client || !this.isEnabled) {
+      return;
+    }
+
     this.client = createClient({
       url: process.env.REDIS_URL || 'redis://localhost:6379',
       socket: {
         connectTimeout: parseInt(process.env.REDIS_CONNECT_TIMEOUT || '5000', 10),
+        reconnectStrategy: (retries) => {
+          // 最多重试 5 次
+          if (retries > 5) {
+            console.error('[CacheService] Max reconnection attempts reached, disabling Redis');
+            this.isEnabled = false;
+            return false;
+          }
+          // 指数退避：1秒、2秒、4秒、8秒、16秒
+          return Math.min(retries * 1000, 16000);
+        },
       },
     });
 
@@ -53,7 +75,14 @@ export class CacheService {
    * 连接到 Redis
    */
   async connect(): Promise<void> {
-    if (!this.isEnabled || !this.client) {
+    if (!this.isEnabled) {
+      return;
+    }
+
+    // 初始化客户端（如果还没有）
+    this.initClient();
+
+    if (!this.client) {
       return;
     }
 
@@ -75,6 +104,7 @@ export class CacheService {
       })
       .catch((err) => {
         console.error('[CacheService] Failed to connect to Redis:', err);
+        console.error('[CacheService] Redis will be disabled. Application will continue without caching.');
         this.isEnabled = false; // 禁用缓存,避免后续调用失败
       })
       .finally(() => {
