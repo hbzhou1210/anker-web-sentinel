@@ -12,16 +12,18 @@
 
 ## 技术栈
 
-**后端**: Node.js 20 + TypeScript + Express + Playwright + PostgreSQL
+**后端**: Node.js 20 + TypeScript + Express + Playwright + 飞书 Bitable
 **前端**: React 18 + TypeScript + Vite + TailwindCSS
+**缓存**: Redis（可选）
 
 ## 快速开始
 
 ### 前置要求
 
 - Node.js >= 20.0.0
-- PostgreSQL >= 14
 - npm >= 10.0.0
+- 飞书开放平台应用（用于 Bitable 数据存储）
+- Redis（可选，用于缓存）
 
 ### 安装
 
@@ -29,19 +31,25 @@
 # 1. 安装依赖
 npm install
 
-# 2. 配置数据库
-createdb anker_web_sentinel
+# 2. 配置环境变量
+cp .env.example .env
+# 编辑 .env 设置飞书应用凭证:
+# FEISHU_APP_ID=your_app_id
+# FEISHU_APP_SECRET=your_app_secret
 
-# 3. 配置环境变量
-cp backend/.env.example backend/.env
-# 编辑 backend/.env 设置 DATABASE_URL
-
-# 4. 运行数据库迁移
-npm run migrate
-
-# 5. 安装浏览器
+# 3. 安装浏览器
 cd backend && npx playwright install chromium
 ```
+
+### 飞书应用配置
+
+1. 访问 [飞书开放平台](https://open.feishu.cn/)
+2. 创建企业自建应用
+3. 开通以下权限：
+   - `bitable:app` - 多维表格应用权限
+   - `im:message` - 发送消息（可选，用于通知）
+4. 获取 App ID 和 App Secret
+5. 配置到 `.env` 文件中
 
 ### 开发
 
@@ -79,19 +87,19 @@ docker-compose up -d
 ### Launch 平台部署
 
 ```bash
-# 1. 准备数据库（推荐 Neon: https://neon.tech）
-# 获取 PostgreSQL 连接字符串
-
-# 2. 打包项目
+# 1. 打包项目
 zip -r anker-web-sentinel.zip . \
     -x "node_modules/*" -x ".git/*" -x "dist/*"
 
-# 3. 上传到 Launch 平台
+# 2. 上传到 Launch 平台
 # 选择 "其他类型，自带 Dockerfile"
 
-# 4. 配置环境变量
-DATABASE_URL=postgresql://user:pass@host:5432/dbname
+# 3. 配置环境变量
+DATABASE_STORAGE=bitable
+FEISHU_APP_ID=your_app_id
+FEISHU_APP_SECRET=your_app_secret
 FRONTEND_URL=https://web.anker-launch.com
+REDIS_ENABLED=false  # 或配置 Redis
 ```
 
 ## 项目结构

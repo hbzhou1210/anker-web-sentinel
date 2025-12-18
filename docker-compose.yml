@@ -1,26 +1,7 @@
 version: '3.8'
 
 services:
-  # PostgreSQL 数据库
-  postgres:
-    image: postgres:16-alpine
-    container_name: anker-sentinel-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: anker_web_sentinel
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-your_secure_password_here}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Redis 缓存
+  # Redis 缓存（可选）
   redis:
     image: redis:7-alpine
     container_name: anker-sentinel-redis
@@ -47,16 +28,24 @@ services:
     # 默认 64MB 对于浏览器自动化太小,增加到 512MB
     shm_size: '512mb'
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-your_secure_password_here}@postgres:5432/anker_web_sentinel
+
+      # 数据存储配置 - 使用飞书 Bitable
+      DATABASE_STORAGE: bitable
+
+      # 飞书配置（必填）
+      FEISHU_APP_ID: ${FEISHU_APP_ID}
+      FEISHU_APP_SECRET: ${FEISHU_APP_SECRET}
+      FEISHU_BASE_URL: https://open.feishu.cn
+
+      # Redis 配置（可选，开发环境可禁用）
       REDIS_URL: redis://redis:6379
-      REDIS_ENABLED: true
+      REDIS_ENABLED: ${REDIS_ENABLED:-false}
+
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
       SCREENSHOT_DIR: /app/screenshots
 
@@ -66,26 +55,37 @@ services:
       SMTP_SECURE: ${SMTP_SECURE:-false}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Anita-Web-Sentinel}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
       APP_URL: ${APP_URL:-http://localhost}
 
-      # Anthropic API (Core Web Vitals 分析)
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-5}
-      ANTHROPIC_BEDROCK_BASE_URL: ${ANTHROPIC_BEDROCK_BASE_URL:-}
+      # Anthropic AI 配置（用于 Core Web Vitals 分析）
+      APP_ANTHROPIC_API_KEY: ${APP_ANTHROPIC_API_KEY:-}
+      APP_ANTHROPIC_BASE_URL: ${APP_ANTHROPIC_BASE_URL:-https://ai-router.anker-in.com/v1}
+      APP_ANTHROPIC_MODEL: ${APP_ANTHROPIC_MODEL:-us.anthropic.claude-sonnet-4-5-20250929-v1:0}
 
       # Performance Testing APIs
       WEBPAGETEST_API_KEY: ${WEBPAGETEST_API_KEY:-}
       PAGESPEED_API_KEY: ${PAGESPEED_API_KEY:-}
 
-      # MCP Server (买赠规则查询工具)
+      # MCP Server 配置（买赠规则查询工具）
       MCP_SERVER_URL: ${MCP_SERVER_URL:-}
       MCP_SERVER_TOKEN: ${MCP_SERVER_TOKEN:-}
+
+      # 浏览器池配置
+      BROWSER_POOL_SIZE: ${BROWSER_POOL_SIZE:-5}
+      MIN_BROWSER_POOL_SIZE: ${MIN_BROWSER_POOL_SIZE:-3}
+      MAX_BROWSER_POOL_SIZE: ${MAX_BROWSER_POOL_SIZE:-10}
+      MAX_BROWSER_AGE: ${MAX_BROWSER_AGE:-1800000}
+      MAX_BROWSER_USAGE: ${MAX_BROWSER_USAGE:-30}
+      HEALTH_CHECK_INTERVAL: ${HEALTH_CHECK_INTERVAL:-30000}
+
     volumes:
       - screenshot_data:/app/screenshots
     ports:
       - "3000:3000"
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -109,8 +109,6 @@ services:
       retries: 3
 
 volumes:
-  postgres_data:
-    driver: local
   redis_data:
     driver: local
   screenshot_data:
