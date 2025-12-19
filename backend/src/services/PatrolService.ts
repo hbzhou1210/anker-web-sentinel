@@ -4,14 +4,13 @@ import browserPool from '../automation/BrowserPool.js';
 import { IPatrolTaskRepository, IPatrolExecutionRepository } from '../models/interfaces/index.js';
 import { BitablePatrolTaskRepository } from '../models/repositories/BitablePatrolTaskRepository.js';
 import { BitablePatrolExecutionRepository } from '../models/repositories/BitablePatrolExecutionRepository.js';
-import { PatrolExecutionStatus, PatrolTestResult, PatrolTask, PatrolConfig, MonitoringLevel } from '../models/entities.js';
+import { PatrolExecutionStatus, PatrolTestResult, PatrolTask, PatrolConfig } from '../models/entities.js';
 import screenshotService from '../automation/ScreenshotService.js';
 import { patrolEmailService } from './PatrolEmailService.js';
 import { imageCompareService } from '../automation/ImageCompareService.js';
 import { EventEmitter, PatrolEventType } from '../events/index.js';
 import { configService } from '../config/index.js';
 import { recordPatrolExecution, metrics } from '../monitoring/metrics.js';
-import monitoringService from '../monitoring/MonitoringService.js';
 
 // 页面类型枚举
 // Updated: Removed TypeScript type annotations from page.evaluate() functions
@@ -1817,32 +1816,7 @@ export class PatrolService {
 
         const testPromises = task.urls.map((urlConfig) =>
           limit(async () => {
-            // 🎯 步骤 1: 先尝试轻量级监控（快速检查）
-            try {
-              const lightweightResult = await monitoringService.checkUrl(urlConfig);
-
-              // 如果轻量级监控通过且不需要浏览器检查，直接返回成功结果
-              if (lightweightResult.status === 'up' && !lightweightResult.warning) {
-                console.log(`  ✓ [Lightweight] ${urlConfig.name} passed quick check (${lightweightResult.responseTime}ms)`);
-                return {
-                  url: urlConfig.url,
-                  name: urlConfig.name,
-                  status: 'pass' as const,
-                  responseTime: lightweightResult.responseTime,
-                  statusCode: lightweightResult.statusCode,
-                  testDuration: lightweightResult.responseTime,
-                  checkType: 'quick' as const,
-                  monitoringLevel: MonitoringLevel.LIGHTWEIGHT
-                };
-              }
-
-              // 如果需要浏览器检查或有告警，继续浏览器测试
-              console.log(`  ⚠️  [Lightweight] ${urlConfig.name} needs full browser test: ${lightweightResult.warning || lightweightResult.error || 'degraded status'}`);
-            } catch (error) {
-              console.warn(`  ⚠️  [Lightweight] ${urlConfig.name} quick check failed, falling back to browser test:`, error);
-            }
-
-            // 🎯 步骤 2: 如果轻量级检查失败或需要完整测试，使用浏览器
+            // 直接使用浏览器进行完整测试（UI 检查场景）
             let page: Page | null = null;
 
             try {
