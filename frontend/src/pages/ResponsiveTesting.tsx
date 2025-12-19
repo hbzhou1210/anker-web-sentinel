@@ -124,6 +124,53 @@ export default function ResponsiveTesting() {
   // 初始加载
   useEffect(() => {
     loadDevices();
+
+    // 检查是否有遗留的 loading 状态（页面刷新或崩溃后）
+    const savedLoading = localStorage.getItem('responsiveTest_loading');
+    const savedTaskId = localStorage.getItem('responsiveTest_taskId');
+
+    if (savedLoading === 'true' && savedTaskId) {
+      // 尝试恢复任务状态
+      console.log('[ResponsiveTesting] Detected orphaned loading state, checking task:', savedTaskId);
+
+      fetch(getFullApiUrl(`/api/v1/responsive/tasks/${savedTaskId}`))
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.data) {
+            const task = data.data;
+            if (task.status === 'completed' || task.status === 'failed') {
+              // 任务已完成，清理 loading 状态
+              console.log('[ResponsiveTesting] Task already completed, clearing loading state');
+              setLoading(false);
+              localStorage.setItem('responsiveTest_loading', 'false');
+              localStorage.removeItem('responsiveTest_taskId');
+            } else {
+              // 任务仍在运行，恢复轮询
+              console.log('[ResponsiveTesting] Task still running, resuming poll');
+              setTaskId(savedTaskId);
+              pollTaskStatus(savedTaskId);
+            }
+          } else {
+            // 任务不存在，清理状态
+            console.log('[ResponsiveTesting] Task not found, clearing loading state');
+            setLoading(false);
+            localStorage.setItem('responsiveTest_loading', 'false');
+            localStorage.removeItem('responsiveTest_taskId');
+          }
+        })
+        .catch(err => {
+          // 请求失败，清理状态
+          console.error('[ResponsiveTesting] Failed to check task status:', err);
+          setLoading(false);
+          localStorage.setItem('responsiveTest_loading', 'false');
+          localStorage.removeItem('responsiveTest_taskId');
+        });
+    } else if (savedLoading === 'true') {
+      // loading 是 true 但没有 taskId，直接清理
+      console.log('[ResponsiveTesting] Orphaned loading state without taskId, clearing');
+      setLoading(false);
+      localStorage.setItem('responsiveTest_loading', 'false');
+    }
   }, []);
 
   // 保存 URL 到 localStorage
@@ -212,6 +259,8 @@ export default function ResponsiveTesting() {
       if (data.success && data.data && data.data.taskId) {
         const newTaskId = data.data.taskId;
         setTaskId(newTaskId);
+        // 保存 taskId 到 localStorage，以便页面刷新后恢复
+        localStorage.setItem('responsiveTest_taskId', newTaskId);
         setProgressMessage(`测试已启动，预计需要 ${data.data.estimatedTime} 秒`);
 
         // 步骤 2: 轮询任务状态
@@ -275,10 +324,14 @@ export default function ResponsiveTesting() {
             setError('测试结果为空');
           }
           setLoading(false);
+          // 清理 taskId
+          localStorage.removeItem('responsiveTest_taskId');
         } else if (task.status === 'failed') {
           // 任务失败
           setError(task.error || '测试失败');
           setLoading(false);
+          // 清理 taskId
+          localStorage.removeItem('responsiveTest_taskId');
         } else {
           // 继续轮询
           setTimeout(poll, pollInterval);
