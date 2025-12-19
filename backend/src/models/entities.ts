@@ -447,9 +447,18 @@ export enum PatrolScheduleType {
   Custom = 'custom'
 }
 
+// Monitoring Level (轻量级监控)
+export enum MonitoringLevel {
+  LIGHTWEIGHT = 'lightweight',  // HTTP 检查 (60% 网站)
+  STANDARD = 'standard',         // HTTP + SSL + DNS 检查 (30% 网站)
+  BROWSER = 'browser',           // Playwright 浏览器检查 (10% 网站)
+  AUTO = 'auto'                  // 自动检测
+}
+
 export interface PatrolUrl {
   url: string;
   name: string;
+  monitoringLevel?: MonitoringLevel;  // 监控级别（可选，默认为 AUTO）
 }
 
 // 巡检配置选项
@@ -540,6 +549,10 @@ export interface PatrolTestResult {
     width: number;
     height: number;
   };
+
+  // 监控级别（轻量级监控）
+  checkType?: 'quick' | 'standard' | 'full';  // 检查类型
+  monitoringLevel?: MonitoringLevel;  // 使用的监控级别
 }
 
 export interface PatrolTask {
