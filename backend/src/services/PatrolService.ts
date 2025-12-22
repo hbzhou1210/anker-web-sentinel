@@ -2023,7 +2023,7 @@ export class PatrolService {
   /**
    * 执行巡检任务 - 立即返回executionId,测试在后台异步执行
    */
-  async executePatrol(taskId: string): Promise<string> {
+  async executePatrol(taskId: string, originUrl?: string): Promise<string> {
     // 获取巡检任务
     const task = await this.taskRepository.findById(taskId);
     if (!task) {
@@ -2044,6 +2044,7 @@ export class PatrolService {
       failedUrls: 0,
       testResults: [],
       emailSent: false,
+      originUrl, // 🌐 保存请求来源
     });
 
     // 发射执行记录创建事件

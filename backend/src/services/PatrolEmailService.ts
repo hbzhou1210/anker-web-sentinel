@@ -81,8 +81,8 @@ export class PatrolEmailService {
         throw new Error(`Task ${execution.patrolTaskId} not found`);
       }
 
-      // 生成报告URL
-      const reportUrl = this.getReportUrl(executionId);
+      // 生成报告URL (传递 execution 以获取 originUrl)
+      const reportUrl = this.getReportUrl(executionId, execution);
 
       // 生成邮件内容
       const subject = this.generateSubject(task, execution);
@@ -111,9 +111,10 @@ export class PatrolEmailService {
   /**
    * 获取报告完整URL
    */
-  private getReportUrl(executionId: string): string {
-    // 优先使用 APP_URL,然后是 FRONTEND_URL,最后才是 localhost
-    const baseUrl = process.env.APP_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
+  private getReportUrl(executionId: string, execution?: PatrolExecution): string {
+    // 🌐 智能获取应用 URL (优先级: 请求来源 > 环境变量 > localhost)
+    const baseUrl = execution?.originUrl || process.env.APP_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
+    console.log(`[Patrol Email] Using base URL: ${baseUrl} (source: ${execution?.originUrl ? 'request' : (process.env.APP_URL ? 'APP_URL' : (process.env.FRONTEND_URL ? 'FRONTEND_URL' : 'fallback'))})`);
     return `${baseUrl}/patrol/execution/${executionId}`;
   }
 

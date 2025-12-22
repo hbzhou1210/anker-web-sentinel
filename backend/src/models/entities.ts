@@ -595,6 +595,7 @@ export interface PatrolExecution {
   emailSentAt?: Date;
   errorMessage?: string;
   durationMs?: number;
+  originUrl?: string; // 🌐 请求来源的完整 URL (用于生成邮件报告链接)
 }
 
 // Database row types for patrol system
