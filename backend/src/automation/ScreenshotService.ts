@@ -310,10 +310,72 @@ export class ScreenshotService {
     try {
       console.log('  Capturing screenshot for Feishu upload...');
 
+      // 等待页面完全加载,确保图片和内容都渲染完成
+      try {
+        // 1. 等待网络空闲(最多5秒)
+        await page.waitForLoadState('networkidle', { timeout: 5000 });
+        console.log('  ✓ Page reached networkidle state');
+      } catch (error) {
+        // 如果5秒内没有达到networkidle,继续等待DOMContentLoaded
+        console.log('  Page did not reach networkidle, waiting for load state...');
+        await page.waitForLoadState('load', { timeout: 3000 }).catch(() => {});
+      }
+
+      // 2. 滚动页面触发懒加载图片
+      try {
+        await page.evaluate(async () => {
+          // 滚动到页面底部,触发懒加载
+          await new Promise<void>((resolve) => {
+            let totalHeight = 0;
+            const distance = 300;
+            const timer = setInterval(() => {
+              const scrollHeight = document.body.scrollHeight;
+              window.scrollBy(0, distance);
+              totalHeight += distance;
+
+              if (totalHeight >= scrollHeight) {
+                clearInterval(timer);
+                // 滚动回顶部
+                window.scrollTo(0, 0);
+                resolve();
+              }
+            }, 100);
+          });
+        });
+        console.log('  ✓ Page scrolled to trigger lazy loading');
+      } catch (error) {
+        console.log('  Warning: Could not scroll page:', error);
+      }
+
+      // 3. 等待所有图片加载完成(包括懒加载的图片)
+      try {
+        await page.evaluate(async () => {
+          const images = Array.from(document.querySelectorAll('img'));
+          await Promise.all(
+            images.map((img) => {
+              if (img.complete && img.naturalHeight > 0) return Promise.resolve();
+              return new Promise((resolve) => {
+                img.addEventListener('load', resolve);
+                img.addEventListener('error', resolve); // 即使加载失败也继续
+                // 超时保护 - 每张图片最多等待5秒
+                setTimeout(resolve, 5000);
+              });
+            })
+          );
+        });
+        console.log('  ✓ All images loaded');
+      } catch (error) {
+        console.log('  Warning: Could not wait for all images:', error);
+      }
+
+      // 4. 额外等待2秒,确保动画和延迟加载内容完成
+      await page.waitForTimeout(2000);
+
       // Capture full page screenshot as PNG
       const screenshot = await page.screenshot({
         fullPage: true,
         type: 'png',
+        timeout: 30000,
       });
 
       // Compress to WebP format at 80% quality

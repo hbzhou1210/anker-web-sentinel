@@ -151,7 +151,7 @@ async function executeResponsiveTest(
 }> {
   // 并行执行测试 - 限制并发数量避免资源耗尽
   // 注意: 每个设备使用独立的browser实例,避免browser崩溃影响其他测试
-  const CONCURRENT_LIMIT = 3; // 同时最多测试3个设备
+  const CONCURRENT_LIMIT = 5; // 同时最多测试5个设备(从3提升到5)
   console.log(`[Task ${taskId}] Starting tests on ${devicesToTest.length} devices (max ${CONCURRENT_LIMIT} concurrent)...`);
   const startTime = Date.now();
 

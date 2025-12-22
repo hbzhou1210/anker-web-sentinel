@@ -81,9 +81,9 @@ export class ResponsiveTestingService {
         'page.goto'
       );
 
-      // 等待页面稳定 - 使用重试机制,减少等待时间
+      // 等待页面稳定 - 使用重试机制,进一步减少等待时间
       await this.executeWithRetry(
-        () => page.waitForTimeout(1000),  // 从 2000ms 减少到 1000ms
+        () => page.waitForTimeout(500),  // 从 1000ms 进一步减少到 500ms
         'waitForTimeout'
       );
 
@@ -140,7 +140,7 @@ export class ResponsiveTestingService {
         );
 
         await this.executeWithRetry(
-          () => page.waitForTimeout(500),  // 从 1000ms 减少到 500ms
+          () => page.waitForTimeout(300),  // 从 500ms 进一步减少到 300ms
           'waitForTimeout(landscape)'
         );
 

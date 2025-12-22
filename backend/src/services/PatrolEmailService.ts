@@ -81,9 +81,12 @@ export class PatrolEmailService {
         throw new Error(`Task ${execution.patrolTaskId} not found`);
       }
 
+      // 生成报告URL
+      const reportUrl = this.getReportUrl(executionId);
+
       // 生成邮件内容
       const subject = this.generateSubject(task, execution);
-      const html = this.generateEmailHTML(task, execution);
+      const html = this.generateEmailHTML(task, execution, reportUrl);
 
       // 发送给所有配置的邮箱
       for (const email of task.notificationEmails) {
@@ -103,6 +106,15 @@ export class PatrolEmailService {
       console.error('发送巡检报告失败:', error);
       throw error;
     }
+  }
+
+  /**
+   * 获取报告完整URL
+   */
+  private getReportUrl(executionId: string): string {
+    // 优先使用 APP_URL,然后是 FRONTEND_URL,最后才是 localhost
+    const baseUrl = process.env.APP_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
+    return `${baseUrl}/patrol/execution/${executionId}`;
   }
 
   /**
@@ -181,7 +193,7 @@ export class PatrolEmailService {
   /**
    * 生成邮件 HTML 内容
    */
-  private generateEmailHTML(task: PatrolTask, execution: PatrolExecution): string {
+  private generateEmailHTML(task: PatrolTask, execution: PatrolExecution, reportUrl: string): string {
     const passRate = ((execution.passedUrls / execution.totalUrls) * 100).toFixed(1);
 
     // 统计真正的失败数(排除低置信度的警告)
@@ -522,6 +534,22 @@ export class PatrolEmailService {
       background-color: #fee2e2;
       color: #991b1b;
     }
+    .report-button {
+      display: inline-block;
+      margin: 20px 0;
+      padding: 12px 30px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 14px;
+      transition: transform 0.2s;
+    }
+    .report-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
     .footer {
       padding: 20px 30px;
       background-color: #f9fafb;
@@ -585,6 +613,9 @@ export class PatrolEmailService {
     </div>
 
     <div class="footer">
+      <div style="margin-bottom: 20px;">
+        <a href="${reportUrl}" class="report-button" style="color: white;">📊 查看完整报告</a>
+      </div>
       <div style="margin-bottom: 15px; padding: 12px; background-color: #f3f4f6; border-radius: 6px; text-align: left;">
         <p style="margin: 0 0 8px 0; font-weight: 600; color: #374151;">📊 置信度说明</p>
         <ul style="margin: 0; padding-left: 20px; font-size: 12px; color: #6b7280; line-height: 1.8;">

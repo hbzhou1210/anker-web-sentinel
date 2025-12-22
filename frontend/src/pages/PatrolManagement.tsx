@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import {
   CheckCircle, XCircle, Clock, Play, Plus, Trash2, Calendar,
   Mail, Link as LinkIcon, Activity, TrendingUp, AlertCircle,
@@ -121,6 +122,7 @@ const DEVICE_PRESETS = [
 ];
 
 const PatrolManagement: React.FC = () => {
+  const { executionId } = useParams<{ executionId?: string }>();
   const [tasks, setTasks] = useState<PatrolTask[]>([]);
   const [executions, setExecutions] = useState<PatrolExecution[]>([]);
   const [loading, setLoading] = useState(true);
@@ -243,6 +245,23 @@ const PatrolManagement: React.FC = () => {
 
     return () => clearInterval(interval);
   }, [selectedTask, showAllExecutions]);
+
+  // 如果URL中有executionId,自动展开对应的执行记录
+  useEffect(() => {
+    if (executionId && executions.length > 0) {
+      const targetExecution = executions.find(e => e.id === executionId);
+      if (targetExecution) {
+        setSelectedExecution(targetExecution);
+        // 滚动到该执行记录
+        setTimeout(() => {
+          const element = document.getElementById(`execution-${executionId}`);
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 100);
+      }
+    }
+  }, [executionId, executions]);
 
   // ESC键关闭截图模态框
   useEffect(() => {
@@ -1116,6 +1135,7 @@ const PatrolManagement: React.FC = () => {
                 return (
                   <div
                     key={execution.id}
+                    id={`execution-${execution.id}`}
                     className="border border-gray-200 rounded-2xl overflow-hidden hover:shadow-md transition-all"
                   >
                     {/* 执行概要 */}

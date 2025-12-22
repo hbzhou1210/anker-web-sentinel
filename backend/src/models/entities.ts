@@ -660,10 +660,16 @@ export interface LinkCrawlTask {
   id: string;               // UUID
   startUrl: string;         // 起始 URL
   maxDepth: number;         // 最大爬取深度
+  mode?: 'crawl' | '404check' | 'csv';  // 任务模式
   status: CrawlStatus;      // 爬取状态
   totalLinks: number;       // 总链接数
   crawledLinks: number;     // 已爬取链接数
   links: CrawledLink[];     // 爬取到的链接列表
+  stats?: {                 // 统计信息
+    total404: number;       // 404错误数量
+    total200: number;       // 正常链接数量
+    totalOther: number;     // 其他状态数量
+  };
   startedAt: Date;          // 开始时间
   completedAt?: Date;       // 完成时间
   durationMs?: number;      // 耗时(毫秒)

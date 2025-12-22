@@ -26,6 +26,7 @@ export class LinkCrawlerService {
       id: taskId,
       startUrl,
       maxDepth,
+      mode: 'crawl',
       status: CrawlStatus.Running,
       totalLinks: 0,
       crawledLinks: 0,
@@ -256,6 +257,286 @@ export class LinkCrawlerService {
    */
   deleteTask(taskId: string): boolean {
     return this.crawlTasks.delete(taskId);
+  }
+
+  /**
+   * 开始404检查任务
+   */
+  async start404Check(startUrl: string): Promise<LinkCrawlTask> {
+    const taskId = uuidv4();
+    const task: LinkCrawlTask = {
+      id: taskId,
+      startUrl,
+      maxDepth: 2, // 固定2级: 起始页面+子链接
+      mode: '404check',
+      status: CrawlStatus.Running,
+      totalLinks: 0,
+      crawledLinks: 0,
+      links: [],
+      stats: {
+        total404: 0,
+        total200: 0,
+        totalOther: 0,
+      },
+      startedAt: new Date(),
+    };
+
+    this.crawlTasks.set(taskId, task);
+
+    console.log(`[404Check] Starting task ${taskId}: ${startUrl}`);
+
+    // 异步执行404检查
+    this.execute404Check(taskId, startUrl).catch((error) => {
+      console.error(`[404Check] Task ${taskId} failed:`, error);
+      task.status = CrawlStatus.Failed;
+      task.errorMessage = error.message;
+      task.completedAt = new Date();
+      task.durationMs = Date.now() - task.startedAt.getTime();
+    });
+
+    return task;
+  }
+
+  /**
+   * 开始CSV批量检查任务
+   */
+  async startCsvCheck(urls: string[]): Promise<LinkCrawlTask> {
+    const taskId = uuidv4();
+    const task: LinkCrawlTask = {
+      id: taskId,
+      startUrl: `CSV批量检查 (${urls.length} 个URL)`,
+      maxDepth: 1, // CSV模式固定1级
+      mode: 'csv',
+      status: CrawlStatus.Running,
+      totalLinks: urls.length,
+      crawledLinks: 0,
+      links: [],
+      stats: {
+        total404: 0,
+        total200: 0,
+        totalOther: 0,
+      },
+      startedAt: new Date(),
+    };
+
+    this.crawlTasks.set(taskId, task);
+
+    console.log(`[CSVCheck] Starting task ${taskId}: ${urls.length} URLs`);
+
+    // 异步执行CSV检查
+    this.executeCsvCheck(taskId, urls).catch((error) => {
+      console.error(`[CSVCheck] Task ${taskId} failed:`, error);
+      task.status = CrawlStatus.Failed;
+      task.errorMessage = error.message;
+      task.completedAt = new Date();
+      task.durationMs = Date.now() - task.startedAt.getTime();
+    });
+
+    return task;
+  }
+
+  /**
+   * 执行404检查
+   */
+  private async execute404Check(taskId: string, startUrl: string): Promise<void> {
+    const task = this.crawlTasks.get(taskId);
+    if (!task) return;
+
+    let browser: Browser | null = null;
+
+    try {
+      browser = await browserPool.acquire();
+      const context = await browser.newContext();
+      const page = await context.newPage();
+
+      console.log(`[404Check] Checking start URL: ${startUrl}`);
+
+      // 第1级: 检查起始页面
+      let startStatus = 0;
+      let startError: string | undefined;
+
+      try {
+        const startResponse = await page.goto(startUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        startStatus = startResponse?.status() || 0;
+      } catch (error: any) {
+        startError = error.message;
+        console.error(`[404Check] Error loading start URL:`, error.message);
+      }
+
+      const startLink: CrawledLink = {
+        url: startUrl,
+        level: 1,
+        statusCode: startStatus || undefined,
+        error: startError || (startStatus === 404 ? 'Page not found (404)' : undefined),
+        crawledAt: new Date(),
+      };
+
+      task.links.push(startLink);
+      task.crawledLinks++;
+
+      // 更新统计
+      if (startStatus === 404) {
+        task.stats!.total404++;
+      } else if (startStatus === 200) {
+        task.stats!.total200++;
+      } else {
+        task.stats!.totalOther++;
+      }
+
+      // 第2级: 提取并检查子链接 (仅当主页面正常时)
+      if (startStatus === 200) {
+        console.log(`[404Check] Extracting links from page...`);
+        const childUrls = await this.extractLinks(page, startUrl);
+        console.log(`[404Check] Found ${childUrls.length} links`);
+
+        // 检查每个子链接
+        for (let i = 0; i < childUrls.length; i++) {
+          const childUrl = childUrls[i];
+
+          try {
+            console.log(`[404Check] [${i + 1}/${childUrls.length}] Checking: ${childUrl}`);
+            const childResponse = await page.goto(childUrl, { waitUntil: 'domcontentloaded', timeout: 10000 });
+            const childStatus = childResponse?.status() || 0;
+
+            const childLink: CrawledLink = {
+              url: childUrl,
+              level: 2,
+              parentUrl: startUrl,
+              statusCode: childStatus,
+              error: childStatus === 404 ? 'Page not found (404)' : undefined,
+              crawledAt: new Date(),
+            };
+
+            task.links.push(childLink);
+            task.crawledLinks++;
+
+            // 更新统计
+            if (childStatus === 404) {
+              task.stats!.total404++;
+            } else if (childStatus === 200) {
+              task.stats!.total200++;
+            } else {
+              task.stats!.totalOther++;
+            }
+          } catch (error: any) {
+            const childLink: CrawledLink = {
+              url: childUrl,
+              level: 2,
+              parentUrl: startUrl,
+              error: error.message,
+              crawledAt: new Date(),
+            };
+
+            task.links.push(childLink);
+            task.crawledLinks++;
+            task.stats!.totalOther++;
+
+            console.error(`[404Check] Error checking ${childUrl}:`, error.message);
+          }
+        }
+      }
+
+      // 更新任务状态
+      task.status = CrawlStatus.Completed;
+      task.completedAt = new Date();
+      task.durationMs = Date.now() - task.startedAt.getTime();
+      task.totalLinks = task.links.length;
+
+      console.log(`[404Check] Task ${taskId} completed: ${task.totalLinks} links checked, ${task.stats!.total404} 404s found`);
+
+      await context.close();
+    } catch (error: any) {
+      console.error(`[404Check] Task ${taskId} error:`, error);
+      task.status = CrawlStatus.Failed;
+      task.errorMessage = error.message;
+      task.completedAt = new Date();
+      task.durationMs = Date.now() - task.startedAt.getTime();
+      throw error;
+    } finally {
+      if (browser) {
+        await browserPool.release(browser);
+      }
+    }
+  }
+
+  /**
+   * 执行CSV批量检查
+   */
+  private async executeCsvCheck(taskId: string, urls: string[]): Promise<void> {
+    const task = this.crawlTasks.get(taskId);
+    if (!task) return;
+
+    let browser: Browser | null = null;
+
+    try {
+      browser = await browserPool.acquire();
+      const context = await browser.newContext();
+      const page = await context.newPage();
+
+      // 逐个检查URL
+      for (let i = 0; i < urls.length; i++) {
+        const url = urls[i];
+
+        try {
+          console.log(`[CSVCheck] [${i + 1}/${urls.length}] Checking: ${url}`);
+          const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10000 });
+          const status = response?.status() || 0;
+
+          const link: CrawledLink = {
+            url,
+            level: 1,
+            statusCode: status,
+            error: status === 404 ? 'Page not found (404)' : undefined,
+            crawledAt: new Date(),
+          };
+
+          task.links.push(link);
+          task.crawledLinks++;
+
+          // 更新统计
+          if (status === 404) {
+            task.stats!.total404++;
+          } else if (status === 200) {
+            task.stats!.total200++;
+          } else {
+            task.stats!.totalOther++;
+          }
+        } catch (error: any) {
+          const link: CrawledLink = {
+            url,
+            level: 1,
+            error: error.message,
+            crawledAt: new Date(),
+          };
+
+          task.links.push(link);
+          task.crawledLinks++;
+          task.stats!.totalOther++;
+
+          console.error(`[CSVCheck] Error checking ${url}:`, error.message);
+        }
+      }
+
+      // 更新任务状态
+      task.status = CrawlStatus.Completed;
+      task.completedAt = new Date();
+      task.durationMs = Date.now() - task.startedAt.getTime();
+
+      console.log(`[CSVCheck] Task ${taskId} completed: ${task.totalLinks} URLs checked, ${task.stats!.total404} 404s found`);
+
+      await context.close();
+    } catch (error: any) {
+      console.error(`[CSVCheck] Task ${taskId} error:`, error);
+      task.status = CrawlStatus.Failed;
+      task.errorMessage = error.message;
+      task.completedAt = new Date();
+      task.durationMs = Date.now() - task.startedAt.getTime();
+      throw error;
+    } finally {
+      if (browser) {
+        await browserPool.release(browser);
+      }
+    }
   }
 }
 

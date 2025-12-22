@@ -89,6 +89,7 @@ function App() {
             <Route path="tools/responsive" element={<ResponsiveTesting />} />
             <Route path="tools/discount-rule" element={<DiscountRuleQuery />} />
             <Route path="tools/patrol" element={<PatrolManagement />} />
+            <Route path="patrol/execution/:executionId" element={<PatrolManagement />} />
             <Route path="tools/link-crawler" element={<LinkCrawler />} />
             <Route path="tools/monitor" element={<ComingSoon title="监控工具" />} />
 

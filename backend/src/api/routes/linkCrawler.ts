@@ -14,43 +14,101 @@ const router = express.Router();
  * 创建新的链接爬取任务
  *
  * Body:
- * - startUrl: string (必填) - 起始 URL
- * - maxDepth: number (可选,默认2) - 最大爬取深度
+ * - mode: 'crawl' | '404check' | 'csv' (可选,默认 'crawl') - 任务模式
+ * - startUrl: string (mode=crawl/404check时必填) - 起始 URL
+ * - maxDepth: number (mode=crawl时可选,默认2) - 最大爬取深度
+ * - urls: string[] (mode=csv时必填) - URL列表
  */
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { startUrl, maxDepth = 2 } = req.body;
+    const { mode = 'crawl', startUrl, maxDepth = 2, urls } = req.body;
 
-    // 验证参数
-    if (!startUrl) {
+    // 验证模式
+    if (!['crawl', '404check', 'csv'].includes(mode)) {
       return res.status(400).json({
         error: 'Bad Request',
-        message: 'startUrl is required'
+        message: 'mode must be one of: crawl, 404check, csv'
       });
     }
 
-    // 验证 URL 格式
-    try {
-      new URL(startUrl);
-    } catch (error) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Invalid URL format'
-      });
+    let task;
+
+    if (mode === 'csv') {
+      // CSV 模式: 批量检查 URL 列表
+      if (!urls || !Array.isArray(urls) || urls.length === 0) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'urls array is required for CSV mode'
+        });
+      }
+
+      // 验证 URL 格式
+      for (const url of urls) {
+        try {
+          new URL(url);
+        } catch (error) {
+          return res.status(400).json({
+            error: 'Bad Request',
+            message: `Invalid URL format: ${url}`
+          });
+        }
+      }
+
+      console.log(`[API] Creating CSV check task: ${urls.length} URLs`);
+      task = await linkCrawlerService.startCsvCheck(urls);
+
+    } else if (mode === '404check') {
+      // 404 检查模式
+      if (!startUrl) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'startUrl is required for 404check mode'
+        });
+      }
+
+      // 验证 URL 格式
+      try {
+        new URL(startUrl);
+      } catch (error) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Invalid URL format'
+        });
+      }
+
+      console.log(`[API] Creating 404 check task: ${startUrl}`);
+      task = await linkCrawlerService.start404Check(startUrl);
+
+    } else {
+      // 爬取模式 (原有逻辑)
+      if (!startUrl) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'startUrl is required for crawl mode'
+        });
+      }
+
+      // 验证 URL 格式
+      try {
+        new URL(startUrl);
+      } catch (error) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Invalid URL format'
+        });
+      }
+
+      // 验证深度
+      if (maxDepth < 1 || maxDepth > 5) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'maxDepth must be between 1 and 5'
+        });
+      }
+
+      console.log(`[API] Creating link crawl task: ${startUrl}, maxDepth=${maxDepth}`);
+      task = await linkCrawlerService.startCrawl(startUrl, maxDepth);
     }
-
-    // 验证深度
-    if (maxDepth < 1 || maxDepth > 5) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'maxDepth must be between 1 and 5'
-      });
-    }
-
-    console.log(`[API] Creating link crawl task: ${startUrl}, maxDepth=${maxDepth}`);
-
-    // 创建爬取任务
-    const task = await linkCrawlerService.startCrawl(startUrl, maxDepth);
 
     res.status(201).json(task);
   } catch (error: any) {
