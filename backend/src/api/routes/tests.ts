@@ -32,11 +32,25 @@ router.post('/', validateUrl, strictLimiter, async (req: Request, res: Response)
     }
 
     // 🌐 自动获取请求来源的完整 URL (协议 + 域名 + 端口)
+    // 优先使用 X-Forwarded-Host (包含端口), 然后使用 Host 头
     const protocol = req.protocol; // http 或 https
-    const host = req.get('host'); // 包含域名和端口,例如: 172.16.38.135:10001
-    const originUrl = `${protocol}://${host}`;
+    const forwardedHost = req.get('x-forwarded-host'); // Nginx 转发的原始 Host (可能包含端口)
+    const host = forwardedHost || req.get('host'); // 回退到 Host 头
 
-    console.log(`[Tests API] Request origin: ${originUrl}`);
+    // 如果 host 不包含端口,但请求来自非标准端口,需要添加端口号
+    let originUrl = `${protocol}://${host}`;
+
+    // 检查是否需要添加端口号 (仅当 host 中没有端口,且不是标准端口时)
+    if (!host?.includes(':')) {
+      const forwardedPort = req.get('x-forwarded-port'); // Nginx 转发的原始端口
+      if (forwardedPort &&
+          ((protocol === 'http' && forwardedPort !== '80') ||
+           (protocol === 'https' && forwardedPort !== '443'))) {
+        originUrl = `${protocol}://${host}:${forwardedPort}`;
+      }
+    }
+
+    console.log(`[Tests API] Request origin: ${originUrl} (host: ${host}, x-forwarded-host: ${forwardedHost}, x-forwarded-port: ${req.get('x-forwarded-port')})`);
 
     // Create test request with pending status
     const testRequest = await testRequestRepository.create(url, config, notificationEmail, originUrl);

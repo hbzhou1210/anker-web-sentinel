@@ -7,6 +7,10 @@ import { getMetrics } from '../monitoring/metrics.js';
 
 const app: Express = express();
 
+// 信任反向代理 (Nginx)
+// 这样 req.protocol, req.hostname, req.ip 等会使用 X-Forwarded-* 头
+app.set('trust proxy', true);
+
 // Request ID middleware (应该最先应用)
 app.use(requestIdMiddleware);
 
