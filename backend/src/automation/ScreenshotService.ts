@@ -211,6 +211,37 @@ export class ScreenshotService {
         }
       }
 
+      // ✨ 新增：等待所有图片加载完成（与巡检截图保持一致）
+      try {
+        console.log('  Waiting for all images to load...');
+        await page.evaluate(async () => {
+          const images = Array.from(document.querySelectorAll('img'));
+          await Promise.all(
+            images.map((img) => {
+              // 如果图片已经加载完成且有实际高度,直接返回
+              if (img.complete && img.naturalHeight > 0) return Promise.resolve();
+
+              // 否则等待加载完成
+              return new Promise((resolve) => {
+                img.addEventListener('load', resolve);
+                img.addEventListener('error', resolve);
+                setTimeout(resolve, 3000); // 每张图片最多等待 3 秒
+              });
+            })
+          );
+        });
+        console.log('  ✓ All images loaded');
+      } catch (error) {
+        console.log('  Warning: Could not wait for all images:', error);
+      }
+
+      // 额外等待一小段时间,确保动画和延迟加载完成
+      try {
+        await page.waitForTimeout(1000);
+      } catch {
+        // 忽略超时错误
+      }
+
       // 尝试完整页面截图
       const screenshot = await page.screenshot({
         fullPage: true,
