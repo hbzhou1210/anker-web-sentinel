@@ -18,7 +18,8 @@ export class InMemoryTestRequestRepository {
   async create(
     url: string,
     config?: any, // 使用 any 以支持所有配置参数
-    notificationEmail?: string
+    notificationEmail?: string,
+    originUrl?: string // 🌐 请求来源的完整 URL
   ): Promise<TestRequest> {
     const testRequest: TestRequest = {
       id: uuidv4(),
@@ -27,10 +28,11 @@ export class InMemoryTestRequestRepository {
       status: TestRequestStatus.Pending,
       config: config || null,
       notificationEmail: notificationEmail || null,
+      originUrl: originUrl || null, // 🌐 保存请求来源
     };
 
     this.requests.set(testRequest.id, testRequest);
-    console.log(`[InMemoryTestRequestRepository] Created test request ${testRequest.id}`);
+    console.log(`[InMemoryTestRequestRepository] Created test request ${testRequest.id} from origin: ${originUrl || 'unknown'}`);
 
     return testRequest;
   }

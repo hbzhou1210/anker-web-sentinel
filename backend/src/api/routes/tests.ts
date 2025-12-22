@@ -31,8 +31,15 @@ router.post('/', validateUrl, strictLimiter, async (req: Request, res: Response)
       }
     }
 
+    // 🌐 自动获取请求来源的完整 URL (协议 + 域名 + 端口)
+    const protocol = req.protocol; // http 或 https
+    const host = req.get('host'); // 包含域名和端口,例如: 172.16.38.135:10001
+    const originUrl = `${protocol}://${host}`;
+
+    console.log(`[Tests API] Request origin: ${originUrl}`);
+
     // Create test request with pending status
-    const testRequest = await testRequestRepository.create(url, config, notificationEmail);
+    const testRequest = await testRequestRepository.create(url, config, notificationEmail, originUrl);
 
     // Start test execution asynchronously (don't await)
     testExecutionService.executeTest(testRequest.id, url, config).catch((error) => {

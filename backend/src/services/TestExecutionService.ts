@@ -447,8 +447,10 @@ export class TestExecutionService {
     if (testRequest?.notificationEmail && emailService.isAvailable()) {
       try {
         console.log(`Sending email to ${testRequest.notificationEmail}...`);
-        // 生产环境必须配置 APP_URL,否则报告链接将不可用
-        const appUrl = process.env.APP_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
+        // 🌐 智能获取应用 URL (优先级: 请求来源 > 环境变量 > localhost)
+        const appUrl = testRequest.originUrl || process.env.APP_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
+        console.log(`[Email] Using app URL: ${appUrl} (source: ${testRequest.originUrl ? 'request' : (process.env.APP_URL ? 'APP_URL' : (process.env.FRONTEND_URL ? 'FRONTEND_URL' : 'fallback'))})`);
+
         await emailService.sendTestCompletionEmail(testRequest.notificationEmail, {
           url,
           overallScore: report.overallScore,

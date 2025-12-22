@@ -50,6 +50,7 @@ export interface TestRequest {
   requestedAt: Date;
   status: TestRequestStatus;
   notificationEmail?: string;
+  originUrl?: string; // 🌐 请求来源的完整 URL (用于生成邮件报告链接)
   config?: {
     timeout?: number;  // seconds
     waitTime?: number; // seconds
