@@ -208,23 +208,26 @@ router.post('/tasks/:taskId/execute', strictLimiter, async (req: Request, res: R
       return;
     }
 
-    // 🌐 自动获取请求来源的完整 URL (协议 + 域名 + 端口)
-    const protocol = req.protocol;
-    const forwardedHost = req.get('x-forwarded-host');
-    const host = forwardedHost || req.get('host');
-    let originUrl = `${protocol}://${host}`;
+    // 🌐 获取前端地址用于邮件报告链接
+    // 优先级: Referer 头 (前端URL) > 环境变量 > localhost:5173
+    let originUrl: string | undefined;
 
-    // 检查是否需要添加端口号
-    if (!host?.includes(':')) {
-      const forwardedPort = req.get('x-forwarded-port');
-      if (forwardedPort &&
-          ((protocol === 'http' && forwardedPort !== '80') ||
-           (protocol === 'https' && forwardedPort !== '443'))) {
-        originUrl = `${protocol}://${host}:${forwardedPort}`;
+    const referer = req.get('referer') || req.get('referrer');
+    if (referer) {
+      try {
+        const refererUrl = new URL(referer);
+        originUrl = `${refererUrl.protocol}//${refererUrl.host}`;
+        console.log(`[Patrol API] Using Referer as origin: ${originUrl}`);
+      } catch (e) {
+        console.warn(`[Patrol API] Invalid referer URL: ${referer}`);
       }
     }
 
-    console.log(`[Patrol API] Request origin: ${originUrl}`);
+    // 回退到环境变量或默认值
+    if (!originUrl) {
+      originUrl = process.env.FRONTEND_URL || process.env.APP_URL || 'http://localhost:5173';
+      console.log(`[Patrol API] Using fallback origin: ${originUrl}`);
+    }
 
     // 启动巡检任务(异步执行,但等待创建execution记录,并传递 originUrl)
     const executionId = await patrolService.executePatrol(taskId, originUrl).catch((error) => {

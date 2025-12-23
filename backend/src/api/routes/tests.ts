@@ -32,25 +32,26 @@ router.post('/', validateUrl, strictLimiter, async (req: Request, res: Response)
     }
 
     // 🌐 自动获取请求来源的完整 URL (协议 + 域名 + 端口)
-    // 优先使用 X-Forwarded-Host (包含端口), 然后使用 Host 头
-    const protocol = req.protocol; // http 或 https
-    const forwardedHost = req.get('x-forwarded-host'); // Nginx 转发的原始 Host (可能包含端口)
-    const host = forwardedHost || req.get('host'); // 回退到 Host 头
+    // 🌐 获取前端地址用于邮件报告链接
+    // 优先级: Referer 头 (前端URL) > 环境变量 > localhost:5173
+    let originUrl: string | undefined;
 
-    // 如果 host 不包含端口,但请求来自非标准端口,需要添加端口号
-    let originUrl = `${protocol}://${host}`;
-
-    // 检查是否需要添加端口号 (仅当 host 中没有端口,且不是标准端口时)
-    if (!host?.includes(':')) {
-      const forwardedPort = req.get('x-forwarded-port'); // Nginx 转发的原始端口
-      if (forwardedPort &&
-          ((protocol === 'http' && forwardedPort !== '80') ||
-           (protocol === 'https' && forwardedPort !== '443'))) {
-        originUrl = `${protocol}://${host}:${forwardedPort}`;
+    const referer = req.get('referer') || req.get('referrer');
+    if (referer) {
+      try {
+        const refererUrl = new URL(referer);
+        originUrl = `${refererUrl.protocol}//${refererUrl.host}`;
+        console.log(`[Tests API] Using Referer as origin: ${originUrl}`);
+      } catch (e) {
+        console.warn(`[Tests API] Invalid referer URL: ${referer}`);
       }
     }
 
-    console.log(`[Tests API] Request origin: ${originUrl} (host: ${host}, x-forwarded-host: ${forwardedHost}, x-forwarded-port: ${req.get('x-forwarded-port')})`);
+    // 回退到环境变量或默认值
+    if (!originUrl) {
+      originUrl = process.env.FRONTEND_URL || process.env.APP_URL || 'http://localhost:5173';
+      console.log(`[Tests API] Using fallback origin: ${originUrl}`);
+    }
 
     // Create test request with pending status
     const testRequest = await testRequestRepository.create(url, config, notificationEmail, originUrl);
