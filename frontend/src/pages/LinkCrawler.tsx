@@ -29,7 +29,7 @@ interface LinkCrawlTask {
   startUrl: string;
   maxDepth: number;
   mode?: 'crawl' | '404check' | 'csv';
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'paused' | 'completed' | 'failed';
   totalLinks: number;
   crawledLinks: number;
   links: CrawledLink[];
@@ -117,6 +117,65 @@ const LinkCrawler: React.FC = () => {
       }
     },
   });
+
+  // 暂停任务
+  const pauseTaskMutation = useMutation({
+    mutationFn: async (taskId: string) => {
+      const response = await axios.post(`${API_BASE_URL}/link-crawler/${taskId}/pause`);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['link-crawler-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['link-crawler-task', selectedTaskId] });
+    },
+  });
+
+  // 恢复任务
+  const resumeTaskMutation = useMutation({
+    mutationFn: async (taskId: string) => {
+      await axios.post(`${API_BASE_URL}/link-crawler/${taskId}/resume`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['link-crawler-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['link-crawler-task', selectedTaskId] });
+    },
+  });
+
+  // 下载CSV模版
+  const downloadCsvTemplate = () => {
+    // 创建CSV模版内容
+    const templateContent = `URL,Description
+https://example.com,Example Site 1
+https://example.com/page1,Example Page 1
+https://example.com/page2,Example Page 2
+https://another-example.com,Another Example Site
+
+# 说明:
+# 1. 第一行为表头,可以保留或删除
+# 2. 第一列为要检查的URL (必填)
+# 3. 第二列为描述信息 (可选)
+# 4. 以 # 开头的行会被忽略
+# 5. 每行一个URL
+`;
+
+    // 创建Blob对象
+    const blob = new Blob([templateContent], { type: 'text/csv;charset=utf-8;' });
+
+    // 创建下载链接
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'url-check-template.csv');
+    link.style.visibility = 'hidden';
+
+    // 触发下载
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // 释放URL对象
+    URL.revokeObjectURL(url);
+  };
 
   // 处理CSV文件上传
   const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -359,7 +418,27 @@ const LinkCrawler: React.FC = () => {
           ) : (
             <div className="form-row">
               <div className="form-group" style={{ flex: 2 }}>
-                <label htmlFor="csvFile">上传CSV文件</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <label htmlFor="csvFile">上传CSV文件</label>
+                  <button
+                    type="button"
+                    onClick={downloadCsvTemplate}
+                    style={{
+                      padding: '4px 12px',
+                      background: '#3b82f6',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    📥 下载模版
+                  </button>
+                </div>
                 <input
                   type="file"
                   id="csvFile"
@@ -400,21 +479,64 @@ const LinkCrawler: React.FC = () => {
                 <div className="task-header">
                   <span className={`status-badge status-${task.status}`}>
                     {task.status === 'running' ? '进行中' :
+                     task.status === 'paused' ? '已暂停' :
                      task.status === 'completed' ? '已完成' :
                      task.status === 'failed' ? '失败' : '等待中'}
                   </span>
                   <span style={{ fontSize: '12px', color: '#666', marginLeft: '10px' }}>
                     {task.mode === 'crawl' ? '🔍 爬取' : task.mode === '404check' ? '🚨 404检查' : '📄 CSV检查'}
                   </span>
-                  <button
-                    className="btn-delete"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteTaskMutation.mutate(task.id);
-                    }}
-                  >
-                    删除
-                  </button>
+                  <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto' }}>
+                    {task.status === 'running' && (
+                      <button
+                        className="btn-pause"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          pauseTaskMutation.mutate(task.id);
+                        }}
+                        style={{
+                          padding: '4px 12px',
+                          background: '#f59e0b',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '12px'
+                        }}
+                      >
+                        ⏸ 暂停
+                      </button>
+                    )}
+                    {task.status === 'paused' && (
+                      <button
+                        className="btn-resume"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          resumeTaskMutation.mutate(task.id);
+                        }}
+                        style={{
+                          padding: '4px 12px',
+                          background: '#10b981',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '12px'
+                        }}
+                      >
+                        ▶ 恢复
+                      </button>
+                    )}
+                    <button
+                      className="btn-delete"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteTaskMutation.mutate(task.id);
+                      }}
+                    >
+                      删除
+                    </button>
+                  </div>
                 </div>
                 <div className="task-url">{task.startUrl}</div>
                 <div className="task-stats">
@@ -446,6 +568,43 @@ const LinkCrawler: React.FC = () => {
                 <div className="progress-info">
                   <span>正在检测... {displayTask.crawledLinks}/{displayTask.totalLinks || '?'} 个链接</span>
                   <div className="spinner"></div>
+                  <button
+                    onClick={() => pauseTaskMutation.mutate(displayTask.id)}
+                    style={{
+                      marginLeft: '15px',
+                      padding: '6px 16px',
+                      background: '#f59e0b',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    ⏸ 暂停任务
+                  </button>
+                </div>
+              )}
+              {displayTask.status === 'paused' && (
+                <div className="progress-info">
+                  <span style={{ color: '#f59e0b' }}>任务已暂停 - {displayTask.crawledLinks} 个链接已爬取</span>
+                  <button
+                    onClick={() => resumeTaskMutation.mutate(displayTask.id)}
+                    style={{
+                      marginLeft: '15px',
+                      padding: '6px 16px',
+                      background: '#10b981',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    ▶ 恢复任务
+                  </button>
                 </div>
               )}
               {displayTask.status === 'completed' && displayTask.stats && (

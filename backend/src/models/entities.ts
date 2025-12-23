@@ -642,6 +642,7 @@ export interface PatrolExecutionRow {
 export enum CrawlStatus {
   Pending = 'pending',
   Running = 'running',
+  Paused = 'paused',
   Completed = 'completed',
   Failed = 'failed'
 }

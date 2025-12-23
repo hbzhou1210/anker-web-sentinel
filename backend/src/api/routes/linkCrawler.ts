@@ -215,4 +215,60 @@ router.post('/:taskId/cancel', (req: Request, res: Response) => {
   }
 });
 
+/**
+ * POST /api/v1/link-crawler/:taskId/pause
+ * 暂停正在运行的爬取任务
+ */
+router.post('/:taskId/pause', (req: Request, res: Response) => {
+  try {
+    const { taskId } = req.params;
+    const paused = linkCrawlerService.pauseTask(taskId);
+
+    if (!paused) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Task cannot be paused (not found or not running)'
+      });
+    }
+
+    const task = linkCrawlerService.getTask(taskId);
+    res.json({
+      message: 'Task paused successfully',
+      task
+    });
+  } catch (error: any) {
+    console.error('[API] Error pausing crawl task:', error);
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/v1/link-crawler/:taskId/resume
+ * 恢复已暂停的爬取任务
+ */
+router.post('/:taskId/resume', (req: Request, res: Response) => {
+  try {
+    const { taskId } = req.params;
+    const resumed = linkCrawlerService.resumeTask(taskId);
+
+    if (!resumed) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Task cannot be resumed (not found or not paused)'
+      });
+    }
+
+    res.json({ message: 'Task resumed successfully' });
+  } catch (error: any) {
+    console.error('[API] Error resuming crawl task:', error);
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: error.message
+    });
+  }
+});
+
 export default router;
