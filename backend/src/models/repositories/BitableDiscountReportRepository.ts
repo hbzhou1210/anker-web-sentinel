@@ -85,7 +85,10 @@ export class BitableDiscountReportRepository implements IDiscountReportRepositor
     const summaryText = this.extractText(fields[mapping.summary]);
     const detailResultsText = this.extractText(fields[mapping.detailResults]);
     const statusText = this.extractText(fields[mapping.status]);
-    const htmlReportUrlText = this.extractText(fields[mapping.htmlReportUrl]);
+
+    // 飞书 URL 字段是对象格式 { link, text }
+    const htmlReportUrlField = fields[mapping.htmlReportUrl];
+    const htmlReportUrl = htmlReportUrlField?.link || this.extractText(htmlReportUrlField);
 
     return {
       recordId: record.record_id,
@@ -97,7 +100,7 @@ export class BitableDiscountReportRepository implements IDiscountReportRepositor
       summary: summaryText ? JSON.parse(summaryText) : {},
       detailResults: await this.decompressIfNeeded(detailResultsText),
       status: statusText as 'active' | 'inactive' | 'error',
-      htmlReportUrl: htmlReportUrlText || undefined,
+      htmlReportUrl: htmlReportUrl || undefined,
     };
   }
 
@@ -112,11 +115,15 @@ export class BitableDiscountReportRepository implements IDiscountReportRepositor
       [mapping.type]: report.type,
       [mapping.shopDomain]: report.shopDomain,
       [mapping.ruleIds]: JSON.stringify(report.ruleIds),
-      [mapping.createdAt]: report.createdAt.getTime(),
+      [mapping.createdAt]: report.createdAt.getTime(), // 飞书日期字段接受毫秒时间戳
       [mapping.summary]: JSON.stringify(report.summary),
       [mapping.detailResults]: await this.compressIfNeeded(report.detailResults),
       [mapping.status]: report.status,
-      [mapping.htmlReportUrl]: report.htmlReportUrl || '',
+      // 飞书 URL 字段需要对象格式 { link, text }
+      [mapping.htmlReportUrl]: report.htmlReportUrl ? {
+        link: report.htmlReportUrl,
+        text: 'View Report'
+      } : '',
     };
   }
 
