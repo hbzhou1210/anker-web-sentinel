@@ -327,7 +327,7 @@ export default function MultilingualCheck() {
             </div>
 
             <div className="language-results">
-              {results.languages.map((langResult) => (
+              {results.languages?.map((langResult) => (
                 <div key={langResult.language} className="language-result-card">
                   <div
                     className="language-header"
