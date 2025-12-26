@@ -71,9 +71,9 @@ export class LanguageCheckService {
 
   constructor() {
     // 使用环境变量配置 LanguageTool API URL
-    // Docker: http://languagetool:8010/v2/check
-    // 本地: http://localhost:8010/v2/check
-    this.apiUrl = process.env.LANGUAGETOOL_API_URL || 'http://localhost:8010/v2/check';
+    // 公共API(无需Docker): https://api.languagetool.org/v2/check
+    // Docker本地: http://localhost:8010/v2/check
+    this.apiUrl = process.env.LANGUAGETOOL_API_URL || 'https://api.languagetool.org/v2/check';
     console.log(`[LanguageCheckService] Using API URL: ${this.apiUrl}`);
   }
 

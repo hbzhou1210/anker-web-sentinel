@@ -69,7 +69,6 @@ export default function MultilingualCheck() {
     return saved ? JSON.parse(saved) : ['en-US', 'de-DE', 'fr-FR'];
   });
   const [loading, setLoading] = useState(false);
-  const [languageToolHealthy, setLanguageToolHealthy] = useState<boolean | null>(null);
   const [results, setResults] = useState<MultilingualTestReport | null>(() => {
     const saved = localStorage.getItem('multilingualCheck_results');
     return saved ? JSON.parse(saved) : null;
@@ -80,21 +79,6 @@ export default function MultilingualCheck() {
     const saved = localStorage.getItem('multilingualCheck_useEnhanced');
     return saved ? JSON.parse(saved) : true; // 默认启用增强模式
   });
-
-  // 检查 LanguageTool 服务健康状态
-  const checkHealth = async () => {
-    try {
-      const response = await fetch(getFullApiUrl('/api/v1/multilingual/health'));
-      const data = await response.json();
-      setLanguageToolHealthy(data.data?.healthy || false);
-    } catch (err) {
-      setLanguageToolHealthy(false);
-    }
-  };
-
-  useEffect(() => {
-    checkHealth();
-  }, []);
 
   // 保存状态到 localStorage
   useEffect(() => {
@@ -133,11 +117,6 @@ export default function MultilingualCheck() {
 
     if (selectedLanguages.length === 0) {
       setError('请至少选择一种语言');
-      return;
-    }
-
-    if (!languageToolHealthy) {
-      setError('LanguageTool 服务未启动,请先启动服务');
       return;
     }
 
@@ -221,39 +200,10 @@ export default function MultilingualCheck() {
               </p>
             </div>
           </div>
-          <div className="service-status">
-            {languageToolHealthy === null ? (
-              <span className="status-badge checking">
-                <Loader2 className="spinning" size={14} />
-                检查中...
-              </span>
-            ) : languageToolHealthy ? (
-              <span className="status-badge healthy">
-                <CheckCircle size={14} />
-                服务正常
-              </span>
-            ) : (
-              <span className="status-badge unhealthy">
-                <XCircle size={14} />
-                服务未启动
-              </span>
-            )}
-          </div>
         </div>
       </div>
 
       <div className="content-container">
-        {!languageToolHealthy && languageToolHealthy !== null && (
-          <div className="alert alert-warning">
-            <AlertTriangle size={20} />
-            <div>
-              <strong>LanguageTool 服务未启动</strong>
-              <p>请先启动 LanguageTool 服务:</p>
-              <code>docker run -d --name languagetool -p 8010:8010 erikvl87/languagetool:latest</code>
-            </div>
-          </div>
-        )}
-
         <form onSubmit={handleSubmit} className="test-form">
           <div className="form-group">
             <label htmlFor="url">网页 URL</label>
@@ -313,7 +263,7 @@ export default function MultilingualCheck() {
           <button
             type="submit"
             className="submit-button"
-            disabled={loading || !languageToolHealthy}
+            disabled={loading}
           >
             {loading ? (
               <>
