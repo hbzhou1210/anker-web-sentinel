@@ -340,8 +340,8 @@ export default function MultilingualCheck() {
                       <div>
                         <h3>{getLanguageName(langResult.language)}</h3>
                         <p className="language-stats">
-                          文本长度: {langResult.textLength} 字符 |
-                          共 {langResult.errors.length} 个问题
+                          文本长度: {langResult.textLength || 0} 字符 |
+                          共 {langResult.errors?.length || 0} 个问题
                         </p>
                       </div>
                     </div>
@@ -369,22 +369,24 @@ export default function MultilingualCheck() {
 
                   {expandedLanguages.includes(langResult.language) && (
                     <div className="errors-list">
-                      {langResult.errors.length === 0 ? (
+                      {(langResult.errors?.length || 0) === 0 ? (
                         <div className="no-errors">
                           <CheckCircle size={24} />
                           <p>未发现问题</p>
                         </div>
                       ) : (
-                        langResult.errors.map((error, index) => (
-                          <div key={index} className={`error-item ${error.severity}`}>
+                        langResult.errors?.map((error, index) => (
+                          <div key={index} className={`error-item ${error.severity || 'info'}`}>
                             <div className="error-header">
-                              {getSeverityIcon(error.severity)}
-                              <span className="error-message">{error.message}</span>
+                              {getSeverityIcon(error.severity || 'info')}
+                              <span className="error-message">{error.message || '未知错误'}</span>
                             </div>
-                            <div className="error-context">
-                              <code>{error.context.text}</code>
-                            </div>
-                            {error.replacements.length > 0 && (
+                            {error.context?.text && (
+                              <div className="error-context">
+                                <code>{error.context.text}</code>
+                              </div>
+                            )}
+                            {error.replacements && error.replacements.length > 0 && (
                               <div className="error-suggestions">
                                 <strong>建议:</strong>
                                 {error.replacements.slice(0, 3).map((rep, i) => (
@@ -394,10 +396,12 @@ export default function MultilingualCheck() {
                                 ))}
                               </div>
                             )}
-                            <div className="error-details">
-                              <span>规则: {error.rule.id}</span>
-                              <span>类别: {error.rule.category.name}</span>
-                            </div>
+                            {error.rule && (
+                              <div className="error-details">
+                                <span>规则: {error.rule.id || 'unknown'}</span>
+                                <span>类别: {error.rule.category?.name || 'unknown'}</span>
+                              </div>
+                            )}
                           </div>
                         ))
                       )}
