@@ -21,6 +21,7 @@ import linkCrawlerRouter from './api/routes/linkCrawler.js';
 import discountRuleRouter from './api/routes/discountRule.js';
 import systemRouter from './api/routes/system.js';
 import monitorRouter from './routes/monitor.js';
+import multilingualRouter from './api/routes/multilingual.js';
 import { patrolSchedulerService } from './services/PatrolSchedulerService.js';
 import { imageCompareService } from './automation/ImageCompareService.js';
 import { initializeEventSystem, cleanupEventSystem } from './events/index.js';
@@ -65,6 +66,7 @@ app.use('/api/v1/link-crawler', linkCrawlerRouter);
 app.use('/api/v1/discount-rule', discountRuleRouter);
 app.use('/api/v1/system', systemRouter);
 app.use('/api/v1/monitor', monitorRouter);
+app.use('/api/v1/multilingual', multilingualRouter);
 
 // Compatibility route for tool interface - maps /api/check-discount to discount rule router
 app.use('/api', discountRuleRouter);

@@ -124,8 +124,12 @@ export class PatrolSchedulerService {
         try {
           console.log(`[PatrolScheduler] Executing patrol task: ${schedule.patrolTaskId}`);
 
+          // 🌐 使用环境变量配置的应用 URL
+          const originUrl = process.env.APP_URL || process.env.FRONTEND_URL;
+          console.log(`[PatrolScheduler] Using origin URL: ${originUrl || 'not set (will use default)'}`);
+
           // 执行巡检 (邮件将在 PatrolService.runPatrolTests() 中自动发送)
-          const executionId = await patrolService.executePatrol(schedule.patrolTaskId);
+          const executionId = await patrolService.executePatrol(schedule.patrolTaskId, originUrl);
 
           // 更新最后执行时间和下次执行时间
           const nextExecution = this.calculateNextExecution(schedule.cronExpression, schedule.timeZone);
