@@ -442,7 +442,7 @@ export default function MultilingualCheck() {
                               )}
                             </div>
                           );
-                        }))
+                        })
                       )}
                     </div>
                   )}
