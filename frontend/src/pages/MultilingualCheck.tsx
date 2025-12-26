@@ -375,35 +375,74 @@ export default function MultilingualCheck() {
                           <p>未发现问题</p>
                         </div>
                       ) : (
-                        langResult.errors?.map((error, index) => (
-                          <div key={index} className={`error-item ${error.severity || 'info'}`}>
-                            <div className="error-header">
-                              {getSeverityIcon(error.severity || 'info')}
-                              <span className="error-message">{error.message || '未知错误'}</span>
+                        langResult.errors?.map((error, index) => {
+                          // 提取错误文本片段和位置
+                          const contextText = error.context?.text || '';
+                          const errorStart = error.position?.start || 0;
+                          const errorEnd = error.position?.end || 0;
+                          const errorLength = errorEnd - errorStart;
+
+                          // 从上下文中提取出错误的具体文字
+                          let errorWord = '';
+                          if (contextText && error.context?.offset !== undefined && error.context?.length) {
+                            errorWord = contextText.substring(
+                              error.context.offset,
+                              error.context.offset + error.context.length
+                            );
+                          }
+
+                          return (
+                            <div key={index} className={`error-item ${error.severity || 'info'}`}>
+                              {/* 问题类型标签 */}
+                              <div className="error-type-badge">
+                                {error.issueType === 'misspelling' && '拼写错误'}
+                                {error.issueType === 'grammar' && '语法错误'}
+                                {error.issueType === 'typographical' && '排版问题'}
+                                {error.issueType === 'style' && '风格建议'}
+                                {error.issueType === 'uncategorized' && '其他问题'}
+                                {!error.issueType && '语言问题'}
+                              </div>
+
+                              {/* 错误的文字 */}
+                              {errorWord && (
+                                <div className="error-word-highlight">
+                                  <strong>有问题的文字:</strong>
+                                  <span className="highlight-text">"{errorWord}"</span>
+                                </div>
+                              )}
+
+                              {/* 问题描述 */}
+                              <div className="error-description">
+                                <strong>问题:</strong>
+                                <span>{error.shortMessage || error.message || '未知错误'}</span>
+                              </div>
+
+                              {/* 修改建议 */}
+                              {error.replacements && error.replacements.length > 0 && (
+                                <div className="error-suggestions">
+                                  <strong>建议改为:</strong>
+                                  <div className="suggestion-list">
+                                    {error.replacements.slice(0, 3).map((rep, i) => (
+                                      <span key={i} className="suggestion">
+                                        ✓ {rep.value}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 上下文预览 */}
+                              {contextText && (
+                                <div className="error-context">
+                                  <strong>上下文:</strong>
+                                  <div className="context-preview">
+                                    <code>{contextText}</code>
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                            {error.context?.text && (
-                              <div className="error-context">
-                                <code>{error.context.text}</code>
-                              </div>
-                            )}
-                            {error.replacements && error.replacements.length > 0 && (
-                              <div className="error-suggestions">
-                                <strong>建议:</strong>
-                                {error.replacements.slice(0, 3).map((rep, i) => (
-                                  <span key={i} className="suggestion">
-                                    {rep.value}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                            {error.rule && (
-                              <div className="error-details">
-                                <span>规则: {error.rule.id || 'unknown'}</span>
-                                <span>类别: {error.rule.category?.name || 'unknown'}</span>
-                              </div>
-                            )}
-                          </div>
-                        ))
+                          );
+                        }))
                       )}
                     </div>
                   )}
