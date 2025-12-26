@@ -407,7 +407,7 @@ export default function MultilingualCheck() {
                               {errorWord && (
                                 <div className="error-word-highlight">
                                   <strong>有问题的文字:</strong>
-                                  <span className="highlight-text">"{errorWord}"</span>
+                                  <span className="highlight-text">&quot;{errorWord}&quot;</span>
                                 </div>
                               )}
 
