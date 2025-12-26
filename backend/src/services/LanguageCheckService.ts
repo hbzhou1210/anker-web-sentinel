@@ -82,9 +82,12 @@ export class LanguageCheckService {
    */
   async checkText(text: string, languageCode: string): Promise<LanguageToolError[]> {
     try {
-      // 限制文本长度 - LanguageTool 免费 API 限制 20KB
-      // 实际我们限制为 10,000 字符以确保稳定性
-      const maxLength = 10000;
+      // 限制文本长度 - LanguageTool 免费 API 有以下限制:
+      // 1. 文本大小限制: 20KB
+      // 2. 检查时间限制: 20秒
+      // 对于复杂的德语等语言,检查速度较慢,需要更短的文本
+      // 我们限制为 5,000 字符以确保在 20秒内完成
+      const maxLength = 5000;
       const truncatedText = text.length > maxLength ? text.substring(0, maxLength) : text;
 
       if (text.length > maxLength) {
@@ -93,15 +96,17 @@ export class LanguageCheckService {
 
       console.log(`[LanguageCheck] Checking ${truncatedText.length} chars in ${languageCode}`);
 
+      // 使用 URLSearchParams 将数据放在 POST body 中,而不是 URL 参数
+      // 这样可以避免 414 "URI Too Long" 错误
+      const formData = new URLSearchParams();
+      formData.append('text', truncatedText);
+      formData.append('language', languageCode);
+      formData.append('enabledOnly', 'false');
+
       const response = await axios.post<LanguageToolResponse>(
         this.apiUrl,
-        null,
+        formData.toString(),
         {
-          params: {
-            text: truncatedText,
-            language: languageCode, // 'en-US', 'de-DE', 'fr-FR'
-            enabledOnly: false,
-          },
           timeout: this.timeout,
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
