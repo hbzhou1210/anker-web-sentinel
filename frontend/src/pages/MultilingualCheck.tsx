@@ -156,7 +156,7 @@ export default function MultilingualCheck() {
       }
 
       setResults(data.data);
-      setExpandedLanguages(data.data.languages.map((l: LanguageResult) => l.language));
+      setExpandedLanguages(data.data.languages?.map((l: LanguageResult) => l.language) || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : '检查失败,请稍后重试');
     } finally {

@@ -97,13 +97,7 @@ router.post('/check', async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      data: {
-        url: report.url,
-        summary: report.summary,
-        report: report,
-        completedAt: report.completedAt,
-        durationMs: report.durationMs,
-      },
+      data: report,
     });
 
   } catch (error) {

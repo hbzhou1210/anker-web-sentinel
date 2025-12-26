@@ -55,48 +55,9 @@ export class MultilingualTestService {
    * 提取页面的可见文本内容
    */
   async extractPageText(page: Page): Promise<string> {
+    // 简单的文本提取 - 获取所有可见文本
     return await page.evaluate(() => {
-      const walker = document.createTreeWalker(
-        document.body,
-        NodeFilter.SHOW_TEXT,
-        {
-          acceptNode: (node) => {
-            const parent = node.parentElement;
-            if (!parent) return NodeFilter.FILTER_REJECT;
-
-            // 获取计算样式
-            const style = window.getComputedStyle(parent);
-            if (
-              style.display === 'none' ||
-              style.visibility === 'hidden' ||
-              parseFloat(style.opacity) === 0
-            ) {
-              return NodeFilter.FILTER_REJECT;
-            }
-
-            // 排除脚本、样式、SVG等
-            const tagName = parent.tagName.toLowerCase();
-            if (['script', 'style', 'noscript', 'svg', 'canvas'].includes(tagName)) {
-              return NodeFilter.FILTER_REJECT;
-            }
-
-            return NodeFilter.FILTER_ACCEPT;
-          }
-        }
-      );
-
-      const texts: string[] = [];
-      let node;
-
-      while (node = walker.nextNode()) {
-        const text = node.textContent?.trim();
-        if (text && text.length > 0) {
-          texts.push(text);
-        }
-      }
-
-      // 去重并连接
-      return Array.from(new Set(texts)).join('\n');
+      return document.body.innerText || '';
     });
   }
 
@@ -180,8 +141,14 @@ export class MultilingualTestService {
         try {
           console.log(`[MultilingualTest] Checking ${language} for ${url}`);
 
-          // 切换语言
-          await this.switchLanguage(page, language);
+          // 构建带语言参数的 URL
+          const urlWithLang = new URL(url);
+          urlWithLang.searchParams.set('lang', language);
+          urlWithLang.searchParams.set('language', language);
+
+          // 导航到页面
+          await page.goto(urlWithLang.toString(), { waitUntil: 'networkidle', timeout: 30000 });
+          await page.waitForTimeout(2000); // 等待内容加载
 
           // 提取文本
           const text = await this.extractPageText(page);
