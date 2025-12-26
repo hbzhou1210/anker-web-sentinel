@@ -23,6 +23,7 @@ import seoCheckerRouter from './api/routes/seoChecker.js';
 import systemRouter from './api/routes/system.js';
 import monitorRouter from './routes/monitor.js';
 import multilingualRouter from './api/routes/multilingual.js';
+import enhancedMultilingualRouter from './api/routes/enhanced-multilingual.js';
 import { patrolSchedulerService } from './services/PatrolSchedulerService.js';
 import { imageCompareService } from './automation/ImageCompareService.js';
 import { initializeEventSystem, cleanupEventSystem } from './events/index.js';
@@ -69,6 +70,7 @@ app.use('/api/v1/seo-checker', seoCheckerRouter);
 app.use('/api/v1/system', systemRouter);
 app.use('/api/v1/monitor', monitorRouter);
 app.use('/api/v1/multilingual', multilingualRouter);
+app.use('/api/v1/enhanced-multilingual', enhancedMultilingualRouter);
 
 // Compatibility route for tool interface - maps /api/check-discount to discount rule router
 app.use('/api', discountRuleRouter);

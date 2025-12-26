@@ -76,6 +76,10 @@ export default function MultilingualCheck() {
   });
   const [error, setError] = useState('');
   const [expandedLanguages, setExpandedLanguages] = useState<string[]>([]);
+  const [useEnhancedCheck, setUseEnhancedCheck] = useState(() => {
+    const saved = localStorage.getItem('multilingualCheck_useEnhanced');
+    return saved ? JSON.parse(saved) : true; // 默认启用增强模式
+  });
 
   // 检查 LanguageTool 服务健康状态
   const checkHealth = async () => {
@@ -106,6 +110,10 @@ export default function MultilingualCheck() {
       localStorage.setItem('multilingualCheck_results', JSON.stringify(results));
     }
   }, [results]);
+
+  useEffect(() => {
+    localStorage.setItem('multilingualCheck_useEnhanced', JSON.stringify(useEnhancedCheck));
+  }, [useEnhancedCheck]);
 
   const handleLanguageToggle = (langCode: string) => {
     setSelectedLanguages(prev =>
@@ -138,7 +146,12 @@ export default function MultilingualCheck() {
     setResults(null);
 
     try {
-      const response = await fetch(getFullApiUrl('/api/v1/multilingual/check'), {
+      // 使用增强检查或标准检查
+      const endpoint = useEnhancedCheck
+        ? '/api/v1/enhanced-multilingual/batch-check'
+        : '/api/v1/multilingual/check';
+
+      const response = await fetch(getFullApiUrl(endpoint), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -275,6 +288,21 @@ export default function MultilingualCheck() {
             </div>
           </div>
 
+          <div className="form-group">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={useEnhancedCheck}
+                onChange={(e) => setUseEnhancedCheck(e.target.checked)}
+                disabled={loading}
+              />
+              <span>使用增强检查模式</span>
+              <span className="help-text">
+                (提供更清晰的错误展示,按错误单词分组显示)
+              </span>
+            </label>
+          </div>
+
           {error && (
             <div className="alert alert-error">
               <XCircle size={20} />
@@ -369,7 +397,26 @@ export default function MultilingualCheck() {
 
                   {expandedLanguages.includes(langResult.language) && (
                     <div className="errors-list">
-                      {(langResult.errors?.length || 0) === 0 ? (
+                      {/* 增强模式显示 */}
+                      {useEnhancedCheck && (langResult as any).enhancedData ? (
+                        <div className="enhanced-result">
+                          {(langResult as any).enhancedData.totalErrors === 0 ? (
+                            <div className="no-errors">
+                              <CheckCircle size={24} />
+                              <p>未发现问题</p>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="enhanced-summary">
+                                <p>{(langResult as any).enhancedData.summary}</p>
+                              </div>
+                              <pre className="enhanced-text-output">
+                                {(langResult as any).enhancedData.textOutput}
+                              </pre>
+                            </>
+                          )}
+                        </div>
+                      ) : (langResult.errors?.length || 0) === 0 ? (
                         <div className="no-errors">
                           <CheckCircle size={24} />
                           <p>未发现问题</p>
