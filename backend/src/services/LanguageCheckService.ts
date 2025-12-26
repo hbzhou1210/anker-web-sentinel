@@ -85,9 +85,9 @@ export class LanguageCheckService {
       // 限制文本长度 - LanguageTool 免费 API 有以下限制:
       // 1. 文本大小限制: 20KB
       // 2. 检查时间限制: 20秒
-      // 对于复杂的德语等语言,检查速度较慢,需要更短的文本
-      // 我们限制为 5,000 字符以确保在 20秒内完成
-      const maxLength = 5000;
+      // 对于复杂的德语等语言,检查速度非常慢
+      // 经过测试,需要限制为 2,000 字符以确保在 20秒内完成
+      const maxLength = 2000;
       const truncatedText = text.length > maxLength ? text.substring(0, maxLength) : text;
 
       if (text.length > maxLength) {
