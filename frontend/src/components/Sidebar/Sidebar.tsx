@@ -17,6 +17,7 @@ const menuItems: MenuItem[] = [
   { key: 'tools-discount-rule', label: '买赠规则查询', icon: '🎁', path: '/tools/discount-rule' },
   { key: 'tools-patrol', label: '定时巡检管理', icon: '🔍', path: '/tools/patrol' },
   { key: 'tools-link-crawler', label: '链接爬取工具', icon: '🕷️', path: '/tools/link-crawler' },
+  { key: 'tools-seo-checker', label: 'SEO检测', icon: '🔎', path: '/tools/seo-checker' },
   { key: 'tools-test-points', label: '测试点提取', icon: '📝', path: '/tools/test-points', badge: '开发中' },
   { key: 'tools-monitor', label: '监控工具', icon: '📡', path: '/tools/monitor', badge: '开发中' },
 ];
