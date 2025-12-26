@@ -15,6 +15,7 @@ const Report = lazy(() => import('./pages/Report').then(module => ({ default: mo
 const TestPointExtraction = lazy(() => import('./pages/TestPointExtraction').then(module => ({ default: module.TestPointExtraction })));
 // 以下组件已有默认导出,直接使用
 const ResponsiveTesting = lazy(() => import('./pages/ResponsiveTesting'));
+const MultilingualCheck = lazy(() => import('./pages/MultilingualCheck'));
 const PatrolManagement = lazy(() => import('./pages/PatrolManagement'));
 const LinkCrawler = lazy(() => import('./pages/LinkCrawler'));
 const DiscountRuleQuery = lazy(() => import('./pages/DiscountRuleQuery'));
@@ -88,6 +89,7 @@ function App() {
             {/* 工具管理 */}
             <Route path="tools/test-points" element={<TestPointExtraction />} />
             <Route path="tools/responsive" element={<ResponsiveTesting />} />
+            <Route path="tools/multilingual" element={<MultilingualCheck />} />
             <Route path="tools/discount-rule" element={<DiscountRuleQuery />} />
             <Route path="tools/patrol" element={<PatrolManagement />} />
             <Route path="patrol/execution/:executionId" element={<PatrolManagement />} />
