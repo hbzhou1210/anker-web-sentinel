@@ -210,20 +210,6 @@ export class LanguageCheckService {
   }
 
   /**
-   * 检查服务健康状态
-   */
-  async healthCheck(): Promise<boolean> {
-    try {
-      const languagesUrl = this.apiUrl.replace('/check', '/languages');
-      const response = await axios.get(languagesUrl, { timeout: 5000 });
-      return response.status === 200;
-    } catch (error) {
-      console.error('[LanguageCheck] Health check failed:', error);
-      return false;
-    }
-  }
-
-  /**
    * 将语言名称转换为 LanguageTool 代码
    */
   static getLanguageCode(language: string): string {

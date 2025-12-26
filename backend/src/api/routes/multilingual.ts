@@ -27,32 +27,6 @@ router.get('/languages', async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/v1/multilingual/health
- * 检查 LanguageTool 服务健康状态
- */
-router.get('/health', async (req: Request, res: Response) => {
-  try {
-    const isHealthy = await languageCheckService.healthCheck();
-
-    res.json({
-      success: true,
-      data: {
-        healthy: isHealthy,
-        service: 'LanguageTool',
-        timestamp: new Date().toISOString(),
-      },
-    });
-  } catch (error) {
-    console.error('Health check failed:', error);
-    res.status(503).json({
-      success: false,
-      error: 'Service unavailable',
-      message: error instanceof Error ? error.message : String(error),
-    });
-  }
-});
-
-/**
  * POST /api/v1/multilingual/check
  * 创建多语言检查任务
  *
