@@ -146,9 +146,12 @@ export class MultilingualTestService {
           urlWithLang.searchParams.set('lang', language);
           urlWithLang.searchParams.set('language', language);
 
-          // 导航到页面
-          await page.goto(urlWithLang.toString(), { waitUntil: 'networkidle', timeout: 30000 });
-          await page.waitForTimeout(2000); // 等待内容加载
+          // 导航到页面 - 使用更宽松的等待条件
+          await page.goto(urlWithLang.toString(), {
+            waitUntil: 'domcontentloaded', // 改为 domcontentloaded,不等待所有网络请求
+            timeout: 60000 // 增加到 60 秒
+          });
+          await page.waitForTimeout(3000); // 增加等待时间,确保内容渲染
 
           // 提取文本
           const text = await this.extractPageText(page);

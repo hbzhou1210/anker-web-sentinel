@@ -82,14 +82,23 @@ export class LanguageCheckService {
    */
   async checkText(text: string, languageCode: string): Promise<LanguageToolError[]> {
     try {
-      console.log(`[LanguageCheck] Checking ${text.length} chars in ${languageCode}`);
+      // 限制文本长度 - LanguageTool 免费 API 限制 20KB
+      // 实际我们限制为 10,000 字符以确保稳定性
+      const maxLength = 10000;
+      const truncatedText = text.length > maxLength ? text.substring(0, maxLength) : text;
+
+      if (text.length > maxLength) {
+        console.log(`[LanguageCheck] Text truncated from ${text.length} to ${maxLength} chars`);
+      }
+
+      console.log(`[LanguageCheck] Checking ${truncatedText.length} chars in ${languageCode}`);
 
       const response = await axios.post<LanguageToolResponse>(
         this.apiUrl,
         null,
         {
           params: {
-            text: text,
+            text: truncatedText,
             language: languageCode, // 'en-US', 'de-DE', 'fr-FR'
             enabledOnly: false,
           },
