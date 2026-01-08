@@ -265,7 +265,8 @@ export const api = {
       performanceTestMode?: PerformanceTestMode;
       enableWebPageTest?: boolean;
       enablePageSpeed?: boolean;
-      deviceStrategy?: 'mobile' | 'desktop';
+      deviceStrategy?: 'mobile' | 'desktop';  // 兼容旧版本
+      webPageTestStrategy?: 'mobile' | 'desktop';  // WebPageTest 设备策略
       testOptions?: {
         links?: boolean;
         forms?: boolean;

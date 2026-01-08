@@ -124,6 +124,8 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
+    volumes:
+      - screenshot_data:/app/screenshots
     ports:
       - "80:80"
     healthcheck:

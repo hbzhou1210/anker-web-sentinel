@@ -18,6 +18,7 @@ const router = Router();
 router.post('/', validateUrl, strictLimiter, async (req: Request, res: Response) => {
   try {
     const { url, config, notificationEmail } = req.body;
+    console.log('[Tests Route] Received config:', JSON.stringify(config, null, 2));
 
     // Validate email format if provided
     if (notificationEmail) {

@@ -86,13 +86,50 @@ WEBPAGETEST_API_KEY=your_api_key_here
 
 ```typescript
 {
-  location: 'Dulles:Chrome',  // 测试节点: 美国弗吉尼亚州
-  runs: 1,                     // 运行次数: 1次
-  fvonly: 1,                   // 仅首次访问
-  video: 0,                    // 不录制视频
-  lighthouse: 0                // 不运行 Lighthouse
+  location: 'Dulles:Chrome',      // 桌面端: 美国弗吉尼亚州 Chrome 浏览器
+  // 或
+  location: 'Dulles:iPhone12.4G', // 移动端: iPhone 12 + 4G 网络
+  runs: 1,                         // 运行次数: 1次
+  fvonly: 1,                       // 仅首次访问
+  video: 1,                        // 录制视频（用于 Filmstrip）
+  lighthouse: 0,                   // 不运行 Lighthouse
+  priority: 5                      // 优先级（加快测试速度）
 }
 ```
+
+### 设备和网络配置
+
+系统支持两种测试策略：
+
+**1. 桌面端测试 (Desktop)**
+- 位置: `Dulles:Chrome`
+- 设备: 桌面电脑
+- 浏览器: Google Chrome
+- 网络: 标准宽带连接
+
+**2. 移动端测试 (Mobile)**
+- 位置: `Dulles:iPhone12.4G`
+- 设备: Apple iPhone 12
+- 屏幕尺寸: 414x714 (2x DPR)
+- 操作系统: iOS 17
+- 浏览器: Safari Mobile
+- 网络: **Regular 4G** (9 Mbps 下载/上传, 170ms RTT)
+- 额外参数:
+  - `mobile: 1` - 启用移动模拟模式
+  - `mobileDevice: 'iPhone12'` - 指定设备型号
+
+### 网络速度参考
+
+WebPageTest 支持的网络类型及其速度：
+
+| 网络类型 | 下载速度 | 上传速度 | 延迟 (RTT) |
+|---------|---------|---------|------------|
+| 2G | 280 Kbps | 256 Kbps | 800ms |
+| 3G Slow | 400 Kbps | 400 Kbps | 400ms |
+| 3G | 1.6 Mbps | 768 Kbps | 300ms |
+| 3G Fast | 1.6 Mbps | 768 Kbps | 150ms |
+| **4G (当前使用)** | **9 Mbps** | **9 Mbps** | **170ms** |
+| LTE | 12 Mbps | 12 Mbps | 70ms |
 
 ## 故障排查
 

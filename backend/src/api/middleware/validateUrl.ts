@@ -48,7 +48,9 @@ const urlSchema = z.object({
       performanceTestMode: z.enum(['webpagetest', 'pagespeed']).optional(),
       enableWebPageTest: z.boolean().optional(),
       enablePageSpeed: z.boolean().optional(),
-      deviceStrategy: z.enum(['mobile', 'desktop']).optional(),
+      deviceStrategy: z.enum(['mobile', 'desktop']).optional(),  // 兼容旧版本
+      webPageTestStrategy: z.enum(['mobile', 'desktop']).optional(),  // WebPageTest 设备策略
+      pageSpeedStrategy: z.enum(['mobile', 'desktop']).optional(),  // PageSpeed 设备策略
       testOptions: z
         .object({
           links: z.boolean().optional(),

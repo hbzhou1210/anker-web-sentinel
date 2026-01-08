@@ -304,8 +304,7 @@ export function TestInput({ onTestCreated }: TestInputProps) {
             )}
 
             {/* WebPageTest Device Strategy Selector - WebPageTest设备选择器 */}
-            {/* 已隐藏：WebPageTest.org 目前不支持设备选择 */}
-            {false && testOptions.performance && performanceTestModes.has('webpagetest') && (
+            {testOptions.performance && performanceTestModes.has('webpagetest') && (
               <div className="device-strategy-selector">
                 <label className="device-selector-label">WebPageTest 测试设备:</label>
                 <div className="device-options compact">
@@ -322,6 +321,9 @@ export function TestInput({ onTestCreated }: TestInputProps) {
                       <div className="device-title">
                         🖥️ 桌面端
                       </div>
+                      <div className="device-description">
+                        使用桌面 Chrome 浏览器测试
+                      </div>
                     </div>
                   </label>
                   <label className={`device-option ${webPageTestStrategy === 'mobile' ? 'selected' : ''}`}>
@@ -335,7 +337,10 @@ export function TestInput({ onTestCreated }: TestInputProps) {
                     />
                     <div className="device-content">
                       <div className="device-title">
-                        📱 移动端
+                        📱 移动端 (4G)
+                      </div>
+                      <div className="device-description">
+                        使用 iPhone 12 + Regular 4G 网络 (9 Mbps)
                       </div>
                     </div>
                   </label>
