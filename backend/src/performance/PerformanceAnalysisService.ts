@@ -134,9 +134,9 @@ export class PerformanceAnalysisService {
     }
   }
 
-  // Run WebPageTest on a URL - returns both metrics and complete data
+  // Run WebPageTest on a URL - returns complete data only (for link generation)
+  // Note: We don't extract metrics because users should view the full report on webpagetest.org
   async runWebPageTest(url: string, strategy: 'mobile' | 'desktop' = 'desktop'): Promise<{
-    metrics: PerformanceResult[];
     completeData: any;
   }> {
     try {
@@ -148,14 +148,10 @@ export class PerformanceAnalysisService {
 
       // Poll for results
       const result = await this.pollForResults(testId);
-      console.log(`Test completed, extracting metrics...`);
+      console.log(`Test completed with ID: ${testId}`);
 
-      // Extract metrics for scoring
-      const metrics = this.extractMetrics(result);
-
-      // Return both metrics and complete data
+      // Return complete data (no need to extract metrics - users view full report on webpagetest.org)
       return {
-        metrics,
         completeData: result.data
       };
     } catch (error) {
@@ -167,14 +163,13 @@ export class PerformanceAnalysisService {
   // Submit a test to WebPageTest
   private async submitTest(url: string, strategy: 'mobile' | 'desktop' = 'desktop'): Promise<string> {
     try {
-      // Mobile configuration: use mobile device emulation
-      const location = strategy === 'mobile'
-        ? 'Dulles:Moto G4' // Mobile device with 3G network
-        : 'Dulles:Chrome';  // Desktop Chrome
+      // Use Dulles:Chrome location for both desktop and mobile
+      // Mobile uses Chrome's mobile emulation which is more stable than device-specific emulation
+      const location = 'Dulles:Chrome';
 
       console.log(`[WebPageTest] Submitting test with strategy: ${strategy}, location: ${location}`);
 
-      const params = {
+      const params: any = {
         url,
         f: 'json',
         location,
@@ -183,11 +178,23 @@ export class PerformanceAnalysisService {
         video: 1, // Enable video for filmstrip
         lighthouse: 0, // No Lighthouse (we already have PageSpeed)
         priority: 5, // Higher priority for faster results
-        ...(strategy === 'mobile' && {
-          mobile: 1, // Enable mobile mode
-          mobileDevice: 'Moto G4', // Specific mobile device
-        }),
       };
+
+      // Mobile configuration: Use Chrome mobile emulation (more stable than device-specific)
+      if (strategy === 'mobile') {
+        params.mobile = 1; // Enable mobile emulation
+
+        // Use connectivity parameter instead of location suffix for better control
+        params.connectivity = '4G';  // 4G network: 9 Mbps down/up, 170ms latency
+
+        // Chrome mobile emulation parameters (iPhone 14 Pro)
+        // Note: Keep location as 'Dulles:Chrome' without .4G suffix
+        // The connectivity parameter handles network throttling
+        params.width = 390; // iPhone 14 Pro viewport width
+        params.height = 844; // iPhone 14 Pro viewport height
+        params.dpr = 3; // Device pixel ratio (Retina display)
+        params.uastring = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+      }
 
       console.log('[WebPageTest] Request params:', JSON.stringify(params, null, 2));
 

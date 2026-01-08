@@ -366,9 +366,10 @@ export class TestExecutionService {
                 const strategy = config?.webPageTestStrategy || config?.deviceStrategy || 'desktop';
                 console.log(`Running WebPageTest API with ${strategy} strategy...`);
                 const wptResult = await performanceAnalysisService.runWebPageTest(url, strategy);
-                performanceResults = wptResult.metrics;
+                // WebPageTest 成功时,仅设置 webPageTestData(包含 testId),不设置 performanceResults
+                // 前端将引导用户访问 WebPageTest.org 查看完整报告
                 webPageTestData = performanceAnalysisService.transformWebPageTestData(wptResult.completeData);
-                console.log(`✓ WebPageTest completed with ${performanceResults.length} metrics`);
+                console.log(`✓ WebPageTest completed successfully, testId: ${webPageTestData?.testId}`);
               } catch (error) {
                 console.warn('⚠ WebPageTest API failed:', error);
               }
