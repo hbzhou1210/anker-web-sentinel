@@ -1,5 +1,8 @@
 import { Browser, Page } from 'playwright';
 import browserPool from '../automation/BrowserPool.js';
+import { createModuleLogger } from '../utils/logger.js';
+
+const logger = createModuleLogger('SEOCheckerService');
 
 /**
  * Hreflang 链接信息
@@ -48,7 +51,7 @@ export class SEOCheckerService {
    * 检查页面的 SEO 信息
    */
   async checkSEO(url: string): Promise<SEOReport> {
-    console.log(`[SEOChecker] Starting SEO check for: ${url}`);
+    logger.info('Starting SEO check', { url });
 
     let browser: Browser | null = null;
     let page: Page | null = null;
@@ -73,15 +76,15 @@ export class SEOCheckerService {
 
       // 提取 Title
       const title = await page.title().catch(() => null);
-      console.log(`[SEOChecker] Title: ${title}`);
+      logger.info('Page title extracted', { title });
 
       // 提取 Hreflang 链接
       const hreflangLinks = await this.extractHreflangLinks(page);
-      console.log(`[SEOChecker] Found ${hreflangLinks.length} hreflang links`);
+      logger.info('Hreflang links found', { count: hreflangLinks.length });
 
       // 提取 Article 信息（从 JSON-LD 或 meta 标签）
       const article = await this.extractArticleInfo(page);
-      console.log(`[SEOChecker] Article info:`, article);
+      logger.info('Article info extracted', { article });
 
       // 验证 Hreflang 链接（检查是否 404）
       const validatedHreflangLinks = await this.validateHreflangLinks(hreflangLinks, browser);
@@ -110,7 +113,7 @@ export class SEOCheckerService {
       };
 
     } catch (error: any) {
-      console.error(`[SEOChecker] Error checking SEO for ${url}:`, error);
+      logger.error('Error checking SEO', { url, error: error instanceof Error ? error.message : String(error) });
       return {
         url,
         title: null,
@@ -125,7 +128,7 @@ export class SEOCheckerService {
       };
     } finally {
       if (page) {
-        await page.close().catch(err => console.warn(`[SEOChecker] Failed to close page: ${err.message}`));
+        await page.close().catch(err => logger.warn('Failed to close page', { error: err.message }));
       }
       if (browser) {
         await browserPool.release(browser);
@@ -159,7 +162,7 @@ export class SEOCheckerService {
         isValid: false // 将在后续验证中更新
       }));
     } catch (error: any) {
-      console.warn(`[SEOChecker] Failed to extract hreflang links: ${error.message}`);
+      logger.warn('Failed to extract hreflang links', { error: error.message });
       return [];
     }
   }
@@ -239,7 +242,7 @@ export class SEOCheckerService {
 
       return articleInfo;
     } catch (error: any) {
-      console.warn(`[SEOChecker] Failed to extract article info: ${error.message}`);
+      logger.warn('Failed to extract article info', { error: error.message });
       return {
         dateModified: null,
         datePublished: null,
@@ -261,7 +264,7 @@ export class SEOCheckerService {
       let page: Page | null = null;
 
       try {
-        console.log(`[SEOChecker] Validating hreflang link: ${link.lang} -> ${link.href}`);
+        logger.debug('Validating hreflang link', { lang: link.lang, href: link.href });
 
         page = await browser.newPage();
 
@@ -292,10 +295,15 @@ export class SEOCheckerService {
           }
         });
 
-        console.log(`[SEOChecker] ✓ ${link.lang}: ${statusCode} ${isValid ? '(Valid)' : '(Invalid)'} ${consistencyCheck.message ? `- ${consistencyCheck.message}` : ''}`);
+        logger.info('Hreflang link validated', {
+          lang: link.lang,
+          statusCode,
+          isValid,
+          message: consistencyCheck.message
+        });
 
       } catch (error: any) {
-        console.warn(`[SEOChecker] ✗ Failed to validate ${link.lang}: ${error.message}`);
+        logger.warn('Failed to validate hreflang link', { lang: link.lang, error: error.message });
 
         validatedLinks.push({
           ...link,
@@ -400,7 +408,7 @@ export class SEOCheckerService {
 
     } catch (error: any) {
       // 验证过程出错,保守地返回一致
-      console.warn(`[SEOChecker] Error validating lang-url consistency: ${error.message}`);
+      logger.warn('Error validating lang-url consistency', { error: error.message });
       return { isConsistent: true };
     }
   }

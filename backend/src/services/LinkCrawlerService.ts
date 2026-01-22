@@ -39,13 +39,18 @@ export class LinkCrawlerService {
 
     console.log(`[LinkCrawler] Starting crawl task ${taskId}: ${startUrl}, maxDepth=${maxDepth}`);
 
-    // 异步执行爬取
+    // 异步执行爬取，添加二级错误处理
     this.executeCrawl(taskId, startUrl, maxDepth).catch((error) => {
-      console.error(`[LinkCrawler] Task ${taskId} failed:`, error);
-      task.status = CrawlStatus.Failed;
-      task.errorMessage = error.message;
-      task.completedAt = new Date();
-      task.durationMs = Date.now() - task.startedAt.getTime();
+      try {
+        console.error(`[LinkCrawler] Task ${taskId} failed:`, error);
+        task.status = CrawlStatus.Failed;
+        task.errorMessage = error.message;
+        task.completedAt = new Date();
+        task.durationMs = Date.now() - task.startedAt.getTime();
+      } catch (secondaryError) {
+        // 二级错误处理，避免 catch 块中的错误未被捕获
+        console.error(`[LinkCrawler] Secondary error in task ${taskId} error handler:`, secondaryError);
+      }
     });
 
     return task;

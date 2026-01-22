@@ -20,6 +20,21 @@ export class ConfigService {
   }
 
   /**
+   * 要求环境变量必须存在
+   * @param key - 环境变量名
+   * @param errorMessage - 错误提示信息
+   * @returns 环境变量的值
+   * @throws Error 如果环境变量不存在
+   */
+  private requireEnv(key: string, errorMessage: string): string {
+    const value = process.env[key];
+    if (!value) {
+      throw new Error(`${errorMessage}. Please set ${key} in environment variables.`);
+    }
+    return value;
+  }
+
+  /**
    * 加载配置
    * 从环境变量和默认值构建完整配置
    */
@@ -39,7 +54,7 @@ export class ConfigService {
       feishu: {
         appId: process.env.FEISHU_APP_ID || '',
         appSecret: process.env.FEISHU_APP_SECRET || '',
-        bitableAppToken: process.env.FEISHU_BITABLE_APP_TOKEN || 'X66Mb4mPRagcrSsBlRQcNrHQnKh',
+        bitableAppToken: this.requireEnv('FEISHU_BITABLE_APP_TOKEN', 'Feishu Bitable App Token is required'),
         tables: {
           testReports: process.env.FEISHU_TABLE_TEST_REPORTS || 'tbllXmgEKdXOwFfE',
           responsiveTestResults: process.env.FEISHU_TABLE_RESPONSIVE_RESULTS || 'tbl8Qi8wNm8FRU4y',
