@@ -92,7 +92,7 @@ const RedirectTester: React.FC = () => {
     }
   };
 
-  // 导入规则
+  // 导入JSON规则
   const handleImportRules = () => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -104,7 +104,7 @@ const RedirectTester: React.FC = () => {
         try {
           const importedRules = JSON.parse(event.target.result);
           setRules(importedRules);
-          alert('导入成功！');
+          alert(`导入成功！共导入 ${importedRules.length} 条规则`);
         } catch (error) {
           alert('导入失败，请检查JSON格式');
         }
@@ -114,7 +114,88 @@ const RedirectTester: React.FC = () => {
     input.click();
   };
 
-  // 导出规则
+  // 导入CSV规则
+  const handleImportCSV = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.csv,.txt';
+    input.onchange = (e: any) => {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = (event: any) => {
+        try {
+          const csvContent = event.target.result as string;
+          const lines = csvContent.split('\n').filter(line => line.trim());
+
+          // 检测分隔符（逗号或制表符）
+          const firstLine = lines[0];
+          const separator = firstLine.includes('\t') ? '\t' : ',';
+
+          // 解析CSV
+          const importedRules: RedirectRule[] = [];
+          let startIndex = 0;
+
+          // 跳过标题行（如果存在）
+          if (lines[0].toLowerCase().includes('url') || lines[0].toLowerCase().includes('from')) {
+            startIndex = 1;
+          }
+
+          for (let i = startIndex; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+
+            const parts = line.split(separator).map(p => p.trim().replace(/^["']|["']$/g, ''));
+
+            if (parts.length >= 2) {
+              const from = parts[0];
+              const to = parts[1];
+
+              // 验证URL格式
+              if (!from || !to) continue;
+
+              // 默认使用完全匹配，用户可以后续修改
+              const rule: RedirectRule = {
+                from,
+                to,
+                matchType: 'exact'
+              };
+
+              importedRules.push(rule);
+            }
+          }
+
+          if (importedRules.length === 0) {
+            alert('未能解析到有效的重定向规则\n\n请确保CSV格式为：\n源URL,目标URL\n或使用制表符分隔');
+            return;
+          }
+
+          // 询问是否替换或追加
+          const action = window.confirm(
+            `成功解析 ${importedRules.length} 条规则\n\n` +
+            `点击"确定"追加到现有规则\n` +
+            `点击"取消"替换所有规则`
+          );
+
+          if (action) {
+            // 追加
+            setRules([...rules, ...importedRules]);
+            alert(`成功追加 ${importedRules.length} 条规则！`);
+          } else {
+            // 替换
+            setRules(importedRules);
+            alert(`成功导入 ${importedRules.length} 条规则！`);
+          }
+
+        } catch (error: any) {
+          alert(`导入失败: ${error.message}\n\n请检查CSV格式是否正确`);
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  };
+
+  // 导出JSON规则
   const handleExportRules = () => {
     if (rules.length === 0) {
       alert('没有规则可以导出');
@@ -127,6 +208,37 @@ const RedirectTester: React.FC = () => {
     const a = document.createElement('a');
     a.href = url;
     a.download = 'redirect-rules.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // 导出CSV规则
+  const handleExportCSV = () => {
+    if (rules.length === 0) {
+      alert('没有规则可以导出');
+      return;
+    }
+
+    // 生成CSV内容
+    const headers = ['源URL', '目标URL', '匹配类型'];
+    const rows = rules.map(rule => [
+      rule.from,
+      rule.to,
+      getMatchTypeLabel(rule.matchType)
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    // 添加BOM以支持中文
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'redirect-rules.csv';
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -260,12 +372,25 @@ const RedirectTester: React.FC = () => {
           </div>
 
           <div className="import-export">
+            <button className="btn btn-secondary" onClick={handleImportCSV}>
+              📥 导入CSV
+            </button>
             <button className="btn btn-secondary" onClick={handleImportRules}>
               📥 导入JSON
+            </button>
+            <button className="btn btn-secondary" onClick={handleExportCSV}>
+              📤 导出CSV
             </button>
             <button className="btn btn-secondary" onClick={handleExportRules}>
               📤 导出JSON
             </button>
+          </div>
+
+          <div className="csv-hint">
+            <small>💡 CSV格式示例：</small>
+            <pre>源URL,目标URL
+http://old.com,https://new.com
+http://old.com/page1,https://new.com/page1</pre>
           </div>
         </div>
 

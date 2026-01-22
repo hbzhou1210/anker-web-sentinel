@@ -1,0 +1,6 @@
+源URL,目标URL
+http://old-domain.com,https://new-domain.com
+http://old-domain.com/page1,https://new-domain.com/page1
+http://old-domain.com/page2,https://new-domain.com/page2
+http://old-domain.com/products/item1,https://new-domain.com/shop/item1
+http://old-domain.com/blog/post1,https://new-domain.com/articles/post1

@@ -181,10 +181,39 @@
   display: flex;
   gap: 10px;
   margin-top: 16px;
+  flex-wrap: wrap;
 }
 
 .import-export .btn {
   flex: 1;
+  min-width: 120px;
+}
+
+.csv-hint {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f0f7ff;
+  border-radius: 6px;
+  border: 1px solid #b3d9ff;
+}
+
+.csv-hint small {
+  color: #0066cc;
+  font-weight: 600;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.csv-hint pre {
+  margin: 0;
+  padding: 8px;
+  background: white;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #333;
+  overflow-x: auto;
+  border: 1px solid #e0e0e0;
 }
 
 .action-buttons {
