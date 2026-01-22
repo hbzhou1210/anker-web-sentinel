@@ -378,14 +378,25 @@ export class SEOCheckerService {
       };
 
       // 特殊情况: eu-xx (欧洲通用版本)
+      // 支持欧洲通用站点策略: de-DE → /eu-de/, en-DE → /eu-en/, pl-PL → /eu-pl/ 等
       if (pathRegion === 'eu') {
-        // en-GB 指向 /eu-en/ 是不一致的，应该指向 /gb/ 或 /uk/
-        if (region === 'gb' && urlLower.includes('/eu-en/')) {
-          return {
-            isConsistent: false,
-            message: `Language code '${lang}' (region: ${region}) does not match URL region 'eu'. Expected URL to contain '/${region}/' or similar.`
-          };
+        // 检查URL是否包含语言代码匹配 (如 /eu-de/, /eu-en/, /eu-pl/)
+        const [language] = langParts; // 提取语言部分
+        const euLangMatch = urlLower.match(/\/eu-([a-z]{2})(?:\/|$)/);
+
+        if (euLangMatch) {
+          const euLang = euLangMatch[1]; // 提取 eu- 后面的语言代码
+          // 如果语言部分匹配,则认为是有效的 (如 de-DE → /eu-de/ 是有效的)
+          if (euLang === language) {
+            return { isConsistent: true };
+          }
         }
+
+        // 如果没有匹配到 /eu-xx/ 模式,则认为不一致
+        return {
+          isConsistent: false,
+          message: `Language code '${lang}' points to EU region but URL pattern doesn't match expected '/eu-${language}/' format.`
+        };
       }
 
       // 如果没有找到路径中的地区代码,无法验证
