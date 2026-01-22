@@ -11,6 +11,7 @@ import { imageCompareService } from '../automation/ImageCompareService.js';
 import { EventEmitter, PatrolEventType } from '../events/index.js';
 import { configService } from '../config/index.js';
 import { recordPatrolExecution, metrics } from '../monitoring/metrics.js';
+import { SEOCheckerService, SEOReport } from './SEOCheckerService.js';
 
 // 页面类型枚举
 // Updated: Removed TypeScript type annotations from page.evaluate() functions
@@ -29,10 +30,70 @@ interface CheckDetail {
   confidence?: 'high' | 'medium' | 'low'; // 置信度
 }
 
+/**
+ * 计算SEO评分 (0-100分)
+ *
+ * 评分规则:
+ * - 基础分: 60分
+ * - 标题存在: +10分
+ * - Hreflang链接: 每个有效链接 +2分 (最多20分)
+ * - 缺少x-default: -10分
+ * - 重复语言代码: 每个重复 -5分
+ * - 无效Hreflang URL: 每个 -3分
+ * - Article信息: author +5分, publishedTime +5分, modifiedTime +5分
+ * - 语言代码不一致: 每个 -3分
+ */
+function calculateSEOScore(seoReport: SEOReport): number {
+  let score = 60; // 基础分
+
+  // 标题检查
+  if (seoReport.title && seoReport.title.trim().length > 0) {
+    score += 10;
+  }
+
+  // Hreflang链接评分 (每个有效链接+2分,最多20分)
+  const validHreflangCount = seoReport.hreflangLinks.filter(link => link.isValid).length;
+  score += Math.min(validHreflangCount * 2, 20);
+
+  // Hreflang问题扣分
+  if (seoReport.hreflangIssues) {
+    // 缺少x-default
+    const hasXDefault = seoReport.hreflangLinks.some(link => link.lang === 'x-default');
+    if (!hasXDefault && seoReport.hreflangLinks.length > 0) {
+      score -= 10;
+    }
+
+    // 重复语言代码
+    if (seoReport.hreflangIssues.hasDuplicates) {
+      score -= seoReport.hreflangIssues.duplicates.length * 5;
+    }
+
+    // 语言代码不一致
+    if (seoReport.hreflangIssues.inconsistentCount > 0) {
+      score -= seoReport.hreflangIssues.inconsistentCount * 3;
+    }
+  }
+
+  // 无效URL扣分
+  const invalidUrlCount = seoReport.hreflangLinks.filter(link => !link.isValid).length;
+  score -= invalidUrlCount * 3;
+
+  // Article信息加分
+  if (seoReport.article) {
+    if (seoReport.article.author) score += 5;
+    if (seoReport.article.datePublished) score += 5;
+    if (seoReport.article.dateModified) score += 5;
+  }
+
+  // 确保分数在0-100范围内
+  return Math.max(0, Math.min(100, score));
+}
+
 export class PatrolService {
   private taskRepository: IPatrolTaskRepository;
   private executionRepository: IPatrolExecutionRepository;
   private eventEmitter: EventEmitter;
+  private seoCheckerService: SEOCheckerService;
   // 并发控制:同时测试的最大 URL 数量(从配置服务获取)
   private readonly MAX_CONCURRENT_URLS: number;
 
@@ -45,6 +106,7 @@ export class PatrolService {
     this.taskRepository = taskRepository || new BitablePatrolTaskRepository();
     this.executionRepository = executionRepository || new BitablePatrolExecutionRepository();
     this.eventEmitter = eventEmitter || new EventEmitter();
+    this.seoCheckerService = new SEOCheckerService();
 
     // 从配置服务获取巡检配置
     const patrolConfig = configService.getPatrolConfig();
@@ -1467,6 +1529,56 @@ export class PatrolService {
       const finalStatus = evaluation.status === 'pass' ? 'pass' : 'fail';
       const detailedMessage = `页面类型: ${pageType}\n${evaluation.message}\n\n检查详情:\n${checkMessages}`;
 
+      // SEO检查(如果启用)
+      let seoResults: PatrolTestResult['seoResults'] | undefined;
+      if (config.seoChecks?.enabled) {
+        // 检查页面状态
+        if (page.isClosed()) {
+          console.warn(`  Page closed before SEO check, skipping SEO check`);
+        } else {
+          try {
+            console.log(`  Performing SEO check...`);
+            const seoReport = await this.seoCheckerService.checkSEO(url);
+
+            // 计算SEO评分
+            const seoScore = calculateSEOScore(seoReport);
+            console.log(`  SEO Score: ${seoScore}/100`);
+
+            // 构建seoResults
+            seoResults = {
+              title: seoReport.title || undefined,
+              hreflangLinks: seoReport.hreflangLinks.map(link => ({
+                lang: link.lang,
+                href: link.href,
+                isValid: config.seoChecks?.validateHreflangUrls ? link.isValid : undefined,
+              })),
+              hreflangIssues: {
+                missingXDefault: !seoReport.hreflangLinks.some(link => link.lang === 'x-default') && seoReport.hreflangLinks.length > 0,
+                duplicateLangs: seoReport.hreflangIssues?.duplicates || [],
+                invalidUrls: config.seoChecks?.validateHreflangUrls
+                  ? seoReport.hreflangLinks.filter(link => !link.isValid).map(link => link.href)
+                  : undefined,
+              },
+              article: config.seoChecks?.checkArticleInfo ? {
+                hasArticleTag: !!(seoReport.article?.author || seoReport.article?.datePublished),
+                author: seoReport.article?.author || undefined,
+                publishedTime: seoReport.article?.datePublished || undefined,
+                modifiedTime: seoReport.article?.dateModified || undefined,
+              } : undefined,
+              score: seoScore,
+            };
+
+            // 如果SEO分数过低,记录警告
+            if (seoScore < 60) {
+              console.warn(`  ⚠️  Low SEO score detected: ${seoScore}/100`);
+            }
+          } catch (error) {
+            console.error(`  Failed to perform SEO check:`, error);
+            // SEO检查失败不影响主流程
+          }
+        }
+      }
+
       // 检查页面状态
       if (page.isClosed()) {
         throw new Error('Page closed before screenshot capture');
@@ -1543,6 +1655,7 @@ export class PatrolService {
         deviceType: deviceConfig?.type,
         deviceName: deviceConfig?.name,
         viewport: deviceConfig?.viewport,
+        seoResults, // SEO检查结果
       };
     } catch (error) {
       const responseTime = Date.now() - startTime;

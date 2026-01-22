@@ -37,6 +37,28 @@ interface TestResult {
     width: number;
     height: number;
   };
+  // SEO检查结果
+  seoResults?: {
+    title?: string;
+    hreflangLinks?: Array<{
+      lang: string;
+      href: string;
+      isValid?: boolean;
+    }>;
+    hreflangIssues?: {
+      missingXDefault?: boolean;
+      duplicateLangs?: string[];
+      invalidUrls?: string[];
+    };
+    article?: {
+      hasArticleTag?: boolean;
+      author?: string;
+      publishedTime?: string;
+      modifiedTime?: string;
+      section?: string;
+    };
+    score?: number; // SEO评分 0-100
+  };
 }
 
 interface PatrolTask {
@@ -63,6 +85,12 @@ interface PatrolTask {
       maxAttempts?: number;
       retryDelay?: number;
       retryOnInfraError?: boolean;
+    };
+    seoChecks?: {
+      enabled: boolean;
+      checkHreflang?: boolean;
+      checkArticleInfo?: boolean;
+      validateHreflangUrls?: boolean;
     };
     timeout?: number;
     waitAfterLoad?: number;
@@ -168,6 +196,12 @@ const PatrolManagement: React.FC = () => {
         maxAttempts: 3,
         retryDelay: 2000,
         retryOnInfraError: true,
+      },
+      seoChecks: {
+        enabled: false,
+        checkHreflang: true,
+        checkArticleInfo: true,
+        validateHreflangUrls: false,
       },
       timeout: 30,
       waitAfterLoad: 2,
@@ -1380,6 +1414,128 @@ const PatrolManagement: React.FC = () => {
                                   </div>
                                 </div>
                               )}
+
+                              {/* SEO检查结果 */}
+                              {result.seoResults && (
+                                <div className="mt-4">
+                                  <div className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                                    <Globe className="w-4 h-4" />
+                                    SEO检查结果
+                                  </div>
+                                  <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-3">
+                                    {/* SEO评分 */}
+                                    {result.seoResults.score !== undefined && (
+                                      <div className="flex items-center gap-3">
+                                        <div className={`px-4 py-2 rounded-lg font-bold text-lg ${
+                                          result.seoResults.score >= 80 ? 'bg-green-100 text-green-700' :
+                                          result.seoResults.score >= 60 ? 'bg-yellow-100 text-yellow-700' :
+                                          'bg-red-100 text-red-700'
+                                        }`}>
+                                          {result.seoResults.score}/100
+                                        </div>
+                                        <div className="text-sm text-gray-600">
+                                          SEO总分
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* 页面标题 */}
+                                    {result.seoResults.title && (
+                                      <div className="border-t border-gray-100 pt-3">
+                                        <div className="text-xs text-gray-600 mb-1">页面标题</div>
+                                        <div className="text-sm text-gray-900">{result.seoResults.title}</div>
+                                      </div>
+                                    )}
+
+                                    {/* Hreflang链接 */}
+                                    {result.seoResults.hreflangLinks && result.seoResults.hreflangLinks.length > 0 && (
+                                      <div className="border-t border-gray-100 pt-3">
+                                        <div className="text-xs text-gray-600 mb-2">
+                                          Hreflang链接 ({result.seoResults.hreflangLinks.length}个)
+                                        </div>
+                                        <div className="space-y-1 max-h-40 overflow-y-auto">
+                                          {result.seoResults.hreflangLinks.map((link, idx) => (
+                                            <div key={idx} className="flex items-center gap-2 text-xs p-2 bg-gray-50 rounded">
+                                              <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded font-mono font-semibold">
+                                                {link.lang}
+                                              </span>
+                                              <span className="text-gray-600 truncate flex-1">{link.href}</span>
+                                              {link.isValid !== undefined && (
+                                                <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                                                  link.isValid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                                }`}>
+                                                  {link.isValid ? '✓' : '✗'}
+                                                </span>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Hreflang问题 */}
+                                    {result.seoResults.hreflangIssues && (
+                                      (result.seoResults.hreflangIssues.missingXDefault ||
+                                       (result.seoResults.hreflangIssues.duplicateLangs && result.seoResults.hreflangIssues.duplicateLangs.length > 0) ||
+                                       (result.seoResults.hreflangIssues.invalidUrls && result.seoResults.hreflangIssues.invalidUrls.length > 0))
+                                    ) && (
+                                      <div className="border-t border-gray-100 pt-3">
+                                        <div className="text-xs text-red-600 font-semibold mb-2 flex items-center gap-1">
+                                          <AlertCircle className="w-3 h-3" />
+                                          检测到的问题
+                                        </div>
+                                        <div className="space-y-1">
+                                          {result.seoResults.hreflangIssues.missingXDefault && (
+                                            <div className="text-xs text-gray-700 p-2 bg-yellow-50 rounded">
+                                              ⚠️ 缺少 x-default 标签
+                                            </div>
+                                          )}
+                                          {result.seoResults.hreflangIssues.duplicateLangs && result.seoResults.hreflangIssues.duplicateLangs.length > 0 && (
+                                            <div className="text-xs text-gray-700 p-2 bg-yellow-50 rounded">
+                                              ⚠️ 重复的语言代码: {result.seoResults.hreflangIssues.duplicateLangs.join(', ')}
+                                            </div>
+                                          )}
+                                          {result.seoResults.hreflangIssues.invalidUrls && result.seoResults.hreflangIssues.invalidUrls.length > 0 && (
+                                            <div className="text-xs text-gray-700 p-2 bg-red-50 rounded">
+                                              ❌ {result.seoResults.hreflangIssues.invalidUrls.length}个无效URL
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Article信息 */}
+                                    {result.seoResults.article && (
+                                      <div className="border-t border-gray-100 pt-3">
+                                        <div className="text-xs text-gray-600 mb-2">Article元数据</div>
+                                        <div className="space-y-1 text-xs">
+                                          {result.seoResults.article.author && (
+                                            <div className="flex gap-2">
+                                              <span className="text-gray-600">作者:</span>
+                                              <span className="text-gray-900">{result.seoResults.article.author}</span>
+                                            </div>
+                                          )}
+                                          {result.seoResults.article.publishedTime && (
+                                            <div className="flex gap-2">
+                                              <span className="text-gray-600">发布时间:</span>
+                                              <span className="text-gray-900">{new Date(result.seoResults.article.publishedTime).toLocaleString('zh-CN')}</span>
+                                            </div>
+                                          )}
+                                          {result.seoResults.article.modifiedTime && (
+                                            <div className="flex gap-2">
+                                              <span className="text-gray-600">修改时间:</span>
+                                              <span className="text-gray-900">{new Date(result.seoResults.article.modifiedTime).toLocaleString('zh-CN')}</span>
+                                            </div>
+                                          )}
+                                          {!result.seoResults.article.author && !result.seoResults.article.publishedTime && (
+                                            <div className="text-gray-500">未检测到Article元数据</div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -1914,6 +2070,112 @@ const PatrolManagement: React.FC = () => {
                             仅对基础设施错误重试(网络超时、连接失败等)
                           </label>
                         </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* SEO检查 */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                        <Globe className="w-4 h-4 text-purple-600" />
+                        SEO检查
+                      </label>
+                      <input
+                        type="checkbox"
+                        checked={formData.config.seoChecks?.enabled || false}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            config: {
+                              ...formData.config,
+                              seoChecks: {
+                                ...formData.config.seoChecks,
+                                enabled: e.target.checked,
+                                checkHreflang: formData.config.seoChecks?.checkHreflang !== false,
+                                checkArticleInfo: formData.config.seoChecks?.checkArticleInfo !== false,
+                                validateHreflangUrls: formData.config.seoChecks?.validateHreflangUrls || false,
+                              },
+                            },
+                          })
+                        }
+                        className="w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                    {formData.config.seoChecks?.enabled && (
+                      <div className="pl-6 space-y-3 border-l-2 border-purple-200">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="checkHreflang"
+                            checked={formData.config.seoChecks?.checkHreflang !== false}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                config: {
+                                  ...formData.config,
+                                  seoChecks: {
+                                    ...formData.config.seoChecks!,
+                                    checkHreflang: e.target.checked,
+                                  },
+                                },
+                              })
+                            }
+                            className="w-4 h-4 text-purple-600 border-gray-300 rounded"
+                          />
+                          <label htmlFor="checkHreflang" className="text-xs text-gray-600">
+                            检查Hreflang标签(多语言链接)
+                          </label>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="checkArticleInfo"
+                            checked={formData.config.seoChecks?.checkArticleInfo !== false}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                config: {
+                                  ...formData.config,
+                                  seoChecks: {
+                                    ...formData.config.seoChecks!,
+                                    checkArticleInfo: e.target.checked,
+                                  },
+                                },
+                              })
+                            }
+                            className="w-4 h-4 text-purple-600 border-gray-300 rounded"
+                          />
+                          <label htmlFor="checkArticleInfo" className="text-xs text-gray-600">
+                            检查Article信息(作者、发布时间等)
+                          </label>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="validateHreflangUrls"
+                            checked={formData.config.seoChecks?.validateHreflangUrls || false}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                config: {
+                                  ...formData.config,
+                                  seoChecks: {
+                                    ...formData.config.seoChecks!,
+                                    validateHreflangUrls: e.target.checked,
+                                  },
+                                },
+                              })
+                            }
+                            className="w-4 h-4 text-purple-600 border-gray-300 rounded"
+                          />
+                          <label htmlFor="validateHreflangUrls" className="text-xs text-gray-600">
+                            验证Hreflang URL可访问性(较慢)
+                          </label>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          SEO检查将分析页面标题、多语言链接、文章元数据等,并生成0-100分的评分
+                        </p>
                       </div>
                     )}
                   </div>

@@ -518,6 +518,14 @@ export interface PatrolConfig {
     };
   };
 
+  // SEO检查配置
+  seoChecks?: {
+    enabled: boolean; // 是否启用SEO检查
+    checkHreflang?: boolean; // 是否检查Hreflang标签,默认true
+    checkArticleInfo?: boolean; // 是否检查Article信息,默认true
+    validateHreflangUrls?: boolean; // 是否验证Hreflang URL可访问性,默认false
+  };
+
   // 其他配置
   timeout?: number; // 页面加载超时(秒)
   waitAfterLoad?: number; // 加载后等待时间(秒)
@@ -554,6 +562,29 @@ export interface PatrolTestResult {
   // 监控级别（轻量级监控）
   checkType?: 'quick' | 'standard' | 'full';  // 检查类型
   monitoringLevel?: MonitoringLevel;  // 使用的监控级别
+
+  // SEO检查结果
+  seoResults?: {
+    title?: string; // 页面标题
+    hreflangLinks?: Array<{
+      lang: string; // 语言代码
+      href: string; // URL
+      isValid?: boolean; // URL是否可访问（仅在启用验证时）
+    }>;
+    hreflangIssues?: {
+      missingXDefault?: boolean; // 缺少x-default
+      duplicateLangs?: string[]; // 重复的语言代码
+      invalidUrls?: string[]; // 无效的URL（仅在启用验证时）
+    };
+    article?: {
+      hasArticleTag?: boolean; // 是否有article标签
+      author?: string; // 作者
+      publishedTime?: string; // 发布时间
+      modifiedTime?: string; // 修改时间
+      section?: string; // 分类
+    };
+    score?: number; // SEO评分 0-100
+  };
 }
 
 export interface PatrolTask {
