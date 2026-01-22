@@ -1135,6 +1135,142 @@ export class PatrolService {
   }
 
   /**
+   * 通用页面基础可用性检查
+   * 对于无法归类为特定类型的页面(如集合页、关于页等),执行基本的可用性验证
+   */
+  private async checkGeneralPageAvailability(page: Page): Promise<CheckDetail[]> {
+    const checks: CheckDetail[] = [];
+
+    try {
+      // 1. 检查页面是否有有效内容
+      const contentCheck = await page.evaluate(function() {
+        // 检查页面是否有实质性内容
+        const body = document.body;
+        if (!body) return { hasContent: false, contentLength: 0 };
+
+        const textContent = body.innerText || body.textContent || '';
+        const contentLength = textContent.trim().length;
+
+        // 检查是否有图片
+        const images = document.querySelectorAll('img');
+        const visibleImages = Array.from(images).filter(img => {
+          const rect = img.getBoundingClientRect();
+          const style = window.getComputedStyle(img);
+          return style.display !== 'none' &&
+                 style.visibility !== 'hidden' &&
+                 rect.width > 0 &&
+                 rect.height > 0;
+        });
+
+        return {
+          hasContent: contentLength > 100, // 至少100个字符
+          contentLength,
+          imageCount: visibleImages.length
+        };
+      });
+
+      checks.push({
+        name: '页面内容',
+        passed: contentCheck.hasContent,
+        confidence: 'high',
+        message: contentCheck.hasContent
+          ? `页面包含有效内容 (${contentCheck.contentLength}字符, ${contentCheck.imageCount}张图片)`
+          : `页面内容不足 (仅${contentCheck.contentLength}字符)`
+      });
+
+      // 2. 检查页面是否有导航功能
+      const navigationCheck = await page.evaluate(function() {
+        // 检查导航链接
+        const links = document.querySelectorAll('a[href]');
+        const validLinks = Array.from(links).filter(link => {
+          const href = link.getAttribute('href');
+          if (!href || href === '#' || href === 'javascript:void(0)') return false;
+
+          const rect = link.getBoundingClientRect();
+          const style = window.getComputedStyle(link);
+          return style.display !== 'none' &&
+                 style.visibility !== 'hidden' &&
+                 rect.width > 0 &&
+                 rect.height > 0;
+        });
+
+        // 检查是否有返回首页的链接
+        const homeLinks = Array.from(validLinks).filter(link => {
+          const href = (link.getAttribute('href') || '').toLowerCase();
+          const text = (link.textContent || '').toLowerCase();
+          return href === '/' ||
+                 href.includes('/home') ||
+                 text.includes('home') ||
+                 text.includes('首页') ||
+                 link.getAttribute('aria-label')?.toLowerCase().includes('home');
+        });
+
+        return {
+          totalLinks: validLinks.length,
+          hasHomeLink: homeLinks.length > 0
+        };
+      });
+
+      checks.push({
+        name: '导航功能',
+        passed: navigationCheck.totalLinks >= 3,
+        confidence: 'medium',
+        message: navigationCheck.totalLinks >= 3
+          ? `页面包含${navigationCheck.totalLinks}个有效链接${navigationCheck.hasHomeLink ? ', 可返回首页' : ''}`
+          : `页面链接不足 (仅${navigationCheck.totalLinks}个)`
+      });
+
+      // 3. 检查页面布局是否正常
+      const layoutCheck = await page.evaluate(function() {
+        const body = document.body;
+        if (!body) return { hasLayout: false };
+
+        const bodyRect = body.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+
+        // 检查页面高度是否合理(至少占据一屏)
+        const hasReasonableHeight = bodyRect.height > viewportHeight * 0.5;
+
+        // 检查是否有可见的内容区块
+        const visibleElements = Array.from(document.querySelectorAll('main, section, article, div')).filter(el => {
+          const rect = el.getBoundingClientRect();
+          const style = window.getComputedStyle(el);
+          return style.display !== 'none' &&
+                 style.visibility !== 'hidden' &&
+                 rect.width > 100 &&
+                 rect.height > 50;
+        });
+
+        return {
+          hasLayout: hasReasonableHeight && visibleElements.length >= 1,
+          bodyHeight: Math.round(bodyRect.height),
+          visibleBlocks: visibleElements.length
+        };
+      });
+
+      checks.push({
+        name: '页面布局',
+        passed: layoutCheck.hasLayout,
+        confidence: 'high',
+        message: layoutCheck.hasLayout
+          ? `布局正常 (高度${layoutCheck.bodyHeight}px, ${layoutCheck.visibleBlocks}个内容区块)`
+          : `布局异常 (高度${layoutCheck.bodyHeight}px, ${layoutCheck.visibleBlocks}个内容区块)`
+      });
+
+    } catch (error) {
+      checks.push({
+        name: '基础检查',
+        passed: false,
+        confidence: 'low',
+        message: `检查过程出错: ${error instanceof Error ? error.message : '未知错误'}`
+      });
+    }
+
+    return checks;
+  }
+
+  /**
    * 评估检查结果 - 考虑置信度
    */
   private evaluateChecks(
@@ -1501,6 +1637,9 @@ export class PatrolService {
         } else if (pageType === PageType.Homepage || pageType === PageType.LandingPage) {
           console.log(`  Checking page modules...`);
           checks = await this.checkHomepageModules(page, config);
+        } else if (pageType === PageType.General) {
+          console.log(`  Checking general page availability...`);
+          checks = await this.checkGeneralPageAvailability(page);
         }
       } catch (error) {
         if (page.isClosed()) {
