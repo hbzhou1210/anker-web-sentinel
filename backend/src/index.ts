@@ -20,7 +20,7 @@ import systemRouter from './api/routes/system.js';
 import monitorRouter from './routes/monitor.js';
 import multilingualRouter from './api/routes/multilingual.js';
 import enhancedMultilingualRouter from './api/routes/enhanced-multilingual.js';
-// import redirectTesterRouter from './api/routes/redirect-tester.routes.js'; // TODO: 未完成，暂时注释
+import redirectTesterRouter from './api/routes/redirect-tester.routes.js';
 import { patrolSchedulerService } from './services/PatrolSchedulerService.js';
 import { imageCompareService } from './automation/ImageCompareService.js';
 import { initializeEventSystem, cleanupEventSystem } from './events/index.js';
@@ -66,7 +66,7 @@ app.use('/api/v1/system', systemRouter);
 app.use('/api/v1/monitor', monitorRouter);
 app.use('/api/v1/multilingual', multilingualRouter);
 app.use('/api/v1/enhanced-multilingual', enhancedMultilingualRouter);
-// app.use('/api/redirect-tester', redirectTesterRouter); // TODO: 未完成，暂时注释
+app.use('/api/redirect-tester', redirectTesterRouter);
 
 // Compatibility route for tool interface - maps /api/check-discount to discount rule router
 app.use('/api', discountRuleRouter);
