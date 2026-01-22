@@ -8,6 +8,10 @@
  * - 支持队列状态监控
  */
 
+import { createModuleLogger } from '../utils/logger.js';
+
+const logger = createModuleLogger('TaskQueue');
+
 interface QueueTask {
   id: string;
   name: string;
@@ -56,16 +60,16 @@ export class TaskQueueService {
   async executeHighPriority(task: Omit<QueueTask, 'priority' | 'createdAt'>): Promise<void> {
     this.highPriorityRunning++;
 
-    console.log(`[TaskQueue] 🚀 Executing HIGH priority task: ${task.name} (${task.id})`);
-    console.log(`[TaskQueue] Active high-priority tasks: ${this.highPriorityRunning}`);
+    logger.info(`[TaskQueue] 🚀 Executing HIGH priority task: ${task.name} (${task.id})`);
+    logger.info(`[TaskQueue] Active high-priority tasks: ${this.highPriorityRunning}`);
 
     try {
       await task.execute();
       this.stats.totalExecuted++;
-      console.log(`[TaskQueue] ✓ HIGH priority task completed: ${task.name}`);
+      logger.info(`[TaskQueue] ✓ HIGH priority task completed: ${task.name}`);
     } catch (error) {
       this.stats.totalFailed++;
-      console.error(`[TaskQueue] ✗ HIGH priority task failed: ${task.name}`, error);
+      logger.error(`[TaskQueue] ✗ HIGH priority task failed: ${task.name}`, error);
       throw error;
     } finally {
       this.highPriorityRunning--;
@@ -85,8 +89,8 @@ export class TaskQueueService {
 
     this.lowPriorityQueue.push(queueTask);
 
-    console.log(`[TaskQueue] 📥 Added LOW priority task to queue: ${task.name} (${task.id})`);
-    console.log(`[TaskQueue] Queue length: ${this.lowPriorityQueue.length}`);
+    logger.info(`[TaskQueue] 📥 Added LOW priority task to queue: ${task.name} (${task.id})`);
+    logger.info(`[TaskQueue] Queue length: ${this.lowPriorityQueue.length}`);
 
     // 触发队列处理(异步)
     this.processLowPriorityQueue();
@@ -115,16 +119,16 @@ export class TaskQueueService {
       const task = this.lowPriorityQueue.shift()!;
 
       const waitTime = Date.now() - task.createdAt.getTime();
-      console.log(`[TaskQueue] 🔄 Executing LOW priority task: ${task.name} (waited ${Math.round(waitTime / 1000)}s)`);
-      console.log(`[TaskQueue] Remaining in queue: ${this.lowPriorityQueue.length}`);
+      logger.info(`[TaskQueue] 🔄 Executing LOW priority task: ${task.name} (waited ${Math.round(waitTime / 1000)}s)`);
+      logger.info(`[TaskQueue] Remaining in queue: ${this.lowPriorityQueue.length}`);
 
       try {
         await task.execute();
         this.stats.totalExecuted++;
-        console.log(`[TaskQueue] ✓ LOW priority task completed: ${task.name}`);
+        logger.info(`[TaskQueue] ✓ LOW priority task completed: ${task.name}`);
       } catch (error) {
         this.stats.totalFailed++;
-        console.error(`[TaskQueue] ✗ LOW priority task failed: ${task.name}`, error);
+        logger.error(`[TaskQueue] ✗ LOW priority task failed: ${task.name}`, error);
         // 继续执行下一个任务,不中断队列
       }
 
@@ -135,7 +139,7 @@ export class TaskQueueService {
     }
 
     this.isExecutingLowPriority = false;
-    console.log(`[TaskQueue] ✓ LOW priority queue cleared`);
+    logger.info(`[TaskQueue] ✓ LOW priority queue cleared`);
   }
 
   /**
@@ -168,7 +172,7 @@ export class TaskQueueService {
   clearQueue(): void {
     const cleared = this.lowPriorityQueue.length;
     this.lowPriorityQueue = [];
-    console.log(`[TaskQueue] ⚠️  Cleared ${cleared} tasks from queue`);
+    logger.info(`[TaskQueue] ⚠️  Cleared ${cleared} tasks from queue`);
   }
 }
 

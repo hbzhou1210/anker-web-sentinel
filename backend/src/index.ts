@@ -9,10 +9,6 @@ import cacheService from './services/CacheService.js';
 import { setupStaticFiles } from './api/middleware/staticFiles.js';
 import testsRouter from './api/routes/tests.js';
 import reportsRouter from './api/routes/reports.js';
-// testPointsRouter temporarily disabled - requires PostgreSQL repositories
-// import testPointsRouter from './api/routes/testPoints.js';
-// feishuDocumentsRouter temporarily disabled - requires PostgreSQL repositories
-// import feishuDocumentsRouter from './api/routes/feishuDocuments.js';
 import feishuRouter from './api/routes/feishu.js';
 import responsiveRouter from './api/routes/responsive.js';
 import patrolRouter from './api/routes/patrol.js';
@@ -24,10 +20,11 @@ import systemRouter from './api/routes/system.js';
 import monitorRouter from './routes/monitor.js';
 import multilingualRouter from './api/routes/multilingual.js';
 import enhancedMultilingualRouter from './api/routes/enhanced-multilingual.js';
+import redirectTesterRouter from './api/routes/redirect-tester.routes.js';
 import { patrolSchedulerService } from './services/PatrolSchedulerService.js';
 import { imageCompareService } from './automation/ImageCompareService.js';
 import { initializeEventSystem, cleanupEventSystem } from './events/index.js';
-import { getMetrics } from './monitoring/metrics.js';
+import { logger } from './utils/logger.js';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -48,9 +45,9 @@ const discountRuleOutputDir = path.join(__dirname, '../../tools/function-discoun
 
 // Ensure output directory exists (auto-create if missing)
 if (!fs.existsSync(discountRuleOutputDir)) {
-  console.log('⚠️  Output directory not found, creating:', discountRuleOutputDir);
+  logger.warn('Output directory not found, creating', { path: discountRuleOutputDir });
   fs.mkdirSync(discountRuleOutputDir, { recursive: true });
-  console.log('✓ Output directory created successfully');
+  logger.info('Output directory created successfully', { path: discountRuleOutputDir });
 }
 
 app.use('/discount-rule-output', express.static(discountRuleOutputDir));
@@ -58,8 +55,6 @@ app.use('/discount-rule-output', express.static(discountRuleOutputDir));
 // Mount API routes
 app.use('/api/v1/tests', testsRouter);
 app.use('/api/v1/reports', reportsRouter);
-// app.use('/api/v1/test-points', testPointsRouter); // Temporarily disabled
-// app.use('/api/v1/feishu-documents', feishuDocumentsRouter); // Temporarily disabled
 app.use('/api/v1/feishu', feishuRouter);
 app.use('/api/v1/responsive', responsiveRouter);
 app.use('/api/v1/patrol', patrolRouter);
@@ -71,12 +66,13 @@ app.use('/api/v1/system', systemRouter);
 app.use('/api/v1/monitor', monitorRouter);
 app.use('/api/v1/multilingual', multilingualRouter);
 app.use('/api/v1/enhanced-multilingual', enhancedMultilingualRouter);
+app.use('/api/redirect-tester', redirectTesterRouter);
 
 // Compatibility route for tool interface - maps /api/check-discount to discount rule router
 app.use('/api', discountRuleRouter);
 
 // Version info endpoint
-app.get('/api/version', (req, res) => {
+app.get('/api/version', (_req, res) => {
   try {
     const versionInfo = {
       git_commit: process.env.GIT_COMMIT || 'unknown',
@@ -118,56 +114,60 @@ async function startServer() {
 
     // Using Bitable storage - no PostgreSQL connection needed
     const storageType = configService.getDatabaseConfig().storage;
-    console.log(`✓ Using ${storageType} storage for data persistence`);
+    logger.info('Using storage for data persistence', { storageType });
 
     // Initialize event system
-    console.log('Initializing event system...');
+    logger.info('Initializing event system...');
     initializeEventSystem();
-    console.log('✓ Event system ready');
+    logger.info('Event system ready');
 
     // Initialize Redis cache service
-    console.log('Initializing Redis cache service...');
+    logger.info('Initializing Redis cache service...');
     await cacheService.connect();
     if (cacheService.isAvailable()) {
-      console.log('✓ Redis cache service ready');
+      logger.info('Redis cache service ready');
     } else {
-      console.warn('⚠️  Redis cache service unavailable - running without cache');
+      logger.warn('Redis cache service unavailable - running without cache');
     }
 
     // Initialize browser pool
-    console.log('Initializing browser pool...');
+    logger.info('Initializing browser pool...');
     await browserPool.initialize();
-    console.log('✓ Browser pool ready');
+    logger.info('Browser pool ready');
 
     // Initialize image compare service
-    console.log('Initializing image compare service...');
+    logger.info('Initializing image compare service...');
     await imageCompareService.initialize();
-    console.log('✓ Image compare service ready');
+    logger.info('Image compare service ready');
 
     // Initialize patrol scheduler (optional - won't block server startup if fails)
-    console.log('Initializing patrol scheduler...');
+    logger.info('Initializing patrol scheduler...');
     try {
       await patrolSchedulerService.initialize();
-      console.log('✓ Patrol scheduler ready');
+      logger.info('Patrol scheduler ready');
     } catch (error) {
-      console.warn('⚠️  Patrol scheduler initialization failed (non-critical):', error instanceof Error ? error.message : error);
-      console.warn('   Server will continue without patrol scheduler functionality');
+      logger.warn('Patrol scheduler initialization failed (non-critical)', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      logger.warn('Server will continue without patrol scheduler functionality');
     }
 
     // Start Express server
     const server = app.listen(PORT, () => {
-      console.log(`\n🚀 Server running on http://localhost:${PORT}`);
-      console.log(`   Health check: http://localhost:${PORT}/health`);
-      console.log(`   API endpoints will be available at: http://localhost:${PORT}/api/v1`);
+      logger.info('Server running', {
+        port: PORT,
+        healthCheck: `http://localhost:${PORT}/health`,
+        apiEndpoints: `http://localhost:${PORT}/api/v1`
+      });
     });
 
     // Graceful shutdown
     const shutdown = async () => {
-      console.log('\n⏳ Shutting down gracefully...');
+      logger.info('Shutting down gracefully...');
 
       // Close HTTP server
       server.close(() => {
-        console.log('✓ HTTP server closed');
+        logger.info('HTTP server closed');
       });
 
       // Cleanup event system
@@ -179,14 +179,14 @@ async function startServer() {
       // Close browser pool
       await browserPool.shutdown();
 
-      console.log('✓ Shutdown complete');
+      logger.info('Shutdown complete');
       process.exit(0);
     };
 
     process.on('SIGTERM', shutdown);
     process.on('SIGINT', shutdown);
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
+    logger.error('Failed to start server', { error: error instanceof Error ? error.message : String(error) });
     process.exit(1);
   }
 }

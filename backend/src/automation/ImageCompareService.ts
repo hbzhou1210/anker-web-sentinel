@@ -2,6 +2,9 @@ import { Jimp } from 'jimp';
 import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
+import { createModuleLogger } from '../utils/logger.js';
+
+const logger = createModuleLogger('ImageCompare');
 
 export interface ImageDiffResult {
   hasDifference: boolean;
@@ -37,9 +40,9 @@ class ImageCompareService {
   async initialize(): Promise<void> {
     await fs.mkdir(this.baselineDir, { recursive: true });
     await fs.mkdir(this.diffDir, { recursive: true });
-    console.log(`✓ Image compare service initialized`);
-    console.log(`  Baseline: ${this.baselineDir}`);
-    console.log(`  Diff: ${this.diffDir}`);
+    logger.info(`✓ Image compare service initialized`);
+    logger.info(`  Baseline: ${this.baselineDir}`);
+    logger.info(`  Diff: ${this.diffDir}`);
   }
 
   /**
@@ -77,7 +80,7 @@ class ImageCompareService {
     // 复制图像到基线目录
     await fs.copyFile(imagePath, baselinePath);
 
-    console.log(`✓ Baseline saved: ${baselinePath}`);
+    logger.info(`✓ Baseline saved: ${baselinePath}`);
     return baselinePath;
   }
 
@@ -136,7 +139,7 @@ class ImageCompareService {
 
       // 确保尺寸一致
       if (baseline.width !== current.width || baseline.height !== current.height) {
-        console.warn(`⚠️  Image dimensions mismatch. Baseline: ${baseline.width}x${baseline.height}, Current: ${current.width}x${current.height}`);
+        logger.warn(`⚠️  Image dimensions mismatch. Baseline: ${baseline.width}x${baseline.height}, Current: ${current.width}x${current.height}`);
         // 调整尺寸到较小的尺寸
         const minWidth = Math.min(baseline.width, current.width);
         const minHeight = Math.min(baseline.height, current.height);
@@ -201,7 +204,7 @@ class ImageCompareService {
       if (generateDiffImage && hasDifference && diffImage) {
         diffImagePath = this.getDiffPath(url, deviceType);
         await diffImage.write(diffImagePath);
-        console.log(`✓ Diff image saved: ${diffImagePath}`);
+        logger.info(`✓ Diff image saved: ${diffImagePath}`);
       }
 
       // 如果设置了保存基线且有显著差异,可选择更新基线
@@ -219,7 +222,7 @@ class ImageCompareService {
         currentImagePath,
       };
     } catch (error) {
-      console.error(`Failed to compare images:`, error);
+      logger.error(`Failed to compare images:`, error);
       throw error;
     }
   }
@@ -245,7 +248,7 @@ class ImageCompareService {
     }
 
     if (deletedCount > 0) {
-      console.log(`✓ Cleaned up ${deletedCount} old diff images`);
+      logger.info(`✓ Cleaned up ${deletedCount} old diff images`);
     }
 
     return deletedCount;
@@ -258,7 +261,7 @@ class ImageCompareService {
     const baselinePath = this.getBaselinePath(url, deviceType);
     try {
       await fs.unlink(baselinePath);
-      console.log(`✓ Baseline deleted: ${baselinePath}`);
+      logger.info(`✓ Baseline deleted: ${baselinePath}`);
     } catch (error) {
       // 文件不存在,忽略错误
     }

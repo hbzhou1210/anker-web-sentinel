@@ -1,5 +1,8 @@
 import rateLimit from 'express-rate-limit';
 import { Request, Response } from 'express';
+import { createModuleLogger } from '../../utils/logger.js';
+
+const logger = createModuleLogger('RateLimiter');
 
 /**
  * 标准 API 限流器
@@ -15,7 +18,7 @@ export const standardLimiter = rateLimit({
   standardHeaders: true, // 返回 RateLimit-* headers
   legacyHeaders: false, // 禁用 X-RateLimit-* headers
   handler: (req: Request, res: Response) => {
-    console.warn(`[RateLimiter] Standard rate limit exceeded for IP: ${req.ip}`);
+    logger.warn(`[RateLimiter] Standard rate limit exceeded for IP: ${req.ip}`);
     res.status(429).json({
       error: 'Too many requests from this IP, please try again later.',
       retryAfter: '60 seconds',
@@ -38,7 +41,7 @@ export const strictLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req: Request, res: Response) => {
-    console.warn(`[RateLimiter] Strict rate limit exceeded for IP: ${req.ip}, Path: ${req.path}`);
+    logger.warn(`[RateLimiter] Strict rate limit exceeded for IP: ${req.ip}, Path: ${req.path}`);
     res.status(429).json({
       error: 'Rate limit exceeded for resource-intensive operations. Please try again later.',
       retryAfter: '60 seconds',
@@ -61,7 +64,7 @@ export const createLimiter = rateLimit({
   legacyHeaders: false,
   skipSuccessfulRequests: false, // 即使成功也计入限制
   handler: (req: Request, res: Response) => {
-    console.warn(`[RateLimiter] Create rate limit exceeded for IP: ${req.ip}, Path: ${req.path}`);
+    logger.warn(`[RateLimiter] Create rate limit exceeded for IP: ${req.ip}, Path: ${req.path}`);
     res.status(429).json({
       error: 'Too many create operations. Please try again later.',
       retryAfter: '60 seconds',
