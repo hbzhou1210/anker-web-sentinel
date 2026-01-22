@@ -10,6 +10,12 @@ export interface HreflangLink {
   isValid: boolean;
   statusCode?: number;
   error?: string;
+  warning?: string; // 警告信息(如语言代码不一致)
+  validationDetails?: {
+    isAccessible: boolean; // URL是否可访问
+    isConsistent: boolean; // 语言代码与URL地区是否一致
+    consistencyMessage?: string; // 一致性检查详细信息
+  };
 }
 
 /**
@@ -19,6 +25,12 @@ export interface SEOReport {
   url: string;
   title: string | null;
   hreflangLinks: HreflangLink[];
+  hreflangIssues?: {
+    hasDuplicates: boolean; // 是否有重复的语言代码
+    duplicates: string[]; // 重复的语言代码列表
+    hasSelfReference: boolean; // 是否包含自引用
+    inconsistentCount: number; // 语言代码不一致的数量
+  };
   article: {
     dateModified: string | null;
     datePublished: string | null;
@@ -74,10 +86,25 @@ export class SEOCheckerService {
       // 验证 Hreflang 链接（检查是否 404）
       const validatedHreflangLinks = await this.validateHreflangLinks(hreflangLinks, browser);
 
+      // 检测 Hreflang 问题
+      const duplicateCheck = this.detectDuplicateLangCodes(validatedHreflangLinks);
+      const hasSelfReference = this.validateSelfReference(url, validatedHreflangLinks);
+      const inconsistentCount = validatedHreflangLinks.filter(
+        link => link.validationDetails && !link.validationDetails.isConsistent
+      ).length;
+
+      const hreflangIssues = {
+        hasDuplicates: duplicateCheck.hasDuplicates,
+        duplicates: duplicateCheck.duplicates,
+        hasSelfReference,
+        inconsistentCount
+      };
+
       return {
         url,
         title,
         hreflangLinks: validatedHreflangLinks,
+        hreflangIssues,
         article,
         checkTime: new Date()
       };
@@ -245,15 +272,27 @@ export class SEOCheckerService {
         });
 
         const statusCode = response?.status() || 0;
-        const isValid = statusCode >= 200 && statusCode < 400;
+        const isAccessible = statusCode >= 200 && statusCode < 400;
+
+        // 验证语言代码与URL地区代码的一致性
+        const consistencyCheck = this.validateLangUrlConsistency(link.lang, link.href);
+
+        // 综合判定: 既要可访问,也要语言代码一致
+        const isValid = isAccessible && consistencyCheck.isConsistent;
 
         validatedLinks.push({
           ...link,
           isValid,
-          statusCode
+          statusCode,
+          warning: consistencyCheck.message,
+          validationDetails: {
+            isAccessible,
+            isConsistent: consistencyCheck.isConsistent,
+            consistencyMessage: consistencyCheck.message
+          }
         });
 
-        console.log(`[SEOChecker] ✓ ${link.lang}: ${statusCode} ${isValid ? '(Valid)' : '(Invalid)'}`);
+        console.log(`[SEOChecker] ✓ ${link.lang}: ${statusCode} ${isValid ? '(Valid)' : '(Invalid)'} ${consistencyCheck.message ? `- ${consistencyCheck.message}` : ''}`);
 
       } catch (error: any) {
         console.warn(`[SEOChecker] ✗ Failed to validate ${link.lang}: ${error.message}`);
@@ -271,6 +310,165 @@ export class SEOCheckerService {
     }
 
     return validatedLinks;
+  }
+
+  /**
+   * 验证语言代码与URL地区代码的一致性
+   *
+   * @param lang - 语言代码 (如 en-GB, en-US)
+   * @param href - URL地址
+   * @returns 一致性检查结果
+   */
+  private validateLangUrlConsistency(lang: string, href: string): {
+    isConsistent: boolean;
+    message?: string;
+  } {
+    try {
+      // x-default 是特殊情况,始终有效
+      if (lang === 'x-default') {
+        return { isConsistent: true };
+      }
+
+      // 解析语言代码 (格式: language-region, 如 en-GB)
+      const langParts = lang.toLowerCase().split('-');
+      if (langParts.length < 2) {
+        // 只有语言没有地区代码,无法验证
+        return { isConsistent: true };
+      }
+
+      const [, region] = langParts; // 地区代码 (如 gb, us, ca)
+
+      // 从URL中提取地区代码
+      // 匹配模式: /xx/ 或 /xx- 或域名中的地区代码
+      const urlLower = href.toLowerCase();
+
+      // 尝试从路径中提取地区代码 (如 /ca/, /gb/, /eu-en/)
+      const pathRegionMatch = urlLower.match(/\/([a-z]{2})(?:\/|-|$)/);
+      const pathRegion = pathRegionMatch?.[1];
+
+      // 地区代码映射表 (处理别名和常见变体)
+      const regionMappings: Record<string, string[]> = {
+        'gb': ['gb', 'uk'], // 英国
+        'us': ['us', 'usa'], // 美国
+        'au': ['au', 'australia'], // 澳大利亚
+        'ca': ['ca', 'canada'], // 加拿大
+        'ae': ['ae', 'uae'], // 阿联酋
+        'nz': ['nz', 'newzealand'], // 新西兰
+        'my': ['my', 'malaysia'], // 马来西亚
+        'vn': ['vn', 'vietnam'], // 越南
+        'pl': ['pl', 'poland'], // 波兰
+        'de': ['de', 'germany'], // 德国
+        'fr': ['fr', 'france'], // 法国
+        'es': ['es', 'spain'], // 西班牙
+        'it': ['it', 'italy'], // 意大利
+        'jp': ['jp', 'japan'], // 日本
+        'kr': ['kr', 'korea'], // 韩国
+        'cn': ['cn', 'china'], // 中国
+        'in': ['in', 'india'], // 印度
+        'br': ['br', 'brazil'], // 巴西
+        'mx': ['mx', 'mexico'], // 墨西哥
+      };
+
+      // 特殊情况: eu-xx (欧洲通用版本)
+      if (pathRegion === 'eu') {
+        // en-GB 指向 /eu-en/ 是不一致的，应该指向 /gb/ 或 /uk/
+        if (region === 'gb' && urlLower.includes('/eu-en/')) {
+          return {
+            isConsistent: false,
+            message: `Language code '${lang}' (region: ${region}) does not match URL region 'eu'. Expected URL to contain '/${region}/' or similar.`
+          };
+        }
+      }
+
+      // 如果没有找到路径中的地区代码,无法验证
+      if (!pathRegion) {
+        return { isConsistent: true };
+      }
+
+      // 获取允许的地区代码列表
+      const allowedRegions = regionMappings[region] || [region];
+
+      // 检查URL中的地区代码是否在允许列表中
+      if (!allowedRegions.includes(pathRegion)) {
+        return {
+          isConsistent: false,
+          message: `Language code '${lang}' (region: ${region}) does not match URL region '${pathRegion}'. Expected URL to contain '/${region}/' or similar.`
+        };
+      }
+
+      return { isConsistent: true };
+
+    } catch (error: any) {
+      // 验证过程出错,保守地返回一致
+      console.warn(`[SEOChecker] Error validating lang-url consistency: ${error.message}`);
+      return { isConsistent: true };
+    }
+  }
+
+  /**
+   * 检测重复的语言代码
+   *
+   * @param links - Hreflang链接列表
+   * @returns 重复检测结果
+   */
+  private detectDuplicateLangCodes(links: HreflangLink[]): {
+    hasDuplicates: boolean;
+    duplicates: string[];
+  } {
+    const langCounts = new Map<string, number>();
+
+    // 统计每个语言代码出现的次数
+    links.forEach(link => {
+      langCounts.set(link.lang, (langCounts.get(link.lang) || 0) + 1);
+    });
+
+    // 找出出现次数大于1的语言代码
+    const duplicates = Array.from(langCounts.entries())
+      .filter(([, count]) => count > 1)
+      .map(([lang]) => lang);
+
+    return {
+      hasDuplicates: duplicates.length > 0,
+      duplicates
+    };
+  }
+
+  /**
+   * 验证是否包含自引用
+   * Google要求: 每个页面的hreflang应该包含指向自己的链接
+   *
+   * @param currentUrl - 当前页面URL
+   * @param links - Hreflang链接列表
+   * @returns 是否包含自引用
+   */
+  private validateSelfReference(currentUrl: string, links: HreflangLink[]): boolean {
+    const normalizedCurrentUrl = this.normalizeUrl(currentUrl);
+
+    return links.some(link => {
+      const normalizedLinkUrl = this.normalizeUrl(link.href);
+      return normalizedLinkUrl === normalizedCurrentUrl;
+    });
+  }
+
+  /**
+   * 标准化URL用于比较
+   * 移除协议、尾部斜杠、查询参数等
+   *
+   * @param url - 原始URL
+   * @returns 标准化后的URL
+   */
+  private normalizeUrl(url: string): string {
+    try {
+      const urlObj = new URL(url);
+      // 移除协议和www,保留域名和路径
+      let normalized = urlObj.hostname.replace(/^www\./, '') + urlObj.pathname;
+      // 移除尾部斜杠
+      normalized = normalized.replace(/\/$/, '');
+      return normalized.toLowerCase();
+    } catch {
+      // URL解析失败,返回原始URL的小写形式
+      return url.toLowerCase().replace(/\/$/, '');
+    }
   }
 }
 
