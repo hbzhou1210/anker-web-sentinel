@@ -225,7 +225,7 @@ router.post('/tasks/:taskId/execute', strictLimiter, async (req: Request, res: R
 
     // 回退到环境变量或默认值
     if (!originUrl) {
-      originUrl = process.env.FRONTEND_URL || process.env.APP_URL || 'http://localhost:5173';
+      originUrl = process.env.APP_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
       console.log(`[Patrol API] Using fallback origin: ${originUrl}`);
     }
 
