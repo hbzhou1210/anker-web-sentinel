@@ -20,6 +20,7 @@ const PatrolManagement = lazy(() => import('./pages/PatrolManagement'));
 const LinkCrawler = lazy(() => import('./pages/LinkCrawler'));
 const DiscountRuleQuery = lazy(() => import('./pages/DiscountRuleQuery'));
 const SEOChecker = lazy(() => import('./pages/SEOChecker'));
+const RedirectTester = lazy(() => import('./pages/RedirectTester'));
 
 // Create QueryClient instance
 const queryClient = createQueryClient();
@@ -95,6 +96,7 @@ function App() {
             <Route path="patrol/execution/:executionId" element={<PatrolManagement />} />
             <Route path="tools/link-crawler" element={<LinkCrawler />} />
             <Route path="tools/seo-checker" element={<SEOChecker />} />
+            <Route path="tools/redirect-tester" element={<RedirectTester />} />
             <Route path="tools/monitor" element={<ComingSoon title="监控工具" />} />
 
             {/* 资产管理 */}
