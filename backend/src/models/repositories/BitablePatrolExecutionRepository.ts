@@ -64,6 +64,7 @@ export class BitablePatrolExecutionRepository implements IPatrolExecutionReposit
       emailSentAt: fields.email_sent_at ? new Date(fields.email_sent_at) : undefined,
       errorMessage: errorText || undefined,
       durationMs: fields.duration_ms || undefined,
+      originUrl: this.extractText(fields.origin_url) || undefined, // 🌐 读取请求来源URL
     };
   }
 
@@ -103,6 +104,7 @@ export class BitablePatrolExecutionRepository implements IPatrolExecutionReposit
       email_sent_at: execution.emailSentAt ? execution.emailSentAt.getTime() : null,
       error_message: execution.errorMessage || '',
       duration_ms: execution.durationMs || null,
+      origin_url: execution.originUrl || '', // 🌐 存储请求来源URL
     };
 
     await feishuApiService.createRecord(this.tableId, fields);

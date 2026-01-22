@@ -192,6 +192,90 @@ export class PatrolEmailService {
   }
 
   /**
+   * 生成 SEO 检测结果 HTML
+   */
+  private generateSEOResultsHTML(seoResults: any): string {
+    if (!seoResults) return '';
+
+    let html = `<div class="seo-results">`;
+
+    // SEO 评分标题
+    const score = seoResults.score ?? 0;
+    const scoreClass = score >= 80 ? 'seo-score-good' : score >= 60 ? 'seo-score-warning' : 'seo-score-poor';
+    const title = seoResults.title || '未知页面';
+
+    html += `
+      <div class="seo-header">
+        <span class="seo-badge ${scoreClass}">SEO: ${score}分</span>
+        <span class="seo-title">${title}</span>
+      </div>
+    `;
+
+    // Hreflang 链接信息
+    if (seoResults.hreflangLinks && seoResults.hreflangLinks.length > 0) {
+      html += `
+        <div class="seo-section">
+          <div class="section-title">🌐 多语言配置</div>
+          <ul class="seo-list">
+            <li>✓ 检测到 ${seoResults.hreflangLinks.length} 个 Hreflang 链接</li>
+      `;
+
+      // Hreflang 问题
+      if (seoResults.hreflangIssues) {
+        if (seoResults.hreflangIssues.missingXDefault) {
+          html += `<li class="seo-warning">⚠️ 缺少 x-default 标签</li>`;
+        }
+        if (seoResults.hreflangIssues.duplicateLangs && seoResults.hreflangIssues.duplicateLangs.length > 0) {
+          const duplicates = seoResults.hreflangIssues.duplicateLangs.slice(0, 5).join(', ');
+          const more = seoResults.hreflangIssues.duplicateLangs.length > 5
+            ? ` (共${seoResults.hreflangIssues.duplicateLangs.length}个)`
+            : '';
+          html += `<li class="seo-error">❌ 发现重复的语言代码: ${duplicates}${more}</li>`;
+        }
+        if (seoResults.hreflangIssues.invalidUrls && seoResults.hreflangIssues.invalidUrls.length > 0) {
+          const invalid = seoResults.hreflangIssues.invalidUrls.slice(0, 3).join(', ');
+          const more = seoResults.hreflangIssues.invalidUrls.length > 3
+            ? ` (共${seoResults.hreflangIssues.invalidUrls.length}个)`
+            : '';
+          html += `<li class="seo-error">❌ 无效的 Hreflang URL: ${invalid}${more}</li>`;
+        }
+      }
+
+      html += `
+          </ul>
+        </div>
+      `;
+    }
+
+    // Article 信息
+    if (seoResults.article && seoResults.article.hasArticleTag) {
+      html += `
+        <div class="seo-section">
+          <div class="section-title">📝 文章元数据</div>
+          <ul class="seo-list">
+      `;
+
+      if (seoResults.article.author) {
+        html += `<li>✓ 作者: ${seoResults.article.author}</li>`;
+      }
+      if (seoResults.article.publishedTime) {
+        html += `<li>✓ 发布时间: ${seoResults.article.publishedTime}</li>`;
+      }
+      if (seoResults.article.modifiedTime) {
+        html += `<li>✓ 修改时间: ${seoResults.article.modifiedTime}</li>`;
+      }
+
+      html += `
+          </ul>
+        </div>
+      `;
+    }
+
+    html += `</div>`;
+    return html;
+  }
+
+  /**
    * 生成邮件 HTML 内容
    */
   private generateEmailHTML(task: PatrolTask, execution: PatrolExecution, reportUrl: string): string {
@@ -287,6 +371,7 @@ export class PatrolEmailService {
             </div>
             <div class="url-link">${result.url}</div>
             ${checkDetailsHTML}
+            ${result.seoResults ? this.generateSEOResultsHTML(result.seoResults) : ''}
           </td>
           <td class="result-cell center">${result.statusCode || '-'}</td>
           <td class="result-cell center">${result.responseTime ? `${result.responseTime}ms` : '-'}</td>
@@ -534,6 +619,66 @@ export class PatrolEmailService {
     .confidence-low {
       background-color: #fee2e2;
       color: #991b1b;
+    }
+    .seo-results {
+      margin-top: 12px;
+      padding: 12px;
+      background-color: #f0f9ff;
+      border-radius: 6px;
+      border: 1px solid #bfdbfe;
+    }
+    .seo-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .seo-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 700;
+      color: white;
+    }
+    .seo-score-good {
+      background-color: #22c55e;
+    }
+    .seo-score-warning {
+      background-color: #f59e0b;
+    }
+    .seo-score-poor {
+      background-color: #ef4444;
+    }
+    .seo-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #1e40af;
+    }
+    .seo-section {
+      margin-top: 10px;
+    }
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 6px;
+    }
+    .seo-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .seo-list li {
+      padding: 4px 0;
+      font-size: 12px;
+      color: #4b5563;
+    }
+    .seo-warning {
+      color: #f59e0b !important;
+    }
+    .seo-error {
+      color: #ef4444 !important;
     }
     .report-button {
       display: inline-block;
