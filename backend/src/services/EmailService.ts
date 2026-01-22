@@ -97,9 +97,30 @@ export class EmailService {
       return;
     }
 
-    const subject = `测试报告: ${testReport.url} - 得分 ${testReport.overallScore}`;
+    // 判断是否进行了性能测试,如果是则使用性能评分
+    let displayScore = testReport.overallScore;
+    let scoreType = '功能测试';
 
-    const html = this.generateReportEmailHTML(testReport);
+    if (testReport.performanceTestMode && testReport.performanceTestMode !== 'none') {
+      // 优先使用主报告模式的性能评分
+      if (testReport.performanceTestMode === 'pagespeed' && testReport.pageSpeedData?.performanceScore !== undefined) {
+        displayScore = testReport.pageSpeedData.performanceScore;
+        scoreType = 'PageSpeed性能';
+      } else if (testReport.performanceTestMode === 'webpagetest' && testReport.webPageTestData?.performanceScore !== undefined) {
+        displayScore = testReport.webPageTestData.performanceScore;
+        scoreType = 'WebPageTest性能';
+      } else if (testReport.pageSpeedData?.performanceScore !== undefined) {
+        displayScore = testReport.pageSpeedData.performanceScore;
+        scoreType = 'PageSpeed性能';
+      } else if (testReport.webPageTestData?.performanceScore !== undefined) {
+        displayScore = testReport.webPageTestData.performanceScore;
+        scoreType = 'WebPageTest性能';
+      }
+    }
+
+    const subject = `测试报告: ${testReport.url} - ${scoreType}得分 ${displayScore}`;
+
+    const html = this.generateReportEmailHTML(testReport, displayScore, scoreType);
 
     try {
       await this.transporter.sendMail({
@@ -119,38 +140,42 @@ export class EmailService {
   /**
    * Generate HTML content for test report email
    */
-  private generateReportEmailHTML(testReport: {
-    url: string;
-    overallScore: number;
-    totalChecks: number;
-    passedChecks: number;
-    failedChecks: number;
-    warningChecks: number;
-    reportUrl: string;
-    completedAt: string;
-    uiTestResults?: Array<{
-      testType: string;
-      status: string;
-    }>;
-    performanceTestMode?: string;
-    pageSpeedData?: {
-      performanceScore?: number;
-      metrics?: {
-        firstContentfulPaint?: number;
-        largestContentfulPaint?: number;
-        totalBlockingTime?: number;
-        cumulativeLayoutShift?: number;
-        speedIndex?: number;
-        timeToInteractive?: number;
+  private generateReportEmailHTML(
+    testReport: {
+      url: string;
+      overallScore: number;
+      totalChecks: number;
+      passedChecks: number;
+      failedChecks: number;
+      warningChecks: number;
+      reportUrl: string;
+      completedAt: string;
+      uiTestResults?: Array<{
+        testType: string;
+        status: string;
+      }>;
+      performanceTestMode?: string;
+      pageSpeedData?: {
+        performanceScore?: number;
+        metrics?: {
+          firstContentfulPaint?: number;
+          largestContentfulPaint?: number;
+          totalBlockingTime?: number;
+          cumulativeLayoutShift?: number;
+          speedIndex?: number;
+          timeToInteractive?: number;
+        };
       };
-    };
-    webPageTestData?: {
-      testId?: string;
-      performanceScore?: number;
-    };
-  }): string {
-    const scoreColor = testReport.overallScore >= 80 ? '#10b981' :
-                       testReport.overallScore >= 60 ? '#f59e0b' : '#ef4444';
+      webPageTestData?: {
+        testId?: string;
+        performanceScore?: number;
+      };
+    },
+    displayScore: number,
+    scoreType: string
+  ): string {
+    const scoreColor = displayScore >= 80 ? '#10b981' :
+                       displayScore >= 60 ? '#f59e0b' : '#ef4444';
 
     const statusEmoji = testReport.failedChecks === 0 ? '✅' : '⚠️';
 
@@ -171,9 +196,9 @@ export class EmailService {
         <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
           <div style="text-align: center; margin-bottom: 30px;">
             <div style="display: inline-block; width: 100px; height: 100px; border-radius: 50%; background-color: ${scoreColor}; color: white; font-size: 36px; font-weight: bold; line-height: 100px;">
-              ${testReport.overallScore}
+              ${displayScore}
             </div>
-            <p style="margin: 15px 0 5px 0; font-size: 14px; color: #666;">综合得分</p>
+            <p style="margin: 15px 0 5px 0; font-size: 14px; color: #666;">${scoreType}得分</p>
           </div>
 
           <div style="background-color: #f9fafb; padding: 20px; border-radius: 8px; margin-bottom: 20px;">

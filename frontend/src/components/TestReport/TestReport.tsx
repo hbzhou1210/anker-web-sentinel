@@ -223,6 +223,29 @@ export function TestReport({ report }: TestReportProps) {
     renderingSnapshots,
   } = report;
 
+  // 判断是否进行了性能测试,如果是则使用性能评分
+  const hasPerformanceTest = report.performanceTestMode && report.performanceTestMode !== 'none';
+  let displayScore = overallScore;
+  let scoreLabel = '功能测试分数';
+
+  if (hasPerformanceTest) {
+    // 优先使用主报告模式的性能评分
+    if (report.performanceTestMode === 'pagespeed' && report.pageSpeedData?.performanceScore !== undefined) {
+      displayScore = report.pageSpeedData.performanceScore;
+      scoreLabel = 'PageSpeed 性能评分';
+    } else if (report.performanceTestMode === 'webpagetest' && report.webPageTestData?.performanceScore !== undefined) {
+      displayScore = report.webPageTestData.performanceScore;
+      scoreLabel = 'WebPageTest 性能评分';
+    } else if (report.pageSpeedData?.performanceScore !== undefined) {
+      // 如果主报告模式没有评分,使用任何可用的性能评分
+      displayScore = report.pageSpeedData.performanceScore;
+      scoreLabel = 'PageSpeed 性能评分';
+    } else if (report.webPageTestData?.performanceScore !== undefined) {
+      displayScore = report.webPageTestData.performanceScore;
+      scoreLabel = 'WebPageTest 性能评分';
+    }
+  }
+
   // Calculate score color and status
   const getScoreColor = (score: number): string => {
     if (score >= 80) return 'score-good';
@@ -279,12 +302,12 @@ export function TestReport({ report }: TestReportProps) {
       {/* Overall Score */}
       <div className="overall-score-section">
         <div className="score-circle-container">
-          <div className={`score-circle ${getScoreColor(overallScore)}`}>
-            <div className="score-value">{overallScore}</div>
+          <div className={`score-circle ${getScoreColor(displayScore)}`}>
+            <div className="score-value">{displayScore}</div>
             <div className="score-max">/100</div>
           </div>
-          <div className="score-status">{getScoreStatus(overallScore)}</div>
-          <div className="score-label">功能测试分数</div>
+          <div className="score-status">{getScoreStatus(displayScore)}</div>
+          <div className="score-label">{scoreLabel}</div>
         </div>
 
         <div className="score-breakdown">
