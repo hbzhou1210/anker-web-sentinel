@@ -125,8 +125,9 @@ export class PatrolSchedulerService {
           console.log(`[PatrolScheduler] Executing patrol task: ${schedule.patrolTaskId}`);
 
           // 🌐 使用环境变量配置的应用 URL
-          const originUrl = process.env.APP_URL || process.env.FRONTEND_URL;
-          console.log(`[PatrolScheduler] Using origin URL: ${originUrl || 'not set (will use default)'}`);
+          // 优先级: APP_URL (生产环境) > FRONTEND_URL (开发环境) > localhost (fallback)
+          const originUrl = process.env.APP_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
+          console.log(`[PatrolScheduler] Using origin URL: ${originUrl} (source: ${process.env.APP_URL ? 'APP_URL' : (process.env.FRONTEND_URL ? 'FRONTEND_URL' : 'fallback')})`);
 
           // 执行巡检 (邮件将在 PatrolService.runPatrolTests() 中自动发送)
           const executionId = await patrolService.executePatrol(schedule.patrolTaskId, originUrl);
