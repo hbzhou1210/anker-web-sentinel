@@ -19,6 +19,7 @@ export enum PageType {
   Homepage = 'homepage',      // 首页
   LandingPage = 'landing',    // 落地页
   ProductPage = 'product',    // 产品页
+  Collection = 'collection',  // 品类页/集合页
   General = 'general'         // 通用页面
 }
 
@@ -198,6 +199,19 @@ export class PatrolService {
       nameLower.includes('product')
     ) {
       return PageType.ProductPage;
+    }
+
+    // 品类页/集合页检测
+    if (
+      urlLower.includes('/collections/') ||
+      urlLower.includes('/collection/') ||
+      urlLower.includes('/category/') ||
+      urlLower.includes('/categories/') ||
+      nameLower.includes('品类') ||
+      nameLower.includes('collection') ||
+      nameLower.includes('category')
+    ) {
+      return PageType.Collection;
     }
 
     // 首页检测 - 必须是域名根路径
@@ -1135,6 +1149,151 @@ export class PatrolService {
   }
 
   /**
+   * 品类页/集合页检查: 产品列表和筛选功能
+   */
+  private async checkCollectionPageFunctions(page: Page): Promise<CheckDetail[]> {
+    const checks: CheckDetail[] = [];
+
+    try {
+      // 1. 检查产品列表
+      const productListCheck = await page.evaluate(function() {
+        // 常见的产品列表选择器
+        const productSelectors = [
+          '.product-item',
+          '.product-card',
+          '[data-product-id]',
+          '.grid-item',
+          'article[data-product]',
+          '[class*="product"]',
+          '[data-product]'
+        ];
+
+        let products = [];
+        for (const selector of productSelectors) {
+          const elements = document.querySelectorAll(selector);
+          if (elements.length > 0) {
+            products = Array.from(elements);
+            break;
+          }
+        }
+
+        // 检查产品是否可见
+        const visibleProducts = products.filter(function(product) {
+          const rect = product.getBoundingClientRect();
+          const style = window.getComputedStyle(product);
+          return style.display !== 'none' &&
+                 style.visibility !== 'hidden' &&
+                 rect.width > 0 &&
+                 rect.height > 0;
+        });
+
+        return {
+          totalProducts: visibleProducts.length,
+          hasProducts: visibleProducts.length > 0
+        };
+      });
+
+      checks.push({
+        name: '产品列表',
+        passed: productListCheck.hasProducts && productListCheck.totalProducts >= 3,
+        confidence: 'high',
+        message: productListCheck.hasProducts
+          ? `显示 ${productListCheck.totalProducts} 个产品`
+          : '未找到产品列表'
+      });
+
+      // 2. 检查筛选和排序功能
+      const filterCheck = await page.evaluate(function() {
+        // 常见的筛选功能选择器
+        const filterSelectors = [
+          '[class*="filter"]',
+          '[class*="sidebar"]',
+          '[class*="refine"]',
+          'input[type="checkbox"]',
+          'input[type="radio"]'
+        ];
+
+        let hasFilters = false;
+        for (const selector of filterSelectors) {
+          const elements = document.querySelectorAll(selector);
+          if (elements.length > 0) {
+            hasFilters = true;
+            break;
+          }
+        }
+
+        // 检查排序功能
+        const sortSelectors = [
+          'select[name*="sort"]',
+          '[class*="sort"]',
+          '[data-sort]'
+        ];
+
+        let hasSort = false;
+        for (const selector of sortSelectors) {
+          const elements = document.querySelectorAll(selector);
+          if (elements.length > 0) {
+            hasSort = true;
+            break;
+          }
+        }
+
+        return {
+          hasFilters: hasFilters,
+          hasSort: hasSort
+        };
+      });
+
+      checks.push({
+        name: '筛选和排序',
+        passed: filterCheck.hasFilters || filterCheck.hasSort,
+        confidence: 'medium',
+        message: `筛选: ${filterCheck.hasFilters ? '✓' : '✗'}, 排序: ${filterCheck.hasSort ? '✓' : '✗'}`
+      });
+
+      // 3. 检查分页功能
+      const paginationCheck = await page.evaluate(function() {
+        const paginationSelectors = [
+          '.pagination',
+          '[class*="page"]',
+          'nav[aria-label*="pagination"]',
+          'a[rel="next"]',
+          'button[aria-label*="next"]',
+          '[data-pagination]'
+        ];
+
+        let hasPagination = false;
+        for (const selector of paginationSelectors) {
+          const elements = document.querySelectorAll(selector);
+          if (elements.length > 0) {
+            hasPagination = true;
+            break;
+          }
+        }
+
+        return { hasPagination: hasPagination };
+      });
+
+      checks.push({
+        name: '分页或加载更多',
+        passed: paginationCheck.hasPagination,
+        confidence: 'low',
+        message: paginationCheck.hasPagination ? '支持分页或滚动加载' : '未检测到分页功能'
+      });
+
+    } catch (error) {
+      checks.push({
+        name: '品类页检查',
+        passed: false,
+        confidence: 'low',
+        message: `检查过程出错: ${error instanceof Error ? error.message : '未知错误'}`
+      });
+    }
+
+    return checks;
+  }
+
+  /**
    * 通用页面基础可用性检查
    * 对于无法归类为特定类型的页面(如集合页、关于页等),执行基本的可用性验证
    */
@@ -1634,6 +1793,9 @@ export class PatrolService {
         if (pageType === PageType.ProductPage) {
           console.log(`  Checking product page functions...`);
           checks = await this.checkProductPageFunctions(page);
+        } else if (pageType === PageType.Collection) {
+          console.log(`  Checking collection page functions...`);
+          checks = await this.checkCollectionPageFunctions(page);
         } else if (pageType === PageType.Homepage || pageType === PageType.LandingPage) {
           console.log(`  Checking page modules...`);
           checks = await this.checkHomepageModules(page, config);
