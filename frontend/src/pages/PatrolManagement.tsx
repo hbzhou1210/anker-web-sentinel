@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
 import {
   CheckCircle, XCircle, Clock, Play, Plus, Trash2, Calendar,
   Mail, Link as LinkIcon, Activity, TrendingUp, AlertCircle,
   Zap, Shield, Globe, ChevronRight, ExternalLink,
-  BarChart3, Eye, EyeOff, Loader2, Edit, ZoomIn, ZoomOut, Maximize2, Download
+  Eye, Loader2, Edit, ZoomIn, ZoomOut, Maximize2, Download
 } from 'lucide-react';
 
 import { getFullApiUrl } from '../services/api';
@@ -150,7 +149,6 @@ const DEVICE_PRESETS = [
 ];
 
 const PatrolManagement: React.FC = () => {
-  const { executionId } = useParams<{ executionId?: string }>();
   const [tasks, setTasks] = useState<PatrolTask[]>([]);
   const [executions, setExecutions] = useState<PatrolExecution[]>([]);
   const [loading, setLoading] = useState(true);
@@ -158,7 +156,6 @@ const PatrolManagement: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingTask, setEditingTask] = useState<PatrolTask | null>(null);
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
-  const [selectedExecution, setSelectedExecution] = useState<PatrolExecution | null>(null);
   const [runningTasks, setRunningTasks] = useState<Set<string>>(new Set());
   const [expandedScreenshot, setExpandedScreenshot] = useState<string | null>(null);
   const [imageScale, setImageScale] = useState(1);
@@ -279,23 +276,6 @@ const PatrolManagement: React.FC = () => {
 
     return () => clearInterval(interval);
   }, [selectedTask, showAllExecutions]);
-
-  // 如果URL中有executionId,自动展开对应的执行记录
-  useEffect(() => {
-    if (executionId && executions.length > 0) {
-      const targetExecution = executions.find(e => e.id === executionId);
-      if (targetExecution) {
-        setSelectedExecution(targetExecution);
-        // 滚动到该执行记录
-        setTimeout(() => {
-          const element = document.getElementById(`execution-${executionId}`);
-          if (element) {
-            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }
-        }, 100);
-      }
-    }
-  }, [executionId, executions]);
 
   // ESC键关闭截图模态框
   useEffect(() => {
@@ -498,17 +478,23 @@ const PatrolManagement: React.FC = () => {
       scheduleType,
       customCron,
       config: {
-        visualComparison: task.config?.visualComparison || {
-          enabled: false,
-          diffThreshold: 5,
-          saveBaseline: false,
+        visualComparison: {
+          enabled: task.config?.visualComparison?.enabled || false,
+          diffThreshold: task.config?.visualComparison?.diffThreshold || 5,
+          saveBaseline: task.config?.visualComparison?.saveBaseline || false,
         },
         devices: task.config?.devices || [],
-        retry: task.config?.retry || {
-          enabled: false,
-          maxAttempts: 3,
-          retryDelay: 2000,
-          retryOnInfraError: true,
+        retry: {
+          enabled: task.config?.retry?.enabled || false,
+          maxAttempts: task.config?.retry?.maxAttempts || 3,
+          retryDelay: task.config?.retry?.retryDelay || 2000,
+          retryOnInfraError: task.config?.retry?.retryOnInfraError !== undefined ? task.config.retry.retryOnInfraError : true,
+        },
+        seoChecks: {
+          enabled: task.config?.seoChecks?.enabled || false,
+          checkHreflang: task.config?.seoChecks?.checkHreflang !== undefined ? task.config.seoChecks.checkHreflang : true,
+          checkArticleInfo: task.config?.seoChecks?.checkArticleInfo !== undefined ? task.config.seoChecks.checkArticleInfo : true,
+          validateHreflangUrls: task.config?.seoChecks?.validateHreflangUrls || false,
         },
         timeout: task.config?.timeout || 30,
         waitAfterLoad: task.config?.waitAfterLoad || 2,
@@ -631,8 +617,15 @@ const PatrolManagement: React.FC = () => {
             retryDelay: 2000,
             retryOnInfraError: true,
           },
+          seoChecks: {
+            enabled: false,
+            checkHreflang: true,
+            checkArticleInfo: true,
+            validateHreflangUrls: false,
+          },
           timeout: 30,
           waitAfterLoad: 2,
+          requireFooterNewsletter: false,
         },
       });
       loadTasks();
@@ -768,8 +761,15 @@ const PatrolManagement: React.FC = () => {
             retryDelay: 2000,
             retryOnInfraError: true,
           },
+          seoChecks: {
+            enabled: false,
+            checkHreflang: true,
+            checkArticleInfo: true,
+            validateHreflangUrls: false,
+          },
           timeout: 30,
           waitAfterLoad: 2,
+          requireFooterNewsletter: false,
         },
       });
       loadTasks();
@@ -1164,7 +1164,6 @@ const PatrolManagement: React.FC = () => {
                   execution.totalUrls > 0
                     ? ((execution.passedUrls / execution.totalUrls) * 100).toFixed(1)
                     : '0';
-                const isExpanded = selectedExecution?.id === execution.id;
 
                 return (
                   <div
@@ -1173,10 +1172,7 @@ const PatrolManagement: React.FC = () => {
                     className="border border-gray-200 rounded-2xl overflow-hidden hover:shadow-md transition-all"
                   >
                     {/* 执行概要 */}
-                    <div
-                      className="flex items-center gap-4 p-4 bg-gradient-to-r from-gray-50 to-white cursor-pointer"
-                      onClick={() => setSelectedExecution(isExpanded ? null : execution)}
-                    >
+                    <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-gray-50 to-white">
                       {/* 状态图标 */}
                       <div className="flex-shrink-0">
                         {execution.status === 'completed' ? (
@@ -1243,326 +1239,15 @@ const PatrolManagement: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* 展开/收起按钮 */}
-                      <button className="flex-shrink-0 p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                        {isExpanded ? (
-                          <EyeOff className="w-5 h-5 text-gray-600" />
-                        ) : (
-                          <Eye className="w-5 h-5 text-gray-600" />
-                        )}
+                      {/* 查看报告按钮 */}
+                      <button
+                        onClick={() => window.open(`/patrol/execution/${execution.id}`, '_blank')}
+                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-lg hover:shadow-lg transition-all flex-shrink-0"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                        <span className="font-medium">查看报告</span>
                       </button>
                     </div>
-
-                    {/* 详细测试结果 */}
-                    {isExpanded && execution.testResults && (
-                      <div className="border-t border-gray-200 bg-gradient-to-br from-gray-50 to-white p-6">
-                        <div className="flex items-center gap-2 mb-4">
-                          <BarChart3 className="w-5 h-5 text-indigo-600" />
-                          <h3 className="text-lg font-bold text-gray-900">详细测试报告</h3>
-                        </div>
-
-                        <div className="space-y-3">
-                          {execution.testResults.map((result, index) => (
-                            <div
-                              key={index}
-                              className={`p-4 rounded-xl border-2 ${
-                                result.status === 'pass'
-                                  ? 'bg-green-50 border-green-200'
-                                  : 'bg-red-50 border-red-200'
-                              }`}
-                            >
-                              <div className="flex items-start justify-between mb-2">
-                                <div className="flex items-center gap-3">
-                                  <span className="flex-shrink-0 w-8 h-8 bg-white rounded-full flex items-center justify-center text-sm font-bold text-gray-700 shadow-sm">
-                                    {index + 1}
-                                  </span>
-                                  <div>
-                                    <div className="font-bold text-gray-900">{result.name}</div>
-                                    <div className="text-sm text-gray-600 truncate max-w-md">{result.url}</div>
-                                  </div>
-                                </div>
-                                <div
-                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold ${
-                                    result.status === 'pass'
-                                      ? 'bg-green-500 text-white'
-                                      : 'bg-red-500 text-white'
-                                  }`}
-                                >
-                                  {result.status === 'pass' ? (
-                                    <>
-                                      <CheckCircle className="w-4 h-4" />
-                                      通过
-                                    </>
-                                  ) : (
-                                    <>
-                                      <XCircle className="w-4 h-4" />
-                                      失败
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-
-                              <div className="grid grid-cols-3 gap-3 mt-3">
-                                {result.statusCode && (
-                                  <div className="bg-white rounded-lg p-3 shadow-sm">
-                                    <div className="text-xs text-gray-600 mb-1">状态码</div>
-                                    <div className="text-lg font-bold text-gray-900">{result.statusCode}</div>
-                                  </div>
-                                )}
-                                {result.responseTime && (
-                                  <div className="bg-white rounded-lg p-3 shadow-sm">
-                                    <div className="text-xs text-gray-600 mb-1">响应时间</div>
-                                    <div className="text-lg font-bold text-gray-900">{result.responseTime}ms</div>
-                                  </div>
-                                )}
-                                {result.testDuration && (
-                                  <div className="bg-white rounded-lg p-3 shadow-sm">
-                                    <div className="text-xs text-gray-600 mb-1">测试耗时</div>
-                                    <div className="text-lg font-bold text-gray-900">{result.testDuration}ms</div>
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* 检查详情 - 始终显示 */}
-                              {result.checkDetails && (
-                                <div className="mt-3 p-3 bg-white rounded-lg border border-gray-200">
-                                  <div className="text-xs font-semibold text-gray-700 mb-2">检查详情</div>
-                                  <div className="space-y-2">
-                                    {result.checkDetails.split('\n').filter(line => line.trim()).map((line, idx) => {
-                                      // 解析每行: ✓/✗ 检查项名称: 消息 [置信度: 高/中/低]
-                                      const passed = line.trim().startsWith('✓');
-                                      const failed = line.trim().startsWith('✗');
-
-                                      if (!passed && !failed) return null;
-
-                                      // 移除前面的符号
-                                      const content = line.trim().substring(1).trim();
-                                      const parts = content.split(':');
-                                      const checkName = parts[0]?.trim() || '';
-                                      const messageWithConfidence = parts.slice(1).join(':').trim();
-
-                                      // 提取置信度
-                                      const confidenceMatch = messageWithConfidence.match(/\[置信度:\s*([^\]]+)\]/);
-                                      const confidence = confidenceMatch ? confidenceMatch[1] : null;
-                                      const message = messageWithConfidence.replace(/\s*\[置信度:[^\]]+\]/, '').trim();
-
-                                      return (
-                                        <div key={idx} className={`flex items-start gap-2 p-2 rounded ${
-                                          passed ? 'bg-green-50' : 'bg-red-50'
-                                        }`}>
-                                          {passed ? (
-                                            <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
-                                          ) : (
-                                            <XCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
-                                          )}
-                                          <div className="flex-1 min-w-0">
-                                            <div className={`text-sm font-medium ${
-                                              passed ? 'text-green-700' : 'text-red-700'
-                                            }`}>{checkName}</div>
-                                            {message && (
-                                              <div className="text-xs text-gray-600 mt-0.5">{message}</div>
-                                            )}
-                                            {confidence && (
-                                              <div className="text-xs text-gray-500 mt-0.5">
-                                                置信度: {confidence}
-                                              </div>
-                                            )}
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* 错误信息（仅失败时的额外信息） */}
-                              {result.errorMessage && !result.checkDetails && (
-                                <div className="mt-3 p-3 bg-white rounded-lg border border-red-200">
-                                  <div className="flex items-start gap-2">
-                                    <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
-                                    <div>
-                                      <div className="text-xs font-semibold text-red-600 mb-1">错误信息</div>
-                                      <div className="text-sm text-gray-700">{result.errorMessage}</div>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* 页面截图 */}
-                              {result.screenshotUrl && (
-                                <div className="mt-4">
-                                  <div className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                    </svg>
-                                    页面截图
-                                  </div>
-                                  <div
-                                    className="bg-gray-100 rounded-lg overflow-hidden border border-gray-200 cursor-pointer hover:border-blue-400 transition-colors"
-                                    onClick={() => setExpandedScreenshot(result.screenshotUrl!)}
-                                  >
-                                    <img
-                                      src={`${getFullApiUrl(result.screenshotUrl)}`}
-                                      alt={`${result.name}截图`}
-                                      className="w-full h-48 object-cover object-top"
-                                      loading="lazy"
-                                    />
-                                  </div>
-                                  <div className="text-xs text-gray-500 mt-1 text-center flex items-center justify-center gap-1">
-                                    <Eye className="w-3 h-3" />
-                                    点击预览图查看完整截图
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* SEO检查结果 */}
-                              {result.seoResults && (
-                                <div className="mt-4">
-                                  <div className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                                    <Globe className="w-4 h-4" />
-                                    SEO检查结果
-                                  </div>
-                                  <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-3">
-                                    {/* SEO评分 */}
-                                    {result.seoResults.score !== undefined && (
-                                      <div className="flex items-center gap-3">
-                                        <div className={`px-4 py-2 rounded-lg font-bold text-lg ${
-                                          result.seoResults.score >= 80 ? 'bg-green-100 text-green-700' :
-                                          result.seoResults.score >= 60 ? 'bg-yellow-100 text-yellow-700' :
-                                          'bg-red-100 text-red-700'
-                                        }`}>
-                                          {result.seoResults.score}/100
-                                        </div>
-                                        <div className="text-sm text-gray-600">
-                                          SEO总分
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* 页面标题 */}
-                                    {result.seoResults.title && (
-                                      <div className="border-t border-gray-100 pt-3">
-                                        <div className="text-xs text-gray-600 mb-1">页面标题</div>
-                                        <div className="text-sm text-gray-900">{result.seoResults.title}</div>
-                                      </div>
-                                    )}
-
-                                    {/* Hreflang链接 */}
-                                    {result.seoResults.hreflangLinks && result.seoResults.hreflangLinks.length > 0 && (
-                                      <div className="border-t border-gray-100 pt-3">
-                                        <div className="text-xs text-gray-600 mb-2">
-                                          Hreflang链接 ({result.seoResults.hreflangLinks.length}个)
-                                        </div>
-                                        <div className="space-y-1 max-h-40 overflow-y-auto">
-                                          {result.seoResults.hreflangLinks.map((link, idx) => (
-                                            <div key={idx} className="flex items-center gap-2 text-xs p-2 bg-gray-50 rounded">
-                                              <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded font-mono font-semibold">
-                                                {link.lang}
-                                              </span>
-                                              <span className="text-gray-600 truncate flex-1">{link.href}</span>
-                                              {link.isValid !== undefined && (
-                                                <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                                                  link.isValid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                                                }`}>
-                                                  {link.isValid ? '✓' : '✗'}
-                                                </span>
-                                              )}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* Hreflang问题 */}
-                                    {result.seoResults.hreflangIssues && (
-                                      (result.seoResults.hreflangIssues.missingXDefault ||
-                                       (result.seoResults.hreflangIssues.duplicateLangs && result.seoResults.hreflangIssues.duplicateLangs.length > 0) ||
-                                       (result.seoResults.hreflangIssues.invalidUrls && result.seoResults.hreflangIssues.invalidUrls.length > 0))
-                                    ) && (
-                                      <div className="border-t border-gray-100 pt-3">
-                                        <div className="text-xs text-red-600 font-semibold mb-2 flex items-center gap-1">
-                                          <AlertCircle className="w-3 h-3" />
-                                          检测到的问题
-                                        </div>
-                                        <div className="space-y-1">
-                                          {result.seoResults.hreflangIssues.missingXDefault && (
-                                            <div className="text-xs text-gray-700 p-2 bg-yellow-50 rounded">
-                                              ⚠️ 缺少 x-default 标签
-                                            </div>
-                                          )}
-                                          {result.seoResults.hreflangIssues.duplicateLangs && result.seoResults.hreflangIssues.duplicateLangs.length > 0 && (
-                                            <div className="text-xs text-gray-700 p-2 bg-yellow-50 rounded">
-                                              ⚠️ 重复的语言代码: {result.seoResults.hreflangIssues.duplicateLangs.join(', ')}
-                                            </div>
-                                          )}
-                                          {result.seoResults.hreflangIssues.invalidUrls && result.seoResults.hreflangIssues.invalidUrls.length > 0 && (
-                                            <div className="text-xs text-gray-700 p-2 bg-red-50 rounded">
-                                              ❌ {result.seoResults.hreflangIssues.invalidUrls.length}个无效URL
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* Article信息 */}
-                                    {result.seoResults.article && (
-                                      <div className="border-t border-gray-100 pt-3">
-                                        <div className="text-xs text-gray-600 mb-2">Article元数据</div>
-                                        <div className="space-y-1 text-xs">
-                                          {result.seoResults.article.author && (
-                                            <div className="flex gap-2">
-                                              <span className="text-gray-600">作者:</span>
-                                              <span className="text-gray-900">{result.seoResults.article.author}</span>
-                                            </div>
-                                          )}
-                                          {result.seoResults.article.publishedTime && (
-                                            <div className="flex gap-2">
-                                              <span className="text-gray-600">发布时间:</span>
-                                              <span className="text-gray-900">{new Date(result.seoResults.article.publishedTime).toLocaleString('zh-CN')}</span>
-                                            </div>
-                                          )}
-                                          {result.seoResults.article.modifiedTime && (
-                                            <div className="flex gap-2">
-                                              <span className="text-gray-600">修改时间:</span>
-                                              <span className="text-gray-900">{new Date(result.seoResults.article.modifiedTime).toLocaleString('zh-CN')}</span>
-                                            </div>
-                                          )}
-                                          {!result.seoResults.article.author && !result.seoResults.article.publishedTime && (
-                                            <div className="text-gray-500">未检测到Article元数据</div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-
-                        {/* 测试统计 */}
-                        <div className="mt-6 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl">
-                          <div className="grid grid-cols-4 gap-4">
-                            <div className="text-center">
-                              <div className="text-2xl font-bold text-gray-900">{execution.totalUrls}</div>
-                              <div className="text-xs text-gray-600 mt-1">总计</div>
-                            </div>
-                            <div className="text-center">
-                              <div className="text-2xl font-bold text-green-600">{execution.passedUrls}</div>
-                              <div className="text-xs text-gray-600 mt-1">通过</div>
-                            </div>
-                            <div className="text-center">
-                              <div className="text-2xl font-bold text-red-600">{execution.failedUrls}</div>
-                              <div className="text-xs text-gray-600 mt-1">失败</div>
-                            </div>
-                            <div className="text-center">
-                              <div className="text-2xl font-bold text-indigo-600">{passRate}%</div>
-                              <div className="text-xs text-gray-600 mt-1">通过率</div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -2464,6 +2149,371 @@ const PatrolManagement: React.FC = () => {
                     <Calendar className="w-3 h-3" />
                     选择任务的定时执行时间,启用后将自动按时执行
                   </p>
+                </div>
+
+                {/* 高级配置 */}
+                <div className="border-2 border-gray-200 rounded-xl p-6 space-y-6">
+                  <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-purple-600" />
+                    高级配置
+                  </h3>
+
+                  {/* 视觉对比 */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                        <Eye className="w-4 h-4 text-purple-600" />
+                        页面快照对比
+                      </label>
+                      <input
+                        type="checkbox"
+                        checked={formData.config.visualComparison.enabled}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            config: {
+                              ...formData.config,
+                              visualComparison: {
+                                ...formData.config.visualComparison,
+                                enabled: e.target.checked,
+                              },
+                            },
+                          })
+                        }
+                        className="w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                    {formData.config.visualComparison.enabled && (
+                      <div className="pl-6 space-y-3 border-l-2 border-purple-200">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            差异阈值 ({formData.config.visualComparison.diffThreshold}%)
+                          </label>
+                          <input
+                            type="range"
+                            min="1"
+                            max="20"
+                            step="1"
+                            value={formData.config.visualComparison.diffThreshold}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                config: {
+                                  ...formData.config,
+                                  visualComparison: {
+                                    ...formData.config.visualComparison,
+                                    diffThreshold: parseInt(e.target.value),
+                                  },
+                                },
+                              })
+                            }
+                            className="w-full"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">像素差异超过此百分比将触发告警</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="editSaveBaseline"
+                            checked={formData.config.visualComparison.saveBaseline}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                config: {
+                                  ...formData.config,
+                                  visualComparison: {
+                                    ...formData.config.visualComparison,
+                                    saveBaseline: e.target.checked,
+                                  },
+                                },
+                              })
+                            }
+                            className="w-4 h-4 text-purple-600 border-gray-300 rounded"
+                          />
+                          <label htmlFor="editSaveBaseline" className="text-xs text-gray-600">
+                            自动更新基线图片(无差异时)
+                          </label>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 设备测试 */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-semibold text-gray-700">
+                        多设备测试
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const device = DEVICE_PRESETS[0];
+                          setFormData({
+                            ...formData,
+                            config: {
+                              ...formData.config,
+                              devices: [...formData.config.devices, { ...device }],
+                            },
+                          });
+                        }}
+                        className="text-xs text-purple-600 hover:text-purple-700 font-medium flex items-center gap-1"
+                      >
+                        <Plus className="w-3 h-3" />
+                        添加设备
+                      </button>
+                    </div>
+                    {formData.config.devices.length > 0 ? (
+                      <div className="space-y-2">
+                        {formData.config.devices.map((device, index) => (
+                          <div key={index} className="flex items-center gap-2 p-3 bg-purple-50 rounded-lg group">
+                            <select
+                              value={device.name}
+                              onChange={(e) => {
+                                const selectedDevice = DEVICE_PRESETS.find((d) => d.name === e.target.value);
+                                if (selectedDevice) {
+                                  const newDevices = [...formData.config.devices];
+                                  newDevices[index] = { ...selectedDevice };
+                                  setFormData({
+                                    ...formData,
+                                    config: { ...formData.config, devices: newDevices },
+                                  });
+                                }
+                              }}
+                              className="flex-1 px-3 py-2 text-sm border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500"
+                            >
+                              {DEVICE_PRESETS.map((preset) => (
+                                <option key={preset.name} value={preset.name}>
+                                  {preset.name} ({preset.viewport.width}x{preset.viewport.height})
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newDevices = formData.config.devices.filter((_, i) => i !== index);
+                                setFormData({
+                                  ...formData,
+                                  config: { ...formData.config, devices: newDevices },
+                                });
+                              }}
+                              className="p-2 text-red-600 hover:bg-red-100 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-500">未配置设备,将使用默认桌面端测试</p>
+                    )}
+                  </div>
+
+                  {/* 重试机制 */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                        <Zap className="w-4 h-4 text-purple-600" />
+                        自动重试
+                      </label>
+                      <input
+                        type="checkbox"
+                        checked={formData.config.retry.enabled}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            config: {
+                              ...formData.config,
+                              retry: {
+                                ...formData.config.retry,
+                                enabled: e.target.checked,
+                              },
+                            },
+                          })
+                        }
+                        className="w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                    {formData.config.retry.enabled && (
+                      <div className="pl-6 space-y-3 border-l-2 border-purple-200">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">最大重试次数</label>
+                            <input
+                              type="number"
+                              min="1"
+                              max="5"
+                              value={formData.config.retry.maxAttempts}
+                              onChange={(e) =>
+                                setFormData({
+                                  ...formData,
+                                  config: {
+                                    ...formData.config,
+                                    retry: {
+                                      ...formData.config.retry,
+                                      maxAttempts: parseInt(e.target.value),
+                                    },
+                                  },
+                                })
+                              }
+                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">重试间隔(毫秒)</label>
+                            <input
+                              type="number"
+                              min="1000"
+                              max="10000"
+                              step="500"
+                              value={formData.config.retry.retryDelay}
+                              onChange={(e) =>
+                                setFormData({
+                                  ...formData,
+                                  config: {
+                                    ...formData.config,
+                                    retry: {
+                                      ...formData.config.retry,
+                                      retryDelay: parseInt(e.target.value),
+                                    },
+                                  },
+                                })
+                              }
+                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="editRetryInfraError"
+                            checked={formData.config.retry.retryOnInfraError}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                config: {
+                                  ...formData.config,
+                                  retry: {
+                                    ...formData.config.retry,
+                                    retryOnInfraError: e.target.checked,
+                                  },
+                                },
+                              })
+                            }
+                            className="w-4 h-4 text-purple-600 border-gray-300 rounded"
+                          />
+                          <label htmlFor="editRetryInfraError" className="text-xs text-gray-600">
+                            仅对基础设施错误重试(网络超时、连接失败等)
+                          </label>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* SEO检查 */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                        <Globe className="w-4 h-4 text-purple-600" />
+                        SEO检查
+                      </label>
+                      <input
+                        type="checkbox"
+                        checked={formData.config.seoChecks?.enabled || false}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            config: {
+                              ...formData.config,
+                              seoChecks: {
+                                ...formData.config.seoChecks,
+                                enabled: e.target.checked,
+                                checkHreflang: formData.config.seoChecks?.checkHreflang !== false,
+                                checkArticleInfo: formData.config.seoChecks?.checkArticleInfo !== false,
+                                validateHreflangUrls: formData.config.seoChecks?.validateHreflangUrls || false,
+                              },
+                            },
+                          })
+                        }
+                        className="w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                    {formData.config.seoChecks?.enabled && (
+                      <div className="pl-6 space-y-3 border-l-2 border-purple-200">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="editCheckHreflang"
+                            checked={formData.config.seoChecks?.checkHreflang !== false}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                config: {
+                                  ...formData.config,
+                                  seoChecks: {
+                                    ...formData.config.seoChecks!,
+                                    checkHreflang: e.target.checked,
+                                  },
+                                },
+                              })
+                            }
+                            className="w-4 h-4 text-purple-600 border-gray-300 rounded"
+                          />
+                          <label htmlFor="editCheckHreflang" className="text-xs text-gray-600">
+                            检查Hreflang标签(多语言链接)
+                          </label>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="editCheckArticleInfo"
+                            checked={formData.config.seoChecks?.checkArticleInfo !== false}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                config: {
+                                  ...formData.config,
+                                  seoChecks: {
+                                    ...formData.config.seoChecks!,
+                                    checkArticleInfo: e.target.checked,
+                                  },
+                                },
+                              })
+                            }
+                            className="w-4 h-4 text-purple-600 border-gray-300 rounded"
+                          />
+                          <label htmlFor="editCheckArticleInfo" className="text-xs text-gray-600">
+                            检查Article信息(作者、发布时间等)
+                          </label>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="editValidateHreflangUrls"
+                            checked={formData.config.seoChecks?.validateHreflangUrls || false}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                config: {
+                                  ...formData.config,
+                                  seoChecks: {
+                                    ...formData.config.seoChecks!,
+                                    validateHreflangUrls: e.target.checked,
+                                  },
+                                },
+                              })
+                            }
+                            className="w-4 h-4 text-purple-600 border-gray-300 rounded"
+                          />
+                          <label htmlFor="editValidateHreflangUrls" className="text-xs text-gray-600">
+                            验证Hreflang URL可访问性(较慢)
+                          </label>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          SEO检查将分析页面标题、多语言链接、文章元数据等,并生成0-100分的评分
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* 启用状态 */}

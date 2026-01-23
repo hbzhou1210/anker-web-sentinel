@@ -90,7 +90,7 @@ export class BitablePatrolExecutionRepository implements IPatrolExecutionReposit
     // 清理 testResults,移除过大的 base64 数据
     const sanitizedTestResults = this.sanitizeTestResults(execution.testResults || []);
 
-    const fields = {
+    const fields: Record<string, any> = {
       id,
       patrol_task_id: execution.patrolTaskId,
       status: execution.status,
@@ -104,7 +104,7 @@ export class BitablePatrolExecutionRepository implements IPatrolExecutionReposit
       email_sent_at: execution.emailSentAt ? execution.emailSentAt.getTime() : null,
       error_message: execution.errorMessage || '',
       duration_ms: execution.durationMs || null,
-      origin_url: execution.originUrl || '', // 🌐 存储请求来源URL
+      origin_url: execution.originUrl || '',
     };
 
     await feishuApiService.createRecord(this.tableId, fields);

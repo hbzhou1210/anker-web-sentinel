@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { screenshotCache } from '../services/screenshotCache';
 
 interface LazyImageProps {
   /** 图片 URL */
@@ -18,6 +19,8 @@ interface LazyImageProps {
   placeholder?: string;
   /** 根边距 - 提前多少像素开始加载 (默认 50px) */
   rootMargin?: string;
+  /** 是否使用 IndexedDB 缓存（用于截图等大图片） */
+  useCache?: boolean;
   /** 加载完成回调 */
   onLoad?: () => void;
   /** 加载失败回调 */
@@ -49,13 +52,44 @@ export function LazyImage({
   className,
   placeholder = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect width="400" height="300" fill="%23f0f0f0"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="16" fill="%23999"%3E加载中...%3C/text%3E%3C/svg%3E',
   rootMargin = '50px',
+  useCache = true, // 默认启用缓存
   onLoad,
   onError,
 }: LazyImageProps) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isInView, setIsInView] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [cachedSrc, setCachedSrc] = useState<string>(src);
   const imgRef = useRef<HTMLImageElement>(null);
+
+  // 使用缓存加载图片
+  useEffect(() => {
+    if (!isInView || !useCache) return;
+
+    // 只对看起来像截图URL的路径使用缓存
+    const shouldCache = src.includes('/screenshots/') || src.includes('/screenshot');
+    if (!shouldCache) {
+      setCachedSrc(src);
+      return;
+    }
+
+    let cancelled = false;
+
+    screenshotCache.getScreenshot(src).then((cachedUrl) => {
+      if (!cancelled) {
+        setCachedSrc(cachedUrl);
+      }
+    }).catch((error) => {
+      console.error('[LazyImage] Failed to get cached screenshot:', error);
+      if (!cancelled) {
+        setCachedSrc(src); // 回退到原始URL
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isInView, src, useCache]);
 
   useEffect(() => {
     if (!imgRef.current) return;
@@ -100,7 +134,7 @@ export function LazyImage({
   return (
     <img
       ref={imgRef}
-      src={isInView ? src : placeholder}
+      src={isInView ? cachedSrc : placeholder}
       alt={alt}
       className={className}
       onLoad={handleLoad}

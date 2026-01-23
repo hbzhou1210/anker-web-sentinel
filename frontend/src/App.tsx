@@ -17,6 +17,7 @@ const TestPointExtraction = lazy(() => import('./pages/TestPointExtraction').the
 const ResponsiveTesting = lazy(() => import('./pages/ResponsiveTesting'));
 const MultilingualCheck = lazy(() => import('./pages/MultilingualCheck'));
 const PatrolManagement = lazy(() => import('./pages/PatrolManagement'));
+const PatrolExecutionDetail = lazy(() => import('./pages/PatrolExecutionDetail'));
 const LinkCrawler = lazy(() => import('./pages/LinkCrawler'));
 const DiscountRuleQuery = lazy(() => import('./pages/DiscountRuleQuery'));
 const SEOChecker = lazy(() => import('./pages/SEOChecker'));
@@ -93,7 +94,7 @@ function App() {
             <Route path="tools/multilingual" element={<MultilingualCheck />} />
             <Route path="tools/discount-rule" element={<DiscountRuleQuery />} />
             <Route path="tools/patrol" element={<PatrolManagement />} />
-            <Route path="patrol/execution/:executionId" element={<PatrolManagement />} />
+            <Route path="patrol/execution/:executionId" element={<PatrolExecutionDetail />} />
             <Route path="tools/link-crawler" element={<LinkCrawler />} />
             <Route path="tools/seo-checker" element={<SEOChecker />} />
             <Route path="tools/redirect-tester" element={<RedirectTester />} />

@@ -195,18 +195,23 @@ router.delete('/tasks/:taskId', async (req: Request, res: Response) => {
  * 应用严格限流器(10次/分钟) - 资源密集型操作
  */
 router.post('/tasks/:taskId/execute', strictLimiter, async (req: Request, res: Response) => {
+  console.log(`[POST /tasks/:taskId/execute] 收到请求`);
   try {
     const { taskId } = req.params;
+    console.log(`[POST /tasks/:taskId/execute] taskId=${taskId}`);
 
     // 检查任务是否存在
+    console.log(`[POST /tasks/:taskId/execute] 检查任务是否存在...`);
     const task = await patrolService.getPatrolTask(taskId);
     if (!task) {
+      console.log(`[POST /tasks/:taskId/execute] 任务不存在`);
       res.status(404).json({
         error: 'Not Found',
         message: `巡检任务 ${taskId} 不存在`,
       });
       return;
     }
+    console.log(`[POST /tasks/:taskId/execute] 任务存在: ${task.name}`);
 
     // 🌐 获取前端地址用于邮件报告链接
     // 优先级: Referer 头 (前端URL) > 环境变量 > localhost:5173
@@ -242,6 +247,11 @@ router.post('/tasks/:taskId/execute', strictLimiter, async (req: Request, res: R
     });
   } catch (error) {
     console.error('执行巡检任务失败:', error);
+    console.error('错误详情:', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : 'No stack',
+    });
     res.status(500).json({
       error: 'Internal Server Error',
       message: '执行巡检任务失败',

@@ -1155,51 +1155,88 @@ export class PatrolService {
     const checks: CheckDetail[] = [];
 
     try {
+      // 🔧 等待动态内容加载
+      console.log('  Waiting for product list to load...');
+
+      // 等待主要内容区域
+      await page.waitForSelector('main, [role="main"], .main-content, #main', {
+        timeout: 5000
+      }).catch(() => console.log('    Main content area not found, continuing...'));
+
+      // 额外等待以确保JavaScript渲染完成
+      await page.waitForTimeout(3000);
+
+      // 🔧 滚动页面触发懒加载
+      await page.evaluate(function() {
+        window.scrollTo(0, document.body.scrollHeight / 3);
+      });
+      await page.waitForTimeout(1500);
+
       // 1. 检查产品列表
       const productListCheck = await page.evaluate(function() {
-        // 常见的产品列表选择器
+        // 🔧 优化：更精确的产品列表选择器，按优先级排序
         const productSelectors = [
-          '.product-item',
-          '.product-card',
-          '[data-product-id]',
-          '.grid-item',
-          'article[data-product]',
-          '[class*="product"]',
-          '[data-product]'
+          '.product-item',                      // 传统类名
+          '.product-card',                      // 传统类名
+          '[class*="ProductCard"][class*="Root"]', // CSS Modules: ProductCard_ProductCardRoot__xxx
+          '[class*="productCard"][class*="root"]', // CSS Modules: productCard_root__xxx
+          '[data-product-id]',                  // 数据属性
+          'article[data-product]',              // 语义化标签
+          '[data-product]',                     // 数据属性
+          'li[class*="product-"]',              // 列表项产品
+          'div[class*="product-item"]',         // div产品项
         ];
 
         let products = [];
+        let matchedSelector = '';
+
         for (const selector of productSelectors) {
-          const elements = document.querySelectorAll(selector);
-          if (elements.length > 0) {
-            products = Array.from(elements);
-            break;
+          try {
+            const elements = document.querySelectorAll(selector);
+            if (elements.length > 0) {
+              products = Array.from(elements);
+              matchedSelector = selector;
+              console.log(`[Collection Check] Found ${elements.length} elements with selector: ${selector}`);
+              break;
+            }
+          } catch (e) {
+            console.warn(`[Collection Check] Selector error: ${selector}`, e);
           }
         }
 
-        // 检查产品是否可见
+        // 🔧 增强：检查产品是否可见，并验证是否真的是产品
         const visibleProducts = products.filter(function(product) {
           const rect = product.getBoundingClientRect();
           const style = window.getComputedStyle(product);
-          return style.display !== 'none' &&
-                 style.visibility !== 'hidden' &&
-                 rect.width > 0 &&
-                 rect.height > 0;
+          const isVisible = style.display !== 'none' &&
+                           style.visibility !== 'hidden' &&
+                           rect.width > 0 &&
+                           rect.height > 0;
+
+          if (!isVisible) return false;
+
+          // 🔧 额外验证：产品应该包含图片或标题
+          const hasImage = product.querySelector('img') !== null;
+          const hasTitle = product.querySelector('h1, h2, h3, h4, .title, [class*="title"], [class*="name"]') !== null;
+          const hasLink = product.querySelector('a') !== null;
+
+          return hasImage || hasTitle || hasLink;
         });
 
         return {
           totalProducts: visibleProducts.length,
-          hasProducts: visibleProducts.length > 0
+          hasProducts: visibleProducts.length > 0,
+          matchedSelector: matchedSelector
         };
       });
 
       checks.push({
         name: '产品列表',
-        passed: productListCheck.hasProducts && productListCheck.totalProducts >= 3,
-        confidence: 'high',
+        passed: productListCheck.hasProducts && productListCheck.totalProducts >= 1, // 🔧 改为至少1个产品即可
+        confidence: productListCheck.totalProducts >= 3 ? 'high' : 'medium', // 🔧 动态置信度
         message: productListCheck.hasProducts
-          ? `显示 ${productListCheck.totalProducts} 个产品`
-          : '未找到产品列表'
+          ? `显示 ${productListCheck.totalProducts} 个产品 (选择器: ${productListCheck.matchedSelector})`
+          : `未找到产品列表 (已尝试 9 个选择器)`
       });
 
       // 2. 检查筛选和排序功能
@@ -2438,44 +2475,58 @@ export class PatrolService {
    * 执行巡检任务 - 立即返回executionId,测试在后台异步执行
    */
   async executePatrol(taskId: string, originUrl?: string): Promise<string> {
+    console.log(`[executePatrol] 开始执行 taskId=${taskId}, originUrl=${originUrl}`);
+
     // 获取巡检任务
+    console.log(`[executePatrol] 查询任务...`);
     const task = await this.taskRepository.findById(taskId);
     if (!task) {
       throw new Error(`Patrol task ${taskId} not found`);
     }
+    console.log(`[executePatrol] 任务找到: ${task.name}, enabled=${task.enabled}`);
 
     if (!task.enabled) {
       throw new Error(`Patrol task ${taskId} is disabled`);
     }
 
     // 创建执行记录
-    const executionId = await this.executionRepository.create({
-      patrolTaskId: taskId,
-      status: PatrolExecutionStatus.Pending,
-      startedAt: new Date(),
-      totalUrls: task.urls.length,
-      passedUrls: 0,
-      failedUrls: 0,
-      testResults: [],
-      emailSent: false,
-      originUrl, // 🌐 保存请求来源
-    });
+    console.log(`[executePatrol] 创建执行记录...`);
+    try {
+      const executionId = await this.executionRepository.create({
+        patrolTaskId: taskId,
+        status: PatrolExecutionStatus.Pending,
+        startedAt: new Date(),
+        totalUrls: task.urls.length,
+        passedUrls: 0,
+        failedUrls: 0,
+        testResults: [],
+        emailSent: false,
+        originUrl, // 🌐 保存请求来源
+      });
+      console.log(`[executePatrol] 执行记录创建成功: ${executionId}`);
 
-    // 发射执行记录创建事件
-    await this.eventEmitter.emit({
-      type: PatrolEventType.EXECUTION_CREATED,
-      timestamp: new Date(),
-      executionId,
-      taskId,
-    });
+      // 发射执行记录创建事件
+      console.log(`[executePatrol] 发射事件...`);
+      await this.eventEmitter.emit({
+        type: PatrolEventType.EXECUTION_CREATED,
+        timestamp: new Date(),
+        executionId,
+        taskId,
+      });
+      console.log(`[executePatrol] 事件发射成功`);
 
-    // 在后台异步执行测试
-    this.runPatrolTests(executionId, task).catch((error) => {
-      console.error(`Background patrol test execution failed:`, error);
-    });
+      // 在后台异步执行测试
+      this.runPatrolTests(executionId, task).catch((error) => {
+        console.error(`Background patrol test execution failed:`, error);
+      });
 
-    // 立即返回executionId
-    return executionId;
+      // 立即返回executionId
+      console.log(`[executePatrol] 返回 executionId: ${executionId}`);
+      return executionId;
+    } catch (error) {
+      console.error(`[executePatrol] 执行失败:`, error);
+      throw error;
+    }
   }
 
   /**
