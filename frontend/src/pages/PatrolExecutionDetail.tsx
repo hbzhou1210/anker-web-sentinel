@@ -691,26 +691,36 @@ const PatrolExecutionDetail: React.FC = () => {
             </button>
           </div>
 
-          {/* 图片 */}
+          {/* 图片容器 - 支持滚动查看完整截图 */}
           <div
-            className={`relative ${isFullscreen ? 'w-full h-full' : 'max-w-[90vw] max-h-[90vh]'}`}
+            className={`relative overflow-auto ${isFullscreen ? 'w-full h-full' : 'max-w-[90vw] max-h-[90vh]'}`}
             onClick={(e) => e.stopPropagation()}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-            style={{ cursor: imageScale > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default' }}
+            style={{
+              // 自定义滚动条样式
+              scrollbarWidth: 'thin',
+              scrollbarColor: 'rgba(255,255,255,0.3) transparent',
+            }}
           >
-            <img
-              src={`${getFullApiUrl(expandedScreenshot)}`}
-              alt="放大截图"
-              className="max-w-full max-h-full object-contain"
-              style={{
-                transform: `scale(${imageScale}) translate(${imagePosition.x / imageScale}px, ${imagePosition.y / imageScale}px)`,
-                transition: isDragging ? 'none' : 'transform 0.2s ease-out',
-              }}
-              draggable={false}
-            />
+            <div
+              className="inline-block min-w-full"
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+              style={{ cursor: imageScale > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default' }}
+            >
+              <img
+                src={`${getFullApiUrl(expandedScreenshot)}`}
+                alt="放大截图"
+                className="w-auto h-auto max-w-none"
+                style={{
+                  transform: `scale(${imageScale}) translate(${imagePosition.x / imageScale}px, ${imagePosition.y / imageScale}px)`,
+                  transition: isDragging ? 'none' : 'transform 0.2s ease-out',
+                  transformOrigin: 'top left',
+                }}
+                draggable={false}
+              />
+            </div>
           </div>
 
           {/* 关闭提示 */}
