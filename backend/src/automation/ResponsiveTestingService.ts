@@ -122,10 +122,11 @@ export class ResponsiveTestingService {
         'checkImagesResponsive'
       );
 
-      // 截图 - 竖屏 - 使用重试机制
+      // 截图 - 竖屏 - 上传到飞书（与巡检截图保持一致，避免生产环境路径问题）
+      console.log(`  Capturing portrait screenshot for ${device.name}...`);
       const screenshotPortraitUrl = await this.executeWithRetry(
-        () => this.screenshotService.captureFullPage(page),
-        'captureFullPage(portrait)'
+        () => this.screenshotService.captureAndUploadToFeishu(page),
+        'captureAndUploadToFeishu(portrait)'
       );
 
       // 如果是移动设备,测试横屏
@@ -144,9 +145,10 @@ export class ResponsiveTestingService {
           'waitForTimeout(landscape)'
         );
 
+        console.log(`  Capturing landscape screenshot for ${device.name}...`);
         screenshotLandscapeUrl = await this.executeWithRetry(
-          () => this.screenshotService.captureFullPage(page),
-          'captureFullPage(landscape)'
+          () => this.screenshotService.captureAndUploadToFeishu(page),
+          'captureAndUploadToFeishu(landscape)'
         );
 
         // 恢复竖屏

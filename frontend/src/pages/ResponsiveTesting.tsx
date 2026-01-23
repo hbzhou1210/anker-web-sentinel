@@ -4,6 +4,24 @@ import { CircularProgress } from '../components/CircularProgress';
 import { LazyImage } from '../components/LazyImage';
 import { getFullApiUrl } from '../services/api';
 
+/**
+ * 处理截图URL - 支持飞书图片key和传统路径
+ * 飞书图片key格式: img_v3_xxx 或 img_xxx
+ * 传统路径格式: /screenshots/xxx.webp
+ */
+function getScreenshotUrl(urlOrKey: string): string {
+  // 如果是飞书图片key(以img_开头)
+  if (urlOrKey.startsWith('img_')) {
+    return getFullApiUrl(`/api/v1/images/feishu/${urlOrKey}`);
+  }
+  // 如果已经是完整URL，直接返回
+  if (urlOrKey.startsWith('http://') || urlOrKey.startsWith('https://')) {
+    return urlOrKey;
+  }
+  // 其他情况（如/screenshots/xxx.webp），使用getFullApiUrl处理
+  return getFullApiUrl(urlOrKey);
+}
+
 interface Device {
   id: number;
   name: string;
@@ -984,7 +1002,7 @@ export default function ResponsiveTesting() {
                             <div className="group relative">
                               <div className="relative overflow-hidden rounded-lg border-2 border-gray-200 hover:border-blue-400 transition-all shadow-sm hover:shadow-md">
                                 <LazyImage
-                                  src={`${getFullApiUrl(result.screenshotPortraitUrl)}`}
+                                  src={`${getScreenshotUrl(result.screenshotPortraitUrl)}`}
                                   alt="竖屏截图"
                                   className="w-full cursor-pointer transition-transform group-hover:scale-105"
                                   rootMargin="100px"
@@ -992,11 +1010,11 @@ export default function ResponsiveTesting() {
                                 />
                                 <div
                                   className="absolute inset-0 cursor-pointer"
-                                  onClick={() => setSelectedScreenshot(`${getFullApiUrl(result.screenshotPortraitUrl)}`)}
+                                  onClick={() => setSelectedScreenshot(`${getScreenshotUrl(result.screenshotPortraitUrl)}`)}
                                 />
                                 <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all flex items-center justify-center">
                                   <button
-                                    onClick={() => setSelectedScreenshot(`${getFullApiUrl(result.screenshotPortraitUrl)}`)}
+                                    onClick={() => setSelectedScreenshot(`${getScreenshotUrl(result.screenshotPortraitUrl)}`)}
                                     className="opacity-0 group-hover:opacity-100 transition-opacity bg-white rounded-full p-3 shadow-lg"
                                   >
                                     <span className="text-2xl text-blue-600">🔍</span>
@@ -1015,7 +1033,7 @@ export default function ResponsiveTesting() {
                             <div className="group relative">
                               <div className="relative overflow-hidden rounded-lg border-2 border-gray-200 hover:border-blue-400 transition-all shadow-sm hover:shadow-md">
                                 <LazyImage
-                                  src={`${getFullApiUrl(result.screenshotLandscapeUrl)}`}
+                                  src={`${getScreenshotUrl(result.screenshotLandscapeUrl)}`}
                                   alt="横屏截图"
                                   className="w-full cursor-pointer transition-transform group-hover:scale-105"
                                   rootMargin="100px"
@@ -1023,11 +1041,11 @@ export default function ResponsiveTesting() {
                                 />
                                 <div
                                   className="absolute inset-0 cursor-pointer"
-                                  onClick={() => setSelectedScreenshot(`${getFullApiUrl(result.screenshotLandscapeUrl)}`)}
+                                  onClick={() => setSelectedScreenshot(`${getScreenshotUrl(result.screenshotLandscapeUrl)}`)}
                                 />
                                 <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all flex items-center justify-center">
                                   <button
-                                    onClick={() => setSelectedScreenshot(`${getFullApiUrl(result.screenshotLandscapeUrl)}`)}
+                                    onClick={() => setSelectedScreenshot(`${getScreenshotUrl(result.screenshotLandscapeUrl)}`)}
                                     className="opacity-0 group-hover:opacity-100 transition-opacity bg-white rounded-full p-3 shadow-lg"
                                   >
                                     <span className="text-2xl text-blue-600">🔍</span>
