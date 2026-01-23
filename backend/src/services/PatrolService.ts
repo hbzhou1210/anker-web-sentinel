@@ -1163,12 +1163,25 @@ export class PatrolService {
         timeout: 5000
       }).catch(() => console.log('    Main content area not found, continuing...'));
 
-      // 额外等待以确保JavaScript渲染完成
-      await page.waitForTimeout(3000);
+      // 大幅增加等待时间，确保JavaScript渲染完成
+      await page.waitForTimeout(5000);
 
-      // 🔧 滚动页面触发懒加载
+      // 🔧 多次滚动页面触发懒加载和视口内元素渲染
       await page.evaluate(function() {
-        window.scrollTo(0, document.body.scrollHeight / 3);
+        // 滚动到页面顶部
+        window.scrollTo(0, 0);
+      });
+      await page.waitForTimeout(1000);
+
+      await page.evaluate(function() {
+        // 滚动到页面1/4处
+        window.scrollTo(0, document.body.scrollHeight / 4);
+      });
+      await page.waitForTimeout(1500);
+
+      await page.evaluate(function() {
+        // 滚动到页面中部
+        window.scrollTo(0, document.body.scrollHeight / 2);
       });
       await page.waitForTimeout(1500);
 
@@ -1215,17 +1228,34 @@ export class PatrolService {
 
           if (!isVisible) return false;
 
-          // 🔧 额外验证：产品应该包含图片或标题
+          // 🔧 额外验证：产品应该包含图片或标题或链接
           const hasImage = product.querySelector('img') !== null;
           const hasTitle = product.querySelector('h1, h2, h3, h4, .title, [class*="title"], [class*="name"]') !== null;
-          const hasLink = product.querySelector('a') !== null;
+          // 修复：如果元素本身是链接（<a>标签），也算有链接
+          const hasLink = product.tagName === 'A' || product.querySelector('a') !== null;
 
           return hasImage || hasTitle || hasLink;
         });
 
+        // 🔧 Fallback: 如果可见产品数量为0，但找到了匹配的元素，说明可能是渲染问题
+        // 这种情况下，我们验证元素本身是否有产品特征（忽略尺寸）
+        let finalProducts = visibleProducts;
+        if (finalProducts.length === 0 && products.length > 0) {
+          finalProducts = products.filter(function(product) {
+            const style = window.getComputedStyle(product);
+            if (style.display === 'none' || style.visibility === 'hidden') return false;
+
+            const hasImage = product.querySelector('img') !== null;
+            const hasTitle = product.querySelector('h1, h2, h3, h4, .title, [class*="title"], [class*="name"]') !== null;
+            const hasLink = product.tagName === 'A' || product.querySelector('a') !== null;
+
+            return hasImage || hasTitle || hasLink;
+          });
+        }
+
         return {
-          totalProducts: visibleProducts.length,
-          hasProducts: visibleProducts.length > 0,
+          totalProducts: finalProducts.length,
+          hasProducts: finalProducts.length > 0,
           matchedSelector: matchedSelector
         };
       });
